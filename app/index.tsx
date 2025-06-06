@@ -9,8 +9,8 @@ export default function Index() {
         alignItems: "center",
       }}
     >
-      <Text className="text-2xl text-black-700 w-3/4 text-center">
-        All coding and routing starts from here 😊
+      <Text className="text-2xl text-center">
+        Edit app/index.tsx to edit this screen.
       </Text>
     </View>
   );
