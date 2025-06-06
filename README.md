@@ -63,3 +63,66 @@ follow the procedures to get started with the installation of the project
 ## Note
 
 - _Do not configure the "app/\_layout.jsx"_
+
+To create a new Git branch, follow these steps:
+
+# Follow the steps to create a branch and append it
+
+---
+
+### 1. **Check Current Branches**
+
+```sh
+git branch
+```
+
+This shows all local branches, with the current one marked by an asterisk (`*`).
+
+### 2. **Create a New Branch**
+
+```sh
+git branch <branch-name>
+```
+
+Replace `<branch-name>` with your desired branch name (e.g., `feature/login`).
+
+### 3. **Switch to the New Branch**
+
+```sh
+git checkout <branch-name>
+```
+
+Or, combine branch creation and switching in one command:
+
+```sh
+git checkout -b <branch-name>
+```
+
+### 4. **Push the Branch to Remote (Optional)**
+
+If you want to push the branch to a remote repository (e.g., GitHub, GitLab):
+
+```sh
+git push -u origin <branch-name>
+```
+
+The `-u` flag sets the upstream, linking your local branch to the remote one.
+
+### Example Workflow
+
+```sh
+# Create and switch to a new branch
+git checkout -b feature/login
+
+# Make changes, then commit
+git add .
+git commit -m "Add login feature"
+
+# Push to remote (first time)
+git push -u origin feature/login
+```
+
+### Key Notes:
+
+- Use descriptive branch names (e.g., `fix/header-style`, `docs/update-readme`).
+- Ensure you’re on the correct base branch (e.g., `main` or `develop`) before creating a new branch.
