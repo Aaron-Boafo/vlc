@@ -122,7 +122,47 @@ git commit -m "Add login feature"
 git push -u origin feature/login
 ```
 
-### Key Notes:
+## Here is a document on the **useThemeStore**
 
-- Use descriptive branch names (e.g., `fix/header-style`, `docs/update-readme`).
-- Ensure you’re on the correct base branch (e.g., `main` or `develop`) before creating a new branch.
+```javascript
+   //to import is use this methode
+   import useThemeStore from "../../../store/theme"; //it is located in the store folder
+
+   const index = () => {
+   const {toggleTheme, themeColor} = useThemeStore();
+   return (
+      // your codes here
+   );
+   };
+
+   //the toggleTheme is a function which changes the theme
+   //the themeColor contains the colors to be used for the project
+
+```
+
+## Here are the colors
+
+```javascript
+const baseTheme = {
+  primary: "#f44bf8",
+  shadow: "#f44bf8",
+  descText: "#8e8e8e",
+  iconBackground: "#f44bf8",
+};
+
+return themeType === "light"
+  ? {
+      ...baseTheme,
+      background: "#fff",
+      tabIconColor: "#000",
+      ribbon: "#2b2138",
+      text: "#000",
+    }
+  : {
+      ...baseTheme,
+      background: "#111017",
+      tabIconColor: "#fff",
+      ribbon: "#f44bf8",
+      text: "#fff",
+    };
+```
