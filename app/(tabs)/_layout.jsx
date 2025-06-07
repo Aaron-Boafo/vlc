@@ -19,8 +19,6 @@ const TabLayouts = () => {
           height: 80,
           paddingTop: 3,
           boxShadow: `10px 4px 50px ${themeColors.shadow}`,
-          borderTopColor: "gray",
-          borderTopWidth: 1,
         },
         tabBarActiveTintColor: themeColors.primary,
         tabBarInactiveTintColor: themeColors.tabIconColor,
