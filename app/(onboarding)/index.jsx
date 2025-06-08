@@ -262,12 +262,6 @@ const OnboardingScreen = () => {
 
   return (
     <>
-      <StatusBar
-        translucent
-        backgroundColor="transparent"
-        barStyle="light-content"
-      />
-
       <View style={styles.container}>
         <Animated.FlatList
           ref={slideRef}
