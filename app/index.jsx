@@ -1,7 +1,7 @@
-import { Redirect } from "expo-router";
-import { useEffect, useState } from "react";
+import {Redirect} from "expo-router";
+import {useEffect, useState} from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { View, ActivityIndicator } from "react-native";
+import {View, ActivityIndicator} from "react-native";
 
 export default function Index() {
   const [isLoading, setIsLoading] = useState(true);
@@ -9,17 +9,17 @@ export default function Index() {
 
   useEffect(() => {
     // Temporarily force reset onboarding status
-    AsyncStorage.removeItem('@onboarding_complete').then(() => {
+    AsyncStorage.removeItem("@onboarding_complete").then(() => {
       checkOnboardingStatus();
     });
   }, []);
 
   const checkOnboardingStatus = async () => {
     try {
-      const value = await AsyncStorage.getItem('@onboarding_complete');
-      setHasCompletedOnboarding(value === 'true');
+      const value = await AsyncStorage.getItem("@onboarding_complete");
+      setHasCompletedOnboarding(value === "true");
     } catch (err) {
-      console.log('Error checking onboarding status:', err);
+      console.log("Error checking onboarding status:", err);
     } finally {
       setIsLoading(false);
     }
@@ -27,15 +27,25 @@ export default function Index() {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#121212' }}>
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "#121212",
+        }}
+      >
         <ActivityIndicator size="large" color="#FF00FF" />
       </View>
     );
   }
 
-  return <Redirect href={hasCompletedOnboarding ? "/(tabs)" : "/onboarding"} />;
+  return (
+    <Redirect
+      href={hasCompletedOnboarding ? "/(tabs)/(video)" : "/(onboarding)"}
+    />
+  );
 }
-
 
 /* import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
