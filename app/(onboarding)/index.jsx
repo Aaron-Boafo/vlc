@@ -7,21 +7,11 @@ import {
   Animated,
   StyleSheet,
   Easing,
-  StatusBar,
 } from "react-native";
 import {useRouter} from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {LinearGradient} from "expo-linear-gradient";
-import {
-  Music,
-  Film,
-  HardDrive,
-  Download,
-  Play,
-  Folder,
-  Settings,
-} from "lucide-react-native";
-import Constants from "expo-constants";
+import {Music, Play, Folder, Settings} from "lucide-react-native";
 
 const {width, height} = Dimensions.get("window");
 
@@ -224,7 +214,7 @@ const OnboardingScreen = () => {
     } else {
       try {
         await AsyncStorage.setItem("@onboarding_complete", "true");
-        router.replace("/(tabs)");
+        router.replace("/(tabs)/(video)");
       } catch (err) {
         console.log("Error saving onboarding status:", err);
       }
@@ -234,7 +224,7 @@ const OnboardingScreen = () => {
   const skip = async () => {
     try {
       await AsyncStorage.setItem("@onboarding_complete", "true");
-      router.replace("/(tabs)");
+      router.replace("/(tabs)/(video)");
     } catch (err) {
       console.log("Error saving onboarding status:", err);
     }

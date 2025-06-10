@@ -1,13 +1,12 @@
 import {View, Text} from "react-native";
-
 import React from "react";
 
-const player = () => {
+const bottomSheet = () => {
   return (
     <View>
-      <Text>player</Text>
+      <Text>bottomSheet</Text>
     </View>
   );
 };
 
-export default player;
+export default bottomSheet;

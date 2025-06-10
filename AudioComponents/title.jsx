@@ -2,68 +2,65 @@ import {View, Text, TouchableOpacity} from "react-native";
 import useThemeStore from "../store/theme";
 import clsx from "clsx";
 import * as Icons from "lucide-react-native";
-import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import AudioControls from "../store/AudioControls";
+import {router} from "expo-router";
 
-const Title = ({activePage = "all"}) => {
+const Title = () => {
   const {themeColors} = useThemeStore();
 
   const containerClasses = clsx(
-    "flex flex-row items-center justify-between px-4 py-3 border-b border-gray-500"
+    "flex flex-row items-center justify-between px-4 py-3 "
   );
-  const appIconClasses = clsx(
-    "w-12 h-12 justify-center items-center rounded-md"
-  );
+
   const appNameClasses = clsx("text-2xl font-bold ml-2");
+
+  const headIcons = [
+    {
+      name: Icons.Search,
+      callBack: () => {
+        router.push("/searchMusic");
+      },
+    },
+    {
+      name: Icons.History,
+      callBack: async () => {
+        if (AudioControls.getState()?.playlist.length > 0) {
+          await AudioControls.getState().previous();
+        }
+      },
+    },
+    {
+      name: Icons.EllipsisVertical,
+      callBack: () => {
+        console.log("More");
+      },
+    },
+  ];
 
   return (
     <View
       className={containerClasses}
       style={{backgroundColor: themeColors.background}}
     >
-      {/* Left side - App icon and name */}
-      <TouchableOpacity
-        className="flex flex-row items-center gap-x-2"
-        activeOpacity={0.7}
+      <Text className={appNameClasses} style={{color: themeColors.text}}>
+        Music
+      </Text>
+
+      <View
+        className="flex flex-row items-center justify-between"
+        style={{width: "25%"}}
       >
-        <View
-          className={appIconClasses}
-          style={{
-            backgroundColor: themeColors.primary,
-            opacity: 0.4,
-          }}
-        />
-        <Text className={appNameClasses} style={{color: themeColors.text}}>
-          App
-        </Text>
-      </TouchableOpacity>
-
-      {/* Right side - Action icons */}
-      <View className="flex flex-row items-center gap-x-2">
-        {activePage !== "playlist" && (
-          <TouchableOpacity activeOpacity={0.7}>
-            <Icons.Search size={20} color={themeColors.text} />
-          </TouchableOpacity>
-        )}
-
-        {(activePage === "playlist" || activePage === "all") && (
-          <TouchableOpacity activeOpacity={0.7}>
-            <MaterialCommunityIcons
-              name="tune"
-              size={20}
-              color={themeColors.text}
-            />
-          </TouchableOpacity>
-        )}
-
-        {activePage !== "playlist" && activePage !== "all" && (
-          <TouchableOpacity activeOpacity={0.7}>
-            <Icons.History size={20} color={themeColors.text} />
-          </TouchableOpacity>
-        )}
-
-        <TouchableOpacity activeOpacity={0.7}>
-          <Icons.EllipsisVertical size={20} color={themeColors.text} />
-        </TouchableOpacity>
+        {headIcons.map((Items, index) => {
+          return (
+            <TouchableOpacity
+              key={index}
+              onPress={Items.callBack}
+              activeOpacity={0.7}
+            >
+              <Items.name size={20} color={themeColors.text} />
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </View>
   );

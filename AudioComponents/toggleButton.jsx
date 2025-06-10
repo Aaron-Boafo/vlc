@@ -1,73 +1,173 @@
-import {View, Text, TouchableOpacity} from "react-native";
-import * as Icons from "lucide-react-native";
-import useThemeStore from "../store/theme";
-import clsx from "clsx";
-import useAudioStore from "../store/AudioHeadStore";
+import React, {useCallback, useMemo, useRef} from "react";
+import {View, Text, TouchableOpacity, Animated, Easing} from "react-native";
+import {
+  LayoutGrid,
+  ListVideo,
+  Disc3,
+  SquareUserRound,
+  Clock,
+  Heart,
+} from "lucide-react-native";
+import ThemeStore from "../store/theme";
+import AudioStore from "../store/AudioHeadStore";
 
-const toggleButton = ({activePage = "all"}) => {
-  const {themeColors} = useThemeStore();
-  const {toggleTabs} = useAudioStore();
-  const size = 24;
+const ToggleButton = ({activePage = "All", scrollTo}) => {
+  const {themeColors} = ThemeStore();
+  const {toggleTabs} = AudioStore();
+
+  // Animation values
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const opacityAnim = useRef(new Animated.Value(1)).current;
+
+  // Memoize the tags array to prevent recreation on every render
+  const tags = useMemo(
+    () => [
+      {name: "All", Icon: LayoutGrid},
+      {name: "Playlist", Icon: ListVideo},
+      {name: "Album", Icon: Disc3},
+      {name: "Artist", Icon: SquareUserRound},
+      {name: "History", Icon: Heart},
+    ],
+    []
+  );
+
+  // Animated press handler
+  const handlePress = useCallback(
+    (name, index) => {
+      // Button press animation
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(scaleAnim, {
+            toValue: 0.95,
+            duration: 80,
+            useNativeDriver: true,
+          }),
+          Animated.timing(opacityAnim, {
+            toValue: 0.8,
+            duration: 80,
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.parallel([
+          Animated.timing(scaleAnim, {
+            toValue: 1,
+            duration: 120,
+            easing: Easing.out(Easing.elastic(1)),
+            useNativeDriver: true,
+          }),
+          Animated.timing(opacityAnim, {
+            toValue: 1,
+            duration: 120,
+            useNativeDriver: true,
+          }),
+        ]),
+      ]).start();
+
+      toggleTabs(name, index);
+
+      // Smooth scroll animation
+      Animated.timing(new Animated.Value(0), {
+        toValue: 1,
+        duration: 300,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start(() => {
+        scrollTo(index);
+      });
+    },
+    [scrollTo, toggleTabs, scaleAnim, opacityAnim]
+  );
+
+  // Pre-calculate styles that don't change
+  const containerStyle = useMemo(
+    () => ({
+      backgroundColor: "#282828",
+      flexDirection: "row",
+      padding: 5,
+      justifyContent: "space-between",
+      width: "95%",
+      marginHorizontal: "auto",
+      borderRadius: 10,
+      marginBottom: 10,
+    }),
+    []
+  );
 
   return (
-    <View className="flex flex-row  w-[95%] mx-auto my-3 rounded-lg p-1 justify-between items-center bg-gray-500   ">
-      {/* the all button page */}
+    <View style={containerStyle}>
+      {tags.map(({name, Icon}, index) => {
+        const isActive = activePage === name;
+        const iconColor = isActive ? themeColors.primary : themeColors.text;
 
-      {tags.map((tag, index) => (
-        <TouchableOpacity
-          onPress={() => toggleTabs(tag.name)}
-          className={clsx(
-            "flex flex-row justify-center items-center gap-x-2 px-3 py-2",
-            activePage === tag.name && "bg-slate-900 rounded-lg"
-          )}
-          key={index}
-        >
-          <tag.icon
-            size={size}
-            color={
-              activePage === tag.name ? themeColors.primary : themeColors.text
-            }
-          />
-          {activePage === tag.name && (
-            <Text
+        // Text width animation
+        const textWidthAnim = useRef(
+          new Animated.Value(isActive ? 1 : 0)
+        ).current;
+
+        if (isActive) {
+          Animated.timing(textWidthAnim, {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: false,
+          }).start();
+        } else {
+          Animated.timing(textWidthAnim, {
+            toValue: 0,
+            duration: 150,
+            useNativeDriver: false,
+          }).start();
+        }
+
+        return (
+          <Animated.View
+            key={name}
+            style={{
+              transform: [{scale: scaleAnim}],
+              opacity: opacityAnim,
+            }}
+          >
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => handlePress(name, index)}
               style={{
-                color:
-                  activePage === tag.name
-                    ? themeColors.primary
-                    : themeColors.text,
+                flexDirection: "row",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: 8,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 8,
+                backgroundColor: isActive ? "#1e1e1e" : "transparent",
               }}
             >
-              {" "}
-              {tag.name.toLocaleUpperCase()}
-            </Text>
-          )}
-        </TouchableOpacity>
-      ))}
+              <Icon size={24} color={iconColor} />
+              <Animated.View
+                style={{
+                  width: textWidthAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, 50], // Adjust based on your text width
+                  }),
+                  overflow: "hidden",
+                }}
+              >
+                {isActive && (
+                  <Text
+                    style={{
+                      color: iconColor,
+                      fontWeight: "800",
+                      width: 50, // Match the outputRange max value
+                    }}
+                  >
+                    {name}
+                  </Text>
+                )}
+              </Animated.View>
+            </TouchableOpacity>
+          </Animated.View>
+        );
+      })}
     </View>
   );
 };
 
-const tags = [
-  {
-    name: "all",
-    icon: Icons.LayoutGrid,
-  },
-  {
-    name: "playlist",
-    icon: Icons.ListVideo,
-  },
-  {
-    name: "album",
-    icon: Icons.Disc3,
-  },
-  {
-    name: "artist",
-    icon: Icons.SquareUserRound,
-  },
-  {
-    name: "history",
-    icon: Icons.Clock,
-  },
-];
-
-export default toggleButton;
+export default React.memo(ToggleButton);

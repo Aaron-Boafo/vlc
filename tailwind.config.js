@@ -5,6 +5,7 @@ module.exports = {
     "./app/**/*{js,jsx,ts,tsx}",
     "./components/**/*.{js,jsx,ts,tsx}",
     "./AudioComponents/**/*.{js,jsx,ts,tsx}",
+    "./AudioScreens/**/*.{js,jsx,ts,tsx}",
   ],
   presets: [require("nativewind/preset")],
   theme: {

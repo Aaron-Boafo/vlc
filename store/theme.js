@@ -8,6 +8,8 @@ const getThemeColors = (themeType) => {
     shadow: "#f44bf8",
     descText: "#8e8e8e",
     iconBackground: "#f44bf8",
+    card: "#191825",
+    search: "#222",
   };
 
   return themeType === "light"
@@ -41,6 +43,8 @@ const useThemeStore = create(
             themeColors: getThemeColors(newTheme),
           };
         }),
+      currentTrack: null,
+      setCurrentTrack: (track) => set(() => ({currentTrack: track})),
     }),
     {
       name: "theme-storage",

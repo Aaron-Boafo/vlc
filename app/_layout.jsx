@@ -24,6 +24,36 @@ export default function Layout() {
             },
           }}
         />
+        <Stack.Screen
+          name="player"
+          options={{
+            headerShown: false,
+            presentation: "modal",
+            animation: "slide_from_bottom",
+            transitionSpec: {
+              open: {animation: "timing", config: {duration: 100}},
+              close: {animation: "timing", config: {duration: 100}},
+            },
+            gestureResponseDistance: 30,
+            gestureVelocityImpact: 0.1,
+          }}
+        />
+
+        <Stack.Screen
+          name="searchMusic"
+          options={{
+            headerShown: false,
+            presentation: "modal",
+            animation: "slide_from_bottom",
+            transitionSpec: {
+              open: {animation: "timing", config: {duration: 100}},
+              close: {animation: "timing", config: {duration: 100}},
+            },
+            gestureResponseDistance: 30,
+            gestureVelocityImpact: 0.1,
+          }}
+        />
+
         <Stack.Screen name="(tabs)" options={{gestureEnabled: false}} />
       </Stack>
     </View>
