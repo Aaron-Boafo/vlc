@@ -6,11 +6,9 @@ import {
   TouchableOpacity,
 } from "react-native";
 import {CircleOff, FileX2} from "lucide-react-native";
-import AudioStore from "../store/AudioHeadStore";
-import BottomSheet from "../AudioComponents/bottomSheet";
+import AudioStore from "../store/useAudioStore";
 
 export default function AudioBrowser({
-  width,
   onScroll,
   loading,
   handlePermissionRequest,
@@ -19,7 +17,7 @@ export default function AudioBrowser({
 
   if (loading) {
     return (
-      <View style={[styles.centeredContainer, {width}]}>
+      <View style={[styles.centeredContainer]}>
         <ActivityIndicator size="large" />
       </View>
     );
@@ -27,7 +25,7 @@ export default function AudioBrowser({
 
   if (!permissionGranted) {
     return (
-      <View style={[styles.centeredContainer, {width}]}>
+      <View style={[styles.centeredContainer]}>
         <CircleOff size={50} color="#444" />
         <Text style={styles.emptyText}>
           Oops! Media permission not granted.
@@ -42,7 +40,7 @@ export default function AudioBrowser({
 
   if (audioFiles.length === 0) {
     return (
-      <View style={[styles.centeredContainer, {width}]}>
+      <View style={[styles.centeredContainer]}>
         <FileX2 size={50} color="#444" />
         <Text style={styles.emptyText}>No songs found.</Text>
       </View>
@@ -50,9 +48,8 @@ export default function AudioBrowser({
   }
 
   return (
-    <View style={[styles.container, {width}]}>
-      <Text style={styles.header}>PlayList Screen</Text>
-      <BottomSheet />
+    <View style={[styles.container]}>
+      <Text style={styles.header}>Artist Screen</Text>
     </View>
   );
 }

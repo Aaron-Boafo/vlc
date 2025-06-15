@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import {create} from "zustand";
 import {persist, createJSONStorage} from "zustand/middleware";
 
+//color pallette
 const getThemeColors = (themeType) => {
   const baseTheme = {
     primary: "#f44bf8",
@@ -29,28 +30,25 @@ const getThemeColors = (themeType) => {
       };
 };
 
-const useThemeStore = create(
-  persist(
-    (set) => ({
-      activeTheme: "light",
-      themeColors: getThemeColors("light"),
+const theme = (set) => ({
+  activeTheme: "light",
+  themeColors: getThemeColors("light"),
 
-      toggleTheme: () =>
-        set((state) => {
-          const newTheme = state.activeTheme === "light" ? "dark" : "light";
-          return {
-            activeTheme: newTheme,
-            themeColors: getThemeColors(newTheme),
-          };
-        }),
-      currentTrack: null,
-      setCurrentTrack: (track) => set(() => ({currentTrack: track})),
+  toggleTheme: () =>
+    set((state) => {
+      const newTheme = state.activeTheme === "light" ? "dark" : "light";
+      return {
+        activeTheme: newTheme,
+        themeColors: getThemeColors(newTheme),
+      };
     }),
-    {
-      name: "theme-storage",
-      storage: createJSONStorage(() => AsyncStorage),
-    }
-  )
+});
+
+const useThemeStore = create(
+  persist(theme, {
+    name: "theme-storage",
+    storage: createJSONStorage(() => AsyncStorage),
+  })
 );
 
 export default useThemeStore;

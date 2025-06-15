@@ -1,5 +1,5 @@
 import {Stack} from "expo-router";
-import useThemeStore from "../../../store/theme";
+import useThemeStore from "../../../store/useThemeStore";
 import {View} from "react-native";
 import {StatusBar} from "expo-status-bar";
 import Constants from "expo-constants";
@@ -22,6 +22,7 @@ const AudioLayout = () => {
       {/*the screens for the audio will be here  */}
       <Stack>
         <Stack.Screen name="index" options={{headerShown: false}} />
+        <Stack.Screen name="(media)" options={{headerShown: false}} />
       </Stack>
     </>
   );

@@ -1,8 +1,23 @@
 import {Stack} from "expo-router";
 import {View} from "react-native";
+import {useEffect} from "react";
+import {Audio, InterruptionModeIOS, InterruptionModeAndroid} from "expo-av";
 import "../global.css";
 
 export default function Layout() {
+  // Set audio mode
+  useEffect(() => {
+    Audio.setAudioModeAsync({
+      staysActiveInBackground: true,
+      playsInSilentModeIOS: true,
+      interruptionModeIOS: InterruptionModeIOS.DuckOthers,
+      interruptionModeAndroid: InterruptionModeAndroid.DuckOthers,
+      shouldDuckAndroid: true,
+      playThroughEarpieceAndroid: true,
+    });
+  }, []);
+
+  // Set my layout
   return (
     <View style={{flex: 1, backgroundColor: "#121212"}}>
       <Stack

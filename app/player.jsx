@@ -1,4 +1,4 @@
-import {View, StyleSheet, Text, TouchableOpacity} from "react-native";
+import {View, StyleSheet, Text, TouchableOpacity, Image} from "react-native";
 import Slider from "@react-native-community/slider";
 import {
   Play,
@@ -14,13 +14,14 @@ import {
 } from "lucide-react-native";
 import {SafeAreaView} from "react-native-safe-area-context";
 import {router} from "expo-router";
-import AudioControls from "../store/AudioControls";
-import AudioList from "../store/AudioHeadStore";
-import TextTicker from "react-native-text-ticker";
+import AudioControls from "../store/useAudioControl";
+import AudioList from "../store/useAudioStore";
 import {useEffect, useState} from "react";
+import {fetchMetadata} from "../store/mmkvStorage";
 
 const MusicPlayerUI = () => {
-  const {audioFiles, favourites, setFavourites} = AudioList();
+  const {audioFiles, musicFavourite, setFavourites} = AudioList();
+
   const {
     play,
     pause,
@@ -50,16 +51,18 @@ const MusicPlayerUI = () => {
 
   useEffect(() => {
     if (currentTrack) {
-      setFav(favourites.some((e) => e.uri === currentTrack.uri));
+      setFav(musicFavourite.some((e) => e.uri === currentTrack.uri));
     }
-  }, [favourites, currentTrack]);
+  }, [musicFavourite, currentTrack]);
 
   const handleFav = () => {
-    const alreadyFav = favourites.some((e) => e.uri === activeSongInfo?.uri);
+    const alreadyFav = musicFavourite.some(
+      (e) => e.uri === activeSongInfo?.uri
+    );
     if (alreadyFav) {
-      setFavourites(favourites.filter((e) => e.uri !== activeSongInfo.uri));
+      setFavourites(musicFavourite.filter((e) => e.uri !== activeSongInfo.uri));
     } else {
-      setFavourites([...favourites, activeSongInfo]);
+      setFavourites([...musicFavourite, activeSongInfo]);
     }
   };
 
@@ -97,23 +100,26 @@ const MusicPlayerUI = () => {
             />
           </TouchableOpacity>
         </View>
+
         {/* Album Art */}
+
         <View style={styles.albumArtContainer}>
-          <Music2 size={100} color={"#fff"} style={styles.albumArt} />
+          {fetchMetadata(activeSongInfo?.uri) ? (
+            <Image
+              source={{uri: activeSongInfo?.artwork}}
+              style={styles.albumArt}
+            />
+          ) : (
+            <Music2 size={100} color={"#fff"} style={styles.albumArt} />
+          )}
         </View>
+
         {/* Song Info */}
         <View style={styles.songInfoContainer}>
-          <TextTicker
-            style={styles.songTitle}
-            duration={3000}
-            loop
-            repeatSpacer={50}
-            marqueeDelay={1000}
-            scroll
-          >
-            {activeSongInfo?.filename || "Unknown"}
-          </TextTicker>
-          <Text style={styles.songArtist}>Unknown</Text>
+          <Text style={styles.songTitle}>
+            {activeSongInfo?.title || "Unknown"}
+          </Text>
+          <Text style={styles.songArtist}>{activeSongInfo?.artist}</Text>
         </View>
 
         {/* Slider */}
@@ -199,8 +205,10 @@ const styles = StyleSheet.create({
     marginVertical: 20,
   },
   albumArt: {
-    width: "80%",
-    height: 200,
+    width: "90%",
+    resizeMode: "cover",
+    marginHorizontal: "auto",
+    height: "90%",
     borderRadius: 10,
   },
   songInfoContainer: {

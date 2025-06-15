@@ -2,7 +2,6 @@ import {Redirect} from "expo-router";
 import {useEffect, useState} from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {View, ActivityIndicator} from "react-native";
-import AudioControls from "../store/AudioControls";
 
 export default function Index() {
   const [isLoading, setIsLoading] = useState(true);
@@ -13,17 +12,12 @@ export default function Index() {
     AsyncStorage.removeItem("@onboarding_complete").then(() => {
       checkOnboardingStatus();
     });
-    async function checkPlaybackground() {
-      await AudioControls.getState().backgroundPlaySetup();
-      AudioControls.getState().unload();
-    }
-
-    checkPlaybackground();
   }, []);
 
   const checkOnboardingStatus = async () => {
     try {
       const value = await AsyncStorage.getItem("@onboarding_complete");
+      console.log(value);
       setHasCompletedOnboarding(value === "true");
     } catch (err) {
       console.log("Error checking onboarding status:", err);

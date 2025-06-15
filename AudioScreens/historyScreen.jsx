@@ -6,10 +6,11 @@ import {
   StyleSheet,
   ActivityIndicator,
   TouchableOpacity,
+  Image,
 } from "react-native";
 import {CircleOff, FileX2, HeartOff, Music4, Trash2} from "lucide-react-native";
-import AudioStore from "../store/AudioHeadStore";
-import AudioControls from "../store/AudioControls";
+import AudioStore from "../store/useAudioStore";
+import AudioControls from "../store/useAudioControl";
 import {router} from "expo-router";
 
 export default function AudioBrowser({
@@ -19,7 +20,7 @@ export default function AudioBrowser({
   handlePermissionRequest,
   heightView,
 }) {
-  const {audioFiles, permissionGranted, favourites, setFavourites} =
+  const {audioFiles, permissionGranted, musicFavourite, setFavourites} =
     AudioStore();
 
   const formatDuration = (seconds) => {
@@ -31,31 +32,37 @@ export default function AudioBrowser({
 
   const handlePlay = useCallback(async (item) => {
     const song = {uri: item.uri};
-    AudioControls.getState().setPlaylist([song]);
-    AudioControls.getState().play();
+    await AudioControls.getState().setPlaylist([song]);
     router.push("/player");
   }, []);
 
   const handleRemoveFavourite = useCallback(
     (uri) => {
-      setFavourites(favourites.filter((e) => e.uri !== uri));
+      setFavourites(musicFavourite.filter((e) => e.uri !== uri));
     },
-    [setFavourites]
+    [setFavourites, musicFavourite]
   );
 
   const renderItem = useCallback(
     ({item}) => (
       <View style={styles.itemContainer}>
-        <View style={styles.artworkPlaceholder}>
-          <Music4 size={20} color="#444" />
-        </View>
+        {item?.artwork ? (
+          <Image
+            source={{uri: item.artwork}}
+            style={{width: 50, height: 50, objectFit: "cover"}}
+          />
+        ) : (
+          <View style={styles.artworkPlaceholder}>
+            <Music4 size={20} color="#444" />
+          </View>
+        )}
 
         <TouchableOpacity
           style={styles.infoContainer}
           onPress={() => handlePlay(item)}
         >
           <Text style={styles.title} numberOfLines={1}>
-            {item.filename.replace(/\.[^/.]+$/, "")}
+            {item.title.replace(/\.[^/.]+$/, "")}
           </Text>
           <Text style={styles.detail}>
             Duration: {formatDuration(item.duration)}
@@ -70,7 +77,7 @@ export default function AudioBrowser({
         </TouchableOpacity>
       </View>
     ),
-    [handleRemoveFavourite, favourites]
+    [handleRemoveFavourite, musicFavourite, handlePlay]
   );
 
   const renderEmptyState = (icon, message) => (
@@ -104,7 +111,7 @@ export default function AudioBrowser({
       "No songs found."
     );
 
-  if (!favourites.length)
+  if (!musicFavourite.length)
     return renderEmptyState(
       <HeartOff size={100} color="#444" />,
       "No Favourites found."
@@ -115,7 +122,7 @@ export default function AudioBrowser({
       <FlatList
         contentContainerStyle={{paddingBottom: heightView + 10 || 10}}
         onScroll={onScroll}
-        data={favourites || []}
+        data={musicFavourite || []}
         keyExtractor={(item) => item.id?.toString() ?? item.uri}
         initialNumToRender={10}
         maxToRenderPerBatch={10}

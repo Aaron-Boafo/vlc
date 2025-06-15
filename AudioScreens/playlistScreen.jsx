@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
 } from "react-native";
 import {CircleOff, FileX2} from "lucide-react-native";
-import AudioStore from "../store/AudioHeadStore";
+import AudioStore from "../store/useAudioStore";
 
 export default function AudioBrowser({
   width,
@@ -50,7 +50,7 @@ export default function AudioBrowser({
 
   return (
     <View style={[styles.container, {width}]}>
-      <Text style={styles.header}>Albums Screen</Text>
+      <Text style={styles.header}>Artist Screen</Text>
     </View>
   );
 }

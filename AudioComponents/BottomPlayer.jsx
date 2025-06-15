@@ -9,8 +9,8 @@ import {
 import {Music2Icon} from "lucide-react-native";
 import AntDesign from "@expo/vector-icons/AntDesign";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import AudioControls from "../store/AudioControls";
-import AudioList from "../store/AudioHeadStore";
+import AudioControls from "../store/useAudioControl";
+import AudioList from "../store/useAudioStore";
 import {router} from "expo-router";
 
 const BottomPlayer = ({height}) => {
@@ -18,7 +18,8 @@ const BottomPlayer = ({height}) => {
   const {audioFiles} = AudioList();
 
   // Check if playlist and currentIndex are valid
-  const currentTrack = playlist?.[currentIndex];
+  const activeSongInfo = playlist?.[currentIndex];
+  const currentTrack = audioFiles.find((e) => e.uri === activeSongInfo?.uri);
 
   // Safety check: return nothing if audioFiles or currentTrack is not available
   if (!audioFiles || audioFiles.length === 0 || !currentTrack) {
@@ -38,13 +39,16 @@ const BottomPlayer = ({height}) => {
       }}
     >
       {/* Album art */}
-      <View style={styles.picContainer}>
-        {currentTrack.artwork ? (
-          <Image source={{uri: currentTrack.artwork}} style={styles.albumArt} />
-        ) : (
+      {currentTrack?.artwork ? (
+        <Image
+          source={{uri: currentTrack.artwork}}
+          style={[styles.albumArt, {marginRight: 12}]}
+        />
+      ) : (
+        <View style={styles.picContainer}>
           <Music2Icon size={30} color="#fff" />
-        )}
-      </View>
+        </View>
+      )}
 
       {/* Track info */}
       <TouchableOpacity
@@ -52,7 +56,7 @@ const BottomPlayer = ({height}) => {
         style={styles.trackInfo}
       >
         <Text style={styles.trackTitle} numberOfLines={1}>
-          {isPlayingInfo?.filename || "Unknown Title"}
+          {isPlayingInfo?.title || "Unknown Title"}
         </Text>
         <Text style={styles.trackArtist} numberOfLines={1}>
           {isPlayingInfo?.artist || "Unknown Artist"}
@@ -103,9 +107,10 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   albumArt: {
-    width: "100%",
-    height: "100%",
+    width: 50,
+    height: 50,
     borderRadius: 4,
+    objectFit: "cover",
   },
   trackInfo: {
     flex: 2,

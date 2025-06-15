@@ -17,10 +17,10 @@ import {
   Search,
 } from "lucide-react-native";
 import {router} from "expo-router";
-import AudioStore from "../store/AudioHeadStore";
-import AudioControls from "../store/AudioControls";
+import AudioStore from "../store/useAudioStore";
+import AudioControls from "../store/useAudioControl";
 
-const searchMusic = () => {
+const SearchMusic = () => {
   const {audioFiles, permissionGranted} = AudioStore();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -290,4 +290,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default searchMusic;
+export default SearchMusic;

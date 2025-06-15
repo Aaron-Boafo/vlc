@@ -1,7 +1,7 @@
 import {create} from "zustand";
 import {Audio} from "expo-av";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import {createJSONStorage, persist} from "zustand/middleware";
+import {mmkvStorage} from "./mmkvStorage";
 
 export default create(
   persist(
@@ -169,7 +169,11 @@ export default create(
     }),
     {
       name: "music-storage",
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => ({
+        setItem: (key, value) => mmkvStorage.set(key, value),
+        getItem: (key) => mmkvStorage.getString(key),
+        removeItem: (key) => mmkvStorage.delete(key),
+      })),
       partialize: (state) => ({
         playlist: state.playlist,
         currentIndex: state.currentIndex,

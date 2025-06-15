@@ -1,197 +1,176 @@
 import {useState, useEffect, useRef, useCallback, useMemo} from "react";
 import {
   Animated,
-  FlatList,
   View,
   Linking,
   Platform,
-  Dimensions,
   StyleSheet,
   TouchableOpacity,
   Alert,
+  Dimensions,
 } from "react-native";
 import {Shuffle} from "lucide-react-native";
 import * as MediaLibrary from "expo-media-library";
+import * as FileSystem from "expo-file-system";
 import {GestureHandlerRootView} from "react-native-gesture-handler";
 import {PortalProvider} from "@gorhom/portal";
+import Swiper from "react-native-swiper";
+import {getAudioMetadata} from "@missingcore/audio-metadata";
 
-import Head from "../../../AudioComponents/title";
-import ToggleBar from "../../../AudioComponents/toggleButton";
-import useThemeStore from "../../../store/theme";
-import useAudioStore from "../../../store/AudioHeadStore";
-import AudioControl from "../../../store/AudioControls";
-
-import All from "../../../AudioScreens/all";
-import PlayList from "../../../AudioScreens/playlist";
-import Albulm from "../../../AudioScreens/albums";
-import Artist from "../../../AudioScreens/artist";
-import History from "../../../AudioScreens/history";
-import BottomPlayer from "../../../AudioComponents/BottomPlayer";
+import Head from "../../../AudioComponents/titleBar";
+import NavigationTab from "../../../AudioComponents/navigationTab";
+import useThemeStore from "../../../store/useThemeStore";
+import useAudioStore from "../../../store/useAudioStore";
+import AudioControl from "../../../store/useAudioControl";
+import All from "../../../AudioScreens/allScreen";
+import PlayList from "../../../AudioScreens/playlistScreen";
+import Album from "../../../AudioScreens/albumScreen";
+import Artist from "../../../AudioScreens/artistScreen";
+import History from "../../../AudioScreens/historyScreen";
+import Bottomplayer from "../../../AudioComponents/bottomPlayer";
 
 export default function App() {
-  const {
-    activeTab,
-    index,
-    toggleTabs,
-    permissionGranted,
-    setAudioFiles,
-    audioFiles,
-    setPermissionGranted,
-  } = useAudioStore();
-
-  const [loading, setLoading] = useState(true);
-  const [showBottomPlayer, setShowBottomPlayer] = useState(false);
-  const [heightView, setheightView] = useState(0);
-
+  const {permissionGranted, setAudioFiles, audioFiles, setPermissionGranted} =
+    useAudioStore();
   const {themeColors} = useThemeStore();
   const {width} = Dimensions.get("window");
-  const listRef = useRef(null);
-
+  const swiperRef = useRef(null);
   const playComponentAnim = useRef(new Animated.Value(1)).current;
+
+  const [activeTab, setActiveTab] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [showBottomPlayer, setShowBottomPlayer] = useState(false);
+  const [heightView, setHeightView] = useState(0);
   const [prevScrollY, setPrevScrollY] = useState(0);
+  const screens = useMemo(() => [All, PlayList, Album, Artist, History], []);
+  const AUDIO_FILE_CACHE = `${FileSystem.documentDirectory}audioFilesCache.json`;
 
-  // Request permission and load audio files
   useEffect(() => {
-    const fetchData = async () => {
-      const {status} = await MediaLibrary.requestPermissionsAsync();
-
-      if (status === "granted") {
-        setPermissionGranted(true);
-        const files = await loadAllAudioFiles();
-        setAudioFiles(files);
-      } else {
-        setPermissionGranted(false);
-        Alert.alert(
-          "Permission not granted",
-          "Please grant permission to access media files."
-        );
+    const initialize = async () => {
+      const cached = await loadAudioFilesFromCache();
+      if (cached) {
+        setAudioFiles(cached);
+        setLoading(false);
       }
 
+      const {status} = await MediaLibrary.requestPermissionsAsync();
+      if (status !== "granted") {
+        setPermissionGranted(false);
+        showPermissionAlert();
+        return;
+      }
+
+      setPermissionGranted(true);
+      const freshFiles = await loadAllAudioFiles();
+      setAudioFiles(freshFiles);
+      await saveAudioFilesToCache(freshFiles);
       setLoading(false);
     };
 
-    fetchData();
+    initialize();
   }, []);
 
-  // Handle permission request if the permission is not granted
-  const handlePermissionRequest = async () => {
-    const {status, canAskAgain} = await MediaLibrary.requestPermissionsAsync();
-
-    if (status === "granted") {
-      setPermissionGranted(true);
-      setLoading(true);
-      const files = await loadAllAudioFiles();
-      setAudioFiles(files);
-      setLoading(false);
-    } else if (!canAskAgain || status === "denied") {
-      Alert.alert(
-        "Permission Required",
-        "Please grant media library access in settings to continue.",
-        [
-          {text: "Cancel", style: "cancel"},
-          {
-            text: "Open Settings",
-            onPress: () => {
-              if (Platform.OS === "ios") {
-                Linking.openURL("app-settings:");
-              } else {
-                Linking.openSettings();
-              }
-            },
-          },
-        ]
-      );
-    }
-  };
-
   const loadAllAudioFiles = async () => {
-    let allAssets = [];
-    let hasNextPage = true;
     let after = null;
+    let hasNextPage = true;
+    let allAssets = [];
 
     try {
       while (hasNextPage) {
         const media = await MediaLibrary.getAssetsAsync({
           mediaType: MediaLibrary.MediaType.audio,
-          first: 100,
+          first: 50,
           after,
         });
 
-        const simplifiedAssets = media.assets.map((asset) => ({
-          id: asset.id,
-          filename: asset.filename,
-          uri: asset.uri,
-          duration: asset.duration,
-          album: asset.albumId,
-          creationTime: asset.creationTime,
-          modificationTime: asset.modificationTime,
-        }));
+        const batchAssets = await Promise.all(
+          media.assets.map(async (asset) => {
+            let metadata = {};
+            try {
+              const data = await getAudioMetadata(asset.uri, [
+                "album",
+                "artist",
+                "name",
+                "year",
+                "artwork",
+              ]);
+              metadata = data.metadata || {};
+            } catch {
+              metadata = {};
+            }
 
-        allAssets = [...allAssets, ...simplifiedAssets];
+            return {
+              id: asset.id,
+              uri: asset.uri,
+              filename: asset.filename,
+              duration: asset.duration,
+              album: metadata.album ?? "Unknown",
+              artist: metadata.artist ?? "Unknown",
+              title: metadata.name ?? asset.filename,
+              year: metadata.year ?? null,
+              artwork: metadata.artwork ?? null,
+              creationTime: asset.creationTime,
+              modificationTime: asset.modificationTime,
+            };
+          })
+        );
+
+        allAssets = [...allAssets, ...batchAssets];
         hasNextPage = media.hasNextPage;
         after = media.endCursor;
       }
+    } catch (err) {
+      Alert.alert("Error", err.message);
+    }
 
-      return allAssets;
-    } catch (error) {
-      Alert.alert("Error", error.message);
-      return [];
+    return allAssets;
+  };
+
+  const saveAudioFilesToCache = async (data) => {
+    try {
+      await FileSystem.writeAsStringAsync(
+        AUDIO_FILE_CACHE,
+        JSON.stringify(data)
+      );
+    } catch {}
+  };
+
+  const loadAudioFilesFromCache = async () => {
+    try {
+      const json = await FileSystem.readAsStringAsync(AUDIO_FILE_CACHE);
+      return JSON.parse(json);
+    } catch {
+      return null;
     }
   };
 
-  const screen = useMemo(
-    () => [
-      {name: All, key: "All"},
-      {name: PlayList, key: "Playlist"},
-      {name: Albulm, key: "Album"},
-      {name: Artist, key: "Artist"},
-      {name: History, key: "History"},
-    ],
-    []
-  );
+  const showPermissionAlert = () => {
+    Alert.alert(
+      "Permission Required",
+      "Please grant media library access in settings to continue.",
+      [
+        {text: "Cancel", style: "cancel"},
+        {
+          text: "Open Settings",
+          onPress: () => {
+            if (Platform.OS === "ios") {
+              Linking.openURL("app-settings:");
+            } else {
+              Linking.openSettings();
+            }
+          },
+        },
+      ]
+    );
+  };
 
-  const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: themeColors.background,
-      position: "relative",
-    },
-    play: {
-      position: "absolute",
-      right: 20,
-      backgroundColor: themeColors.primary,
-      padding: 15,
-      borderRadius: 50,
-    },
-  });
+  const onTabPress = (index) => {
+    swiperRef.current.scrollBy(index - activeTab);
+    setActiveTab(index);
+  };
 
-  //for the scroll tabs
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      if (listRef.current && screen[index]) {
-        listRef.current.scrollToIndex({
-          index,
-          animated: true,
-        });
-      }
-    }, 100);
-    return () => clearTimeout(timeout);
-  }, [index, screen]);
-
-  const handleScrollFail = useCallback(
-    ({index}) => {
-      setTimeout(() => {
-        if (listRef.current && screen[index]) {
-          listRef.current.scrollToIndex({index, animated: true});
-        }
-      }, 300);
-    },
-    [screen]
-  );
-
-  const scrollTo = (index) => {
-    if (!listRef.current || index >= screen.length) return;
-    listRef.current.scrollToIndex({index});
+  const onIndexChanged = (index) => {
+    setActiveTab(index);
   };
 
   const handleScroll = useCallback(
@@ -210,117 +189,104 @@ export default function App() {
     [prevScrollY, playComponentAnim]
   );
 
-  const getItemLayout = useCallback(
-    (_, index) => ({
-      length: width,
-      offset: width * index,
-      index,
-    }),
-    [width]
-  );
-
-  useEffect(() => {
-    AudioControl.getState().backgroundPlaySetup();
-  }, []);
-
   const handleShuffle = () => {
-    const songs = audioFiles.map((e) => {
-      return {
-        uri: e.uri,
-      };
-    });
+    const songs = audioFiles.map((e) => ({uri: e.uri}));
     AudioControl.getState().setPlaylist(
       songs,
       Math.floor(Math.random() * songs.length)
     );
   };
 
+  //making sure the state has
+  const status = AudioControl.getState()?.status;
+
   useEffect(() => {
     if (AudioControl.getState().status?.isPlaying || false) {
       setShowBottomPlayer(true);
     }
-  }, [AudioControl.getState().status]);
+  }, [status]);
+
+  const handlePermissionRequest = async () => {
+    setLoading(true);
+    const {status} = await MediaLibrary.requestPermissionsAsync();
+    if (status !== "granted") {
+      showPermissionAlert();
+    }
+    setLoading(false);
+  };
+
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: themeColors.background,
+    },
+    play: {
+      position: "absolute",
+      right: 20,
+      backgroundColor: themeColors.primary,
+      padding: 15,
+      borderRadius: 50,
+    },
+  });
 
   return (
-    <>
-      <GestureHandlerRootView style={{flex: 1}}>
-        <PortalProvider>
-          <Head />
-          <View style={styles.container}>
-            <ToggleBar activePage={activeTab} scrollTo={scrollTo} />
+    <GestureHandlerRootView style={{flex: 1}}>
+      <PortalProvider>
+        <Head />
+        <View style={styles.container}>
+          <NavigationTab
+            activePage={activeTab}
+            scrollTo={onTabPress}
+            setIndex={setActiveTab}
+          />
+          <Swiper
+            ref={swiperRef}
+            loop={false}
+            onIndexChanged={onIndexChanged}
+            showsPagination={false}
+          >
+            {screens.map((Screen, index) => (
+              <Screen
+                key={index}
+                handlePermissionRequest={handlePermissionRequest}
+                width={width}
+                onScroll={handleScroll}
+                loading={loading}
+                audioFiles={audioFiles}
+              />
+            ))}
+          </Swiper>
 
-            <FlatList
-              ref={listRef}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              decelerationRate={0.95}
-              pagingEnabled
-              bounces={false}
-              snapToInterval={width}
-              snapToAlignment="center"
-              data={screen}
-              renderItem={({item}) => (
-                <item.name
-                  width={width}
-                  onScroll={handleScroll}
-                  loading={loading}
-                  handlePermissionRequest={handlePermissionRequest}
-                  heightView={heightView}
-                />
-              )}
-              keyExtractor={(item) => item.key}
-              getItemLayout={getItemLayout}
-              initialScrollIndex={index}
-              scrollEventThrottle={16}
-              onScroll={(e) => {
-                const currentX = e.nativeEvent.contentOffset.x;
-                const newIndex = Math.floor(currentX / width);
-                if (newIndex !== index && screen[newIndex]) {
-                  toggleTabs(screen[newIndex].key, newIndex);
-                }
-              }}
-              onScrollToIndexFailed={handleScrollFail}
-            />
-
-            <View>
-              {permissionGranted && audioFiles.length > 0 && (
-                <Animated.View
-                  style={[
-                    styles.play,
-                    {bottom: heightView + 5},
+          {permissionGranted && audioFiles.length > 0 && !loading && (
+            <Animated.View
+              style={[
+                styles.play,
+                {bottom: heightView + 5},
+                {
+                  transform: [
                     {
-                      transform: [
-                        {
-                          translateY: playComponentAnim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [100, 0],
-                          }),
-                        },
-                      ],
-                      opacity: playComponentAnim,
+                      translateY: playComponentAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [100, 0],
+                      }),
                     },
-                  ]}
-                >
-                  <TouchableOpacity
-                    onPress={() => {
-                      handleShuffle();
-                      AudioControl.getState().toggleShuffle();
-                    }}
-                    className="flex items-center justify-center"
-                  >
-                    <Shuffle size={30} color={"#FFF"} />
-                  </TouchableOpacity>
-                </Animated.View>
-              )}
-              {audioFiles.length > 0 &&
-                permissionGranted &&
-                showBottomPlayer && (
-                  <BottomPlayer height={(e) => setheightView(e)} />
-                )}
-            </View>
-          </View>
-        </PortalProvider>
-      </GestureHandlerRootView>
-    </>
+                  ],
+                  opacity: playComponentAnim,
+                },
+              ]}
+            >
+              <TouchableOpacity onPress={handleShuffle}>
+                <Shuffle size={30} color="#FFF" />
+              </TouchableOpacity>
+            </Animated.View>
+          )}
+
+          {audioFiles.length > 0 &&
+            permissionGranted &&
+            showBottomPlayer &&
+            !loading && <Bottomplayer height={(e) => setHeightView(e)} />}
+        </View>
+      </PortalProvider>
+    </GestureHandlerRootView>
   );
 }

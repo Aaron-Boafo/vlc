@@ -1,5 +1,5 @@
 import {Tabs} from "expo-router";
-import useThemeStore from "../../store/theme";
+import useThemeStore from "../../store/useThemeStore";
 import * as Icons from "lucide-react-native";
 
 const TabLayouts = () => {
