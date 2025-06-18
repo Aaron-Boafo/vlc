@@ -17,7 +17,7 @@ import {router} from "expo-router";
 import AudioControls from "../store/useAudioControl";
 import AudioList from "../store/useAudioStore";
 import {useEffect, useState} from "react";
-import {fetchMetadata} from "../store/mmkvStorage";
+import MarqueeText from "react-native-marquee";
 
 const MusicPlayerUI = () => {
   const {audioFiles, musicFavourite, setFavourites} = AudioList();
@@ -104,7 +104,7 @@ const MusicPlayerUI = () => {
         {/* Album Art */}
 
         <View style={styles.albumArtContainer}>
-          {fetchMetadata(activeSongInfo?.uri) ? (
+          {activeSongInfo?.artwork ? (
             <Image
               source={{uri: activeSongInfo?.artwork}}
               style={styles.albumArt}
@@ -114,11 +114,23 @@ const MusicPlayerUI = () => {
           )}
         </View>
 
-        {/* Song Info */}
+        {/* Song Info and Slider */}
         <View style={styles.songInfoContainer}>
-          <Text style={styles.songTitle}>
-            {activeSongInfo?.title || "Unknown"}
-          </Text>
+          {activeSongInfo?.title ? (
+            <MarqueeText
+              style={styles.songTitle}
+              speed={1}
+              marqueeOnStart={true}
+              loop={true}
+              delay={1000}
+            >
+              {activeSongInfo?.title || "Unknown"}
+            </MarqueeText>
+          ) : (
+            <Text style={styles.songTitle}>
+              {activeSongInfo?.title || "Unknown"}
+            </Text>
+          )}
           <Text style={styles.songArtist}>{activeSongInfo?.artist}</Text>
         </View>
 

@@ -1,4 +1,4 @@
-import {useMemo, useState} from "react";
+import {useMemo, useState, useCallback} from "react";
 import {
   View,
   Text,
@@ -44,8 +44,15 @@ export default function AudioBrowser({
   const groupedAudioFiles = useMemo(() => {
     if (!Array.isArray(audioFiles)) return [];
 
+    const uniqueById = {};
+    for (const file of audioFiles) {
+      uniqueById[file.id] = file; // override duplicates
+    }
+
+    const files = Object.values(uniqueById);
+
     const groups = {};
-    audioFiles.forEach((item) => {
+    files.forEach((item) => {
       const firstChar = item?.title?.charAt(0)?.toUpperCase() || "#";
       const key = /^[A-Z]$/.test(firstChar) ? firstChar : "#";
       if (!groups[key]) groups[key] = [];
@@ -64,49 +71,56 @@ export default function AudioBrowser({
     }));
   }, [audioFiles]);
 
-  const handlePlaySingleMusic = async (item) => {
+  const handlePlaySingleMusic = useCallback(async (item) => {
     const song = {uri: item.uri};
-    AudioControls.getState().setPlaylist([song]);
-    AudioControls.getState().play();
-  };
+    const controls = AudioControls.getState();
+    controls.setPlaylist([song]);
+    controls.play();
+    router.push("/player");
+  }, []);
 
-  const renderItem = ({item}) => (
-    <View style={styles.itemContainer}>
-      {item?.artwork ? (
-        <Image
-          source={{uri: item?.artwork}}
-          style={styles.artwork}
-          resizeMode="cover"
-        />
-      ) : (
-        <View style={styles.artworkPlaceholder}>
-          <Music4 size={20} color="#444" />
+  const renderItem = useCallback(({item}) => {
+    return (
+      <View style={styles.itemContainer}>
+        {item?.artwork ? (
+          <Image
+            source={{uri: item?.artwork}}
+            style={styles.artwork}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={styles.artworkPlaceholder}>
+            <Music4 size={20} color="#444" />
+          </View>
+        )}
+        <TouchableOpacity
+          style={styles.infoContainer}
+          onPress={async () => {
+            await handlePlaySingleMusic(item);
+            router.push("/player");
+          }}
+        >
+          <Text style={styles.title} numberOfLines={1}>
+            {item?.title}
+          </Text>
+          <Text style={styles.detail}>
+            Duration: {formatDuration(item.duration)}
+          </Text>
+        </TouchableOpacity>
+        <View style={styles.optionsContainer}>
+          <EllipsisVertical size={20} />
         </View>
-      )}
-      <TouchableOpacity
-        style={styles.infoContainer}
-        onPress={async () => {
-          await handlePlaySingleMusic(item);
-          router.push("/player");
-        }}
-      >
-        <Text style={styles.title} numberOfLines={1}>
-          {item?.title}
-        </Text>
-        <Text style={styles.detail}>
-          Duration: {formatDuration(item.duration)}
-        </Text>
-      </TouchableOpacity>
-      <View style={styles.optionsContainer}>
-        <EllipsisVertical size={20} />
       </View>
-    </View>
-  );
+    );
+  }, []);
 
-  const renderSectionHeader = ({section: {title}}) => (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionHeaderText}>{title}</Text>
-    </View>
+  const renderSectionHeader = useCallback(
+    ({section: {title}}) => (
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionHeaderText}>{title}</Text>
+      </View>
+    ),
+    []
   );
 
   if (loading) {
@@ -147,10 +161,14 @@ export default function AudioBrowser({
         contentContainerStyle={{paddingBottom: heightView + 10 || 10}}
         onScroll={onScroll}
         sections={groupedAudioFiles}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item) => `${item.id || item.uri}-${item.title}`}
         renderItem={renderItem}
         renderSectionHeader={renderSectionHeader}
         refreshing={refreshing}
+        initialNumToRender={10}
+        maxToRenderPerBatch={15}
+        windowSize={10}
+        removeClippedSubviews={true}
         onRefresh={handleRefresh}
         stickySectionHeadersEnabled
       />

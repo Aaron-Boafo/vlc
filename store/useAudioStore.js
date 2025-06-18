@@ -13,10 +13,19 @@ const theme = (set) => ({
       loading: loading,
     }),
 
-  setAudioFiles: (files) =>
-    set({
-      audioFiles: files,
+  setAudioFiles: (newFiles) =>
+    set((state) => {
+      const existingIds = new Set(state.audioFiles.map((f) => f.id));
+      const filtered = newFiles.filter((f) => !existingIds.has(f.id));
+      return {
+        audioFiles: [...state.audioFiles, ...filtered],
+      };
     }),
+
+  setInitialAudioFiles: (files) =>
+    set(() => ({
+      audioFiles: files, // completely replaces current list when it loads from the cach memory
+    })),
 
   setPermissionGranted: (value) =>
     set({

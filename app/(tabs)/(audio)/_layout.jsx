@@ -22,7 +22,6 @@ const AudioLayout = () => {
       {/*the screens for the audio will be here  */}
       <Stack>
         <Stack.Screen name="index" options={{headerShown: false}} />
-        <Stack.Screen name="(media)" options={{headerShown: false}} />
       </Stack>
     </>
   );

@@ -30,8 +30,13 @@ import History from "../../../AudioScreens/historyScreen";
 import Bottomplayer from "../../../AudioComponents/bottomPlayer";
 
 export default function App() {
-  const {permissionGranted, setAudioFiles, audioFiles, setPermissionGranted} =
-    useAudioStore();
+  const {
+    permissionGranted,
+    setAudioFiles,
+    audioFiles,
+    setPermissionGranted,
+    setInitialAudioFiles,
+  } = useAudioStore();
   const {themeColors} = useThemeStore();
   const {width} = Dimensions.get("window");
   const swiperRef = useRef(null);
@@ -48,8 +53,9 @@ export default function App() {
   useEffect(() => {
     const initialize = async () => {
       const cached = await loadAudioFilesFromCache();
+      console.log(cached);
       if (cached) {
-        setAudioFiles(cached);
+        setInitialAudioFiles(cached);
         setLoading(false);
       }
 
@@ -62,7 +68,8 @@ export default function App() {
 
       setPermissionGranted(true);
       const freshFiles = await loadAllAudioFiles();
-      setAudioFiles(freshFiles);
+
+      console.log(freshFiles);
       await saveAudioFilesToCache(freshFiles);
       setLoading(false);
     };
@@ -79,7 +86,7 @@ export default function App() {
       while (hasNextPage) {
         const media = await MediaLibrary.getAssetsAsync({
           mediaType: MediaLibrary.MediaType.audio,
-          first: 50,
+          first: 10,
           after,
         });
 
@@ -116,6 +123,15 @@ export default function App() {
         );
 
         allAssets = [...allAssets, ...batchAssets];
+
+        // Append to existing audioFiles in Zustand store
+        setAudioFiles(batchAssets);
+
+        // Allow user to see files as they're being fetched
+        if (loading) {
+          setLoading(false);
+        }
+
         hasNextPage = media.hasNextPage;
         after = media.endCursor;
       }
@@ -126,20 +142,30 @@ export default function App() {
     return allAssets;
   };
 
+  // save audio files to cache
   const saveAudioFilesToCache = async (data) => {
     try {
       await FileSystem.writeAsStringAsync(
         AUDIO_FILE_CACHE,
         JSON.stringify(data)
       );
-    } catch {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
+  // load audio files from cache
   const loadAudioFilesFromCache = async () => {
     try {
+      const fileInfo = await FileSystem.getInfoAsync(AUDIO_FILE_CACHE);
+      if (!fileInfo.exists) return null;
+
       const json = await FileSystem.readAsStringAsync(AUDIO_FILE_CACHE);
+      if (!json || json.trim().length === 0) return null;
+
       return JSON.parse(json);
-    } catch {
+    } catch (error) {
+      console.log("Cache load error:", error);
       return null;
     }
   };
