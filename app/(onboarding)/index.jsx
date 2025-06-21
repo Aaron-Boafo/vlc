@@ -8,20 +8,22 @@ import {
   StyleSheet,
   Easing,
   StatusBar,
+  Alert,
+  Linking,
+  TouchableOpacity,
+  ActivityIndicator,
 } from "react-native";
 import {useRouter} from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {LinearGradient} from "expo-linear-gradient";
+import * as MediaLibrary from "expo-media-library";
 import {
   Music,
-  Film,
-  HardDrive,
-  Download,
   Play,
   Folder,
   Settings,
 } from "lucide-react-native";
-import Constants from "expo-constants";
+import useThemeStore from "../../store/theme";
 
 const {width, height} = Dimensions.get("window");
 
@@ -196,291 +198,291 @@ const BackgroundPattern = ({pattern, colors}) => {
 };
 
 const OnboardingScreen = () => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const router = useRouter();
-  const scrollX = useRef(new Animated.Value(0)).current;
-  const slideRef = useRef(null);
-  const progressAnim = useRef(new Animated.Value(0)).current;
+    const [currentIndex, setCurrentIndex] = useState(0);
+    const [isLoading, setIsLoading] = useState(true);
+    const router = useRouter();
+    const scrollX = useRef(new Animated.Value(0)).current;
+    const slideRef = useRef(null);
+    const progressAnim = useRef(new Animated.Value(0)).current;
+    const { themeColors } = useThemeStore();
 
-  useEffect(() => {
-    Animated.timing(progressAnim, {
-      toValue: currentIndex / (onboardingData.length - 1),
-      duration: 300,
-      useNativeDriver: false,
-    }).start();
-  }, [currentIndex]);
+    useEffect(() => {
+        const checkOnboardingStatus = async () => {
+          try {
+            // Clear the flag for testing purposes
+            await AsyncStorage.removeItem('hasOnboarded');
+            
+            const hasOnboarded = await AsyncStorage.getItem('hasOnboarded');
+            if (hasOnboarded) {
+              router.replace('/(tabs)/');
+            } else {
+              setIsLoading(false);
+            }
+          } catch (error) {
+            console.error('Error checking onboarding status:', error);
+            setIsLoading(false);
+          }
+        };
+        checkOnboardingStatus();
+    }, []);
 
-  const viewableItemsChanged = useRef(({viewableItems}) => {
-    if (viewableItems[0]) {
-      setCurrentIndex(viewableItems[0].index);
-    }
-  }).current;
-
-  const viewConfig = useRef({viewAreaCoveragePercentThreshold: 50}).current;
-
-  const scrollTo = async () => {
-    if (currentIndex < onboardingData.length - 1) {
-      slideRef.current?.scrollToIndex({index: currentIndex + 1});
-    } else {
-      try {
-        await AsyncStorage.setItem("@onboarding_complete", "true");
-        router.replace("/(tabs)");
-      } catch (err) {
-        console.log("Error saving onboarding status:", err);
+    useEffect(() => {
+      if (!isLoading) {
+        Animated.timing(progressAnim, {
+          toValue: currentIndex / (onboardingData.length - 1),
+          duration: 300,
+          useNativeDriver: false,
+        }).start();
       }
-    }
-  };
+    }, [currentIndex, isLoading]);
 
-  const skip = async () => {
-    try {
-      await AsyncStorage.setItem("@onboarding_complete", "true");
-      router.replace("/(tabs)");
-    } catch (err) {
-      console.log("Error saving onboarding status:", err);
-    }
-  };
+    const viewableItemsChanged = useRef(({viewableItems}) => {
+        if (viewableItems.length > 0) {
+            setCurrentIndex(viewableItems[0].index);
+        }
+    }).current;
 
-  const ProgressBar = () => {
-    const width = progressAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: ["0%", "100%"],
-    });
+    const viewConfig = useRef({viewAreaCoveragePercentThreshold: 50}).current;
+
+    const handleNext = () => {
+        if (currentIndex < onboardingData.length - 1) {
+            slideRef.current?.scrollToIndex({index: currentIndex + 1});
+        }
+    };
+
+    const handleDone = async () => {
+        try {
+            await AsyncStorage.setItem('hasOnboarded', 'true');
+            router.replace("/(tabs)");
+        } catch (err) {
+            console.log("Error saving onboarding status:", err);
+        }
+    };
+
+    const requestPermissionsAndFinish = async () => {
+        try {
+            const { status } = await MediaLibrary.requestPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert(
+                    'Permission Required',
+                    'This app needs access to your media library to show your videos and music. You can enable this in your device settings.',
+                    [
+                        { text: 'Continue Anyway', onPress: () => handleDone() },
+                        { text: 'Open Settings', onPress: () => Linking.openSettings() }
+                    ]
+                );
+            } else {
+                handleDone();
+            }
+        } catch (error) {
+            console.error('Error requesting permissions:', error);
+            handleDone();
+        }
+    }
+
+    const skip = () => {
+        requestPermissionsAndFinish();
+    };
+
+    const handleMainButtonPress = () => {
+        if (currentIndex === onboardingData.length - 1) {
+            requestPermissionsAndFinish();
+        } else {
+            handleNext();
+        }
+    };
+
+    const ProgressBar = () => {
+        const width = progressAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: ["0%", "100%"],
+        });
+
+        return (
+            <View style={styles.progressContainer}>
+                <Animated.View style={[styles.progressBar, { width, backgroundColor: onboardingData[currentIndex].gradient[0] }]}/>
+            </View>
+        );
+    };
+
+    if (isLoading) {
+      return (
+        <View style={[styles.container, {justifyContent: 'center', alignItems: 'center'}]}>
+          <StatusBar hidden />
+          <ActivityIndicator size="large" color="#FFF" />
+        </View>
+      )
+    }
 
     return (
-      <View style={styles.progressContainer}>
-        <Animated.View
-          style={[
-            styles.progressBar,
-            {
-              width,
-            },
-          ]}
-        />
-      </View>
-    );
-  };
-
-  return (
-    <>
-      <View style={styles.container}>
-        <Animated.FlatList
-          ref={slideRef}
-          data={onboardingData}
-          renderItem={({item, index}) => (
-            <View style={styles.slide}>
-              <BackgroundPattern
-                pattern={item.pattern}
-                colors={item.gradient}
-              />
-              <View style={styles.contentContainer}>
-                <AnimatedIcon
-                  icon={item.icon}
-                  size={80}
-                  isActive={index === currentIndex}
+        <>
+            <StatusBar hidden />
+            <View style={styles.container}>
+                <Animated.FlatList
+                    ref={slideRef}
+                    data={onboardingData}
+                    renderItem={({item, index}) => (
+                        <View style={styles.slide}>
+                            <BackgroundPattern pattern={item.pattern} colors={item.gradient} />
+                            <View style={styles.contentContainer}>
+                                <AnimatedIcon icon={item.icon} size={80} isActive={index === currentIndex} />
+                                <View style={styles.textContainer}>
+                                    <Text style={[styles.subtitle, { color: item.gradient[0] }]}>{item.subtitle}</Text>
+                                    <Text style={styles.title}>{item.title}</Text>
+                                    <Text style={styles.description}>{item.description}</Text>
+                                </View>
+                            </View>
+                        </View>
+                    )}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    pagingEnabled
+                    bounces={false}
+                    keyExtractor={(item) => item.title}
+                    onScroll={Animated.event(
+                        [{nativeEvent: {contentOffset: {x: scrollX}}}],
+                        {useNativeDriver: false}
+                    )}
+                    scrollEventThrottle={32}
+                    onViewableItemsChanged={viewableItemsChanged}
+                    viewabilityConfig={viewConfig}
                 />
-                <View style={styles.textContainer}>
-                  <Text style={styles.subtitle}>{item.subtitle}</Text>
-                  <Text style={styles.title}>{item.title}</Text>
-                  <Text style={styles.description}>{item.description}</Text>
-                </View>
-              </View>
-            </View>
-          )}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          pagingEnabled
-          bounces={false}
-          keyExtractor={(item) => item.title}
-          onScroll={Animated.event(
-            [{nativeEvent: {contentOffset: {x: scrollX}}}],
-            {useNativeDriver: false}
-          )}
-          scrollEventThrottle={32}
-          onViewableItemsChanged={viewableItemsChanged}
-          viewabilityConfig={viewConfig}
-        />
 
-        <View style={styles.bottomContainer}>
-          <ProgressBar />
-          <View style={styles.buttonContainer}>
-            <Pressable
-              style={[styles.button, styles.skipButton]}
-              onPress={skip}
-            >
-              <Text style={styles.buttonText}>Skip</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.button, styles.nextButton]}
-              onPress={scrollTo}
-            >
-              <LinearGradient
-                colors={onboardingData[currentIndex].gradient}
-                start={{x: 0, y: 0}}
-                end={{x: 1, y: 0}}
-                style={styles.gradientButton}
-              >
-                <Text style={[styles.buttonText, styles.nextButtonText]}>
-                  {currentIndex === onboardingData.length - 1
-                    ? "Get Started"
-                    : "Next"}
-                </Text>
-              </LinearGradient>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    </>
-  );
+                <View style={styles.bottomContainer}>
+                    <ProgressBar />
+                    <View style={styles.buttonContainer}>
+                        <Pressable style={[styles.button, styles.skipButton]} onPress={skip}>
+                            <Text style={styles.buttonText}>Skip</Text>
+                        </Pressable>
+                        <TouchableOpacity
+                            onPress={handleMainButtonPress}
+                            activeOpacity={0.8}
+                        >
+                            <LinearGradient
+                                colors={onboardingData[currentIndex].gradient}
+                                start={{x: 0, y: 0}}
+                                end={{x: 1, y: 1}}
+                                style={styles.button}
+                            >
+                                <Text style={styles.buttonText}>{currentIndex === onboardingData.length - 1 ? "Get Started" : "Next"}</Text>
+                            </LinearGradient>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+        </>
+    );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#121212",
-    paddingTop: 0,
-  },
-  slide: {
-    width,
-    height,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  contentContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 20,
-    zIndex: 2,
-  },
-  pattern: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.15,
-  },
-  patternGradient: {
-    width: width * 2,
-    height: height * 2,
-    position: "absolute",
-  },
-  diagonalPattern: {
-    transform: [{rotate: "45deg"}],
-  },
-  gridPattern: {
-    transform: [{scale: 0.5}],
-  },
-  circlesPattern: {
-    borderRadius: width,
-  },
-  wavesPattern: {
-    transform: [{rotate: "30deg"}],
-  },
-  iconWrapper: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 40,
-  },
-  textContainer: {
-    alignItems: "center",
-    paddingHorizontal: 30,
-  },
-  subtitle: {
-    fontSize: 18,
-    color: "#FF00FF",
-    textAlign: "center",
-    marginBottom: 8,
-    fontWeight: "600",
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-    textAlign: "center",
-    marginBottom: 16,
-  },
-  description: {
-    fontSize: 16,
-    color: "#CCCCCC",
-    textAlign: "center",
-    lineHeight: 24,
-    maxWidth: "80%",
-  },
-  bottomContainer: {
-    position: "absolute",
-    bottom: 50,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 20,
-  },
-  progressContainer: {
-    height: 4,
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-    borderRadius: 2,
-    marginBottom: 30,
-  },
-  progressBar: {
-    height: "100%",
-    backgroundColor: "#FF00FF",
-    borderRadius: 2,
-  },
-  buttonContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  button: {
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 30,
-    minWidth: 140,
-  },
-  skipButton: {
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-  },
-  nextButton: {
-    overflow: "hidden",
-  },
-  gradientButton: {
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 30,
-    alignItems: "center",
-  },
-  buttonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  nextButtonText: {
-    color: "#FFFFFF",
-  },
+    container: {
+        flex: 1,
+        backgroundColor: "#121212",
+    },
+    slide: {
+        width,
+        height,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    contentContainer: {
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 20,
+        zIndex: 2,
+    },
+    pattern: {
+        ...StyleSheet.absoluteFillObject,
+        opacity: 0.15,
+    },
+    patternGradient: {
+        width: width * 2,
+        height: height * 2,
+        position: "absolute",
+    },
+    diagonalPattern: {
+        transform: [{rotate: "45deg"}],
+    },
+    gridPattern: {
+        transform: [{scale: 0.5}],
+    },
+    circlesPattern: {
+        borderRadius: width,
+    },
+    wavesPattern: {
+        transform: [{rotate: "30deg"}],
+    },
+    iconWrapper: {
+        width: 160,
+        height: 160,
+        borderRadius: 80,
+        backgroundColor: "rgba(255, 255, 255, 0.1)",
+        alignItems: "center",
+        justifyContent: "center",
+        marginBottom: 40,
+    },
+    textContainer: {
+        alignItems: "center",
+        paddingHorizontal: 30,
+    },
+    subtitle: {
+        fontSize: 18,
+        textAlign: "center",
+        marginBottom: 8,
+        fontWeight: "600",
+    },
+    title: {
+        fontSize: 32,
+        fontWeight: "bold",
+        color: "#FFFFFF",
+        textAlign: "center",
+        marginBottom: 16,
+    },
+    description: {
+        fontSize: 16,
+        color: "#CCCCCC",
+        textAlign: "center",
+        lineHeight: 24,
+        maxWidth: "80%",
+    },
+    bottomContainer: {
+        position: "absolute",
+        bottom: 50,
+        left: 0,
+        right: 0,
+        paddingHorizontal: 20,
+    },
+    progressContainer: {
+        height: 4,
+        backgroundColor: "rgba(255, 255, 255, 0.1)",
+        borderRadius: 2,
+        marginBottom: 30,
+    },
+    progressBar: {
+        height: "100%",
+        borderRadius: 2,
+    },
+    buttonContainer: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+    },
+    button: {
+        paddingVertical: 16,
+        paddingHorizontal: 32,
+        borderRadius: 30,
+        minWidth: 140,
+        alignItems: "center",
+    },
+    skipButton: {
+        backgroundColor: "rgba(255, 255, 255, 0.2)",
+    },
+    buttonText: {
+        color: "#FFFFFF",
+        fontSize: 16,
+        fontWeight: "600",
+        textAlign: 'center'
+    },
 });
 
 export default OnboardingScreen;
-
-/* // In the OnboardingScreen component:
-
-const scrollTo = async () => {
-  if (currentIndex < onboardingData.length - 1) {
-    slideRef.current?.scrollToIndex({ index: currentIndex + 1 });
-  } else {
-    try {
-      // Mark onboarding as complete AND app as launched
-      await AsyncStorage.setItem('@has_launched', 'true');
-      router.replace('/(tabs)');
-    } catch (err) {
-      console.log('Error saving launch status:', err);
-    }
-  }
-};
-
-const skip = async () => {
-  try {
-    // Mark onboarding as complete AND app as launched
-    await AsyncStorage.setItem('@has_launched', 'true');
-    router.replace('/(tabs)');
-  } catch (err) {
-    console.log('Error saving launch status:', err);
-  }
-}; */

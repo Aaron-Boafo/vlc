@@ -1,73 +1,73 @@
-import {View, Text, TouchableOpacity} from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import * as Icons from "lucide-react-native";
 import useThemeStore from "../store/theme";
-import clsx from "clsx";
 import useAudioStore from "../store/AudioHeadStore";
 
-const toggleButton = ({activePage = "all"}) => {
-  const {themeColors} = useThemeStore();
-  const {toggleTabs} = useAudioStore();
-  const size = 24;
+const ToggleBar = () => {
+  const { themeColors } = useThemeStore();
+  const { activeTab, toggleTabs } = useAudioStore();
 
   return (
-    <View className="flex flex-row  w-[95%] mx-auto my-3 rounded-lg p-1 justify-between items-center bg-gray-500   ">
-      {/* the all button page */}
-
-      {tags.map((tag, index) => (
-        <TouchableOpacity
-          onPress={() => toggleTabs(tag.name)}
-          className={clsx(
-            "flex flex-row justify-center items-center gap-x-2 px-3 py-2",
-            activePage === tag.name && "bg-slate-900 rounded-lg"
-          )}
-          key={index}
-        >
-          <tag.icon
-            size={size}
-            color={
-              activePage === tag.name ? themeColors.primary : themeColors.text
-            }
-          />
-          {activePage === tag.name && (
-            <Text
-              style={{
-                color:
-                  activePage === tag.name
-                    ? themeColors.primary
-                    : themeColors.text,
-              }}
-            >
-              {" "}
-              {tag.name.toLocaleUpperCase()}
-            </Text>
-          )}
-        </TouchableOpacity>
-      ))}
+    <View style={styles.container}>
+      {tags.map((tag) => {
+        const isActive = activeTab === tag.name;
+        return (
+          <TouchableOpacity
+            key={tag.name}
+            onPress={() => toggleTabs(tag.name)}
+            style={[
+              styles.toggleButton,
+              { backgroundColor: isActive ? themeColors.primary : themeColors.card },
+            ]}
+          >
+            <tag.icon 
+              size={22} 
+              color={isActive ? "white" : themeColors.textSecondary} 
+            />
+            {isActive && (
+              <Text style={styles.toggleTextActive}>
+                {tag.name.charAt(0).toUpperCase() + tag.name.slice(1)}
+              </Text>
+            )}
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 };
 
 const tags = [
-  {
-    name: "all",
-    icon: Icons.LayoutGrid,
-  },
-  {
-    name: "playlist",
-    icon: Icons.ListVideo,
-  },
-  {
-    name: "album",
-    icon: Icons.Disc3,
-  },
-  {
-    name: "artist",
-    icon: Icons.SquareUserRound,
-  },
-  {
-    name: "history",
-    icon: Icons.Clock,
-  },
+  { name: "all", icon: Icons.LayoutGrid },
+  { name: "playlist", icon: Icons.ListVideo },
+  { name: "album", icon: Icons.Disc3 },
+  { name: "artist", icon: Icons.SquareUserRound },
+  { name: "favourite", icon: Icons.Heart },
 ];
 
-export default toggleButton;
+const styles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginTop: 13,
+    marginBottom: 12,
+  },
+  toggleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
+    height: 44,
+    paddingHorizontal: 12,
+    gap: 6,
+  },
+  toggleTextActive: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 14,
+    marginLeft: 6,
+  },
+});
+
+export default ToggleBar;

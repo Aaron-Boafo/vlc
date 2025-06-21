@@ -1,7 +1,10 @@
-import {Stack} from "expo-router";
+import { Stack } from "expo-router";
 
-const AudioLayout = () => {
-  return <Stack />;
-};
-
-export default AudioLayout;
+export default function VideoLayout() {
+  return (
+    <Stack>
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="player" options={{ headerShown: false }} />
+    </Stack>
+  );
+}; 

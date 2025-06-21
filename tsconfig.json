@@ -1,9 +1,23 @@
 {
-  "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    "jsx": "react-native",
+    "target": "esnext",
+    "module": "Node16",
+    "lib": [
+      "esnext"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "moduleResolution": "node16",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": [
+        "./*"
+      ]
     }
   },
   "include": [
@@ -14,5 +28,6 @@
     "nativewind-env.d.ts",
     "app/_layout.jsx",
     "app/index.jsx"
-  ]
+  ],
+  "extends": "expo/tsconfig.base"
 }

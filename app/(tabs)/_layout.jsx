@@ -1,85 +1,49 @@
-import {Tabs} from "expo-router";
+import { Tabs } from "expo-router";
 import useThemeStore from "../../store/theme";
 import * as Icons from "lucide-react-native";
+import MiniPlayer from "../../components/MiniPlayer";
+import { Video } from 'lucide-react-native';
+import VideoMiniPlayer from '../../VideoComponents/VideoMiniPlayer';
 
-const TabLayouts = () => {
-  const {themeColors} = useThemeStore();
+export default function TabLayouts() {
+  const { themeColors, isDarkMode } = useThemeStore();
+
   return (
-    <Tabs
-      initialRouteName="(video)"
-      screenOptions={({focused}) => ({
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: "700",
-          padding: 5,
-          paddingTop: 3,
-        },
-        tabBarStyle: {
-          backgroundColor: themeColors.background,
-          height: 80,
-          paddingTop: 3,
-        },
-        tabBarActiveTintColor: themeColors.primary,
-        tabBarInactiveTintColor: themeColors.tabIconColor,
-        tabBarIconSize: 30,
-      })}
-    >
-      <Tabs.Screen
-        name="(video)"
-        options={{
+    <>
+      <Tabs
+        screenOptions={{
           headerShown: false,
-          tabBarIcon: ({color, size}) => (
-            <Icons.FileVideo color={color} size={size} />
-          ),
-          title: "Video",
-        }}
-      />
-      <Tabs.Screen
-        name="(audio)"
-        options={{
-          headerShown: false,
-          title: "Audio",
-          tabBarIcon: ({size, color}) => (
-            <Icons.FileAudio size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="(browse)"
-        options={{
-          headerShown: false,
-          title: "Browse",
-          tabBarIcon: ({focused, size, color}) => {
-            return !focused ? (
-              <Icons.FolderClosed size={size} color={color} />
-            ) : (
-              <Icons.FolderOpen size={size} color={color} />
-            );
+          tabBarActiveTintColor: themeColors.primary,
+          tabBarInactiveTintColor: themeColors.textSecondary,
+          tabBarStyle: {
+            backgroundColor: themeColors.background,
+            borderTopColor: themeColors.card,
+            borderTopWidth: 1,
           },
         }}
-      />
-      <Tabs.Screen
-        name="(playlist)"
-        options={{
-          headerShown: false,
-          title: "Playlist",
-          tabBarIcon: ({size, color}) => (
-            <Icons.ListMusic color={color} size={size} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="(more)"
-        options={{
-          headerShown: false,
-          title: "More",
-          tabBarIcon: ({size, color}) => (
-            <Icons.Component color={color} size={size} />
-          ),
-        }}
-      />
-    </Tabs>
+      >
+        <Tabs.Screen
+          name="(video)"
+          options={{
+            title: "Video",
+            headerShown: false,
+            tabBarIcon: ({ color }) => <Icons.FileVideo color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="(audio)"
+          options={{
+            title: "Audio",
+            headerShown: false,
+            tabBarIcon: ({ color }) => <Icons.FileAudio color={color} />,
+          }}
+        />
+        <Tabs.Screen name="(browse)" options={{ title: "Browse", tabBarIcon: ({ focused, size, color }) => focused ? <Icons.FolderOpen size={size} color={color} /> : <Icons.FolderClosed size={size} color={color} /> }} />
+        <Tabs.Screen name="(playlist)" options={{ title: "Playlist", tabBarIcon: ({ color, size }) => <Icons.ListMusic color={color} size={size} /> }} />
+        <Tabs.Screen name="(more)" options={{ title: "More", tabBarIcon: ({ color, size }) => <Icons.Component color={color} size={size} /> }} />
+      </Tabs>
+      <MiniPlayer />
+      <VideoMiniPlayer />
+    </>
   );
-};
-
-export default TabLayouts;
+}

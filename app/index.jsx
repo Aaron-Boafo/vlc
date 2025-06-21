@@ -2,13 +2,14 @@ import {Redirect} from "expo-router";
 import {useEffect, useState} from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {View, ActivityIndicator} from "react-native";
+import * as MediaLibrary from "expo-media-library";
 
 export default function Index() {
   const [isLoading, setIsLoading] = useState(true);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
 
   useEffect(() => {
-    // Temporarily force reset onboarding status
+    // Temporarily force reset onboarding status to show onboarding again
     AsyncStorage.removeItem("@onboarding_complete").then(() => {
       checkOnboardingStatus();
     });
@@ -18,6 +19,17 @@ export default function Index() {
     try {
       const value = await AsyncStorage.getItem("@onboarding_complete");
       setHasCompletedOnboarding(value === "true");
+      
+      // Request media permissions on app startup if onboarding is complete
+      if (value === "true") {
+        console.log('Requesting media permissions on app startup...');
+        try {
+          const { status, canAskAgain } = await MediaLibrary.requestPermissionsAsync();
+          console.log('Media permission status:', { status, canAskAgain });
+        } catch (error) {
+          console.error('Error requesting media permissions:', error);
+        }
+      }
     } catch (err) {
       console.log("Error checking onboarding status:", err);
     } finally {
