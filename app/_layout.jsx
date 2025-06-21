@@ -48,7 +48,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="video-player" options={{ headerShown: false }} />
           <Stack.Screen
-            name="(tabs)/(audio)/player"
+            name="player"
             options={{ headerShown: false, presentation: "modal" }}
           />
         </Stack>

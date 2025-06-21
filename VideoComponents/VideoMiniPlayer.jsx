@@ -8,7 +8,8 @@ import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated'
 
 const VideoMiniPlayer = () => {
   const { 
-    currentVideo, 
+    miniPlayerVideo,
+    miniPlayerPosition,
     isMiniPlayerVisible, 
     isMiniPlayerPlaying, 
     toggleMiniPlayerPlayback, 
@@ -50,7 +51,7 @@ const VideoMiniPlayer = () => {
   }, [isMiniPlayerVisible]);
 
   const handleOpenFullScreen = () => {
-    if (currentVideo) {
+    if (miniPlayerVideo) {
       router.push('/(tabs)/(video)/player');
     }
   };
@@ -84,7 +85,7 @@ const VideoMiniPlayer = () => {
       { width: miniPlayerWidth, height: miniPlayerHeight },
       containerAnimatedStyle
     ]}>
-      {currentVideo && (
+      {miniPlayerVideo && (
         <TouchableOpacity 
           style={styles.pressableArea} 
           onPress={handlePlayerPress}
@@ -92,10 +93,11 @@ const VideoMiniPlayer = () => {
         >
           <Video
             ref={videoRef}
-            source={{ uri: currentVideo.uri }}
+            source={{ uri: miniPlayerVideo.uri }}
             style={styles.video}
             resizeMode="cover"
             shouldPlay={isMiniPlayerPlaying}
+            positionMillis={miniPlayerPosition}
             isMuted={false}
             volume={1.0}
             isLooping

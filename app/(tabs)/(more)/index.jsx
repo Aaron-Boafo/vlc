@@ -361,7 +361,7 @@ const MoreScreen = () => {
                   className="w-24 mr-4"
                   onPress={async () => {
                     await audioControl.setAndPlayPlaylist([item]);
-                    router.push('/player');
+                    router.push('/(tabs)/(video)/player');
                   }}
                 >
                   <View

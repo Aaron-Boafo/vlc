@@ -76,6 +76,8 @@ const useVideoStore = create(
       // Mini Player State
       isMiniPlayerVisible: false,
       isMiniPlayerPlaying: false,
+      miniPlayerPosition: 0,
+      miniPlayerVideo: null,
 
       // Load video files from device with optimization
       loadVideoFiles: async () => {
@@ -115,9 +117,14 @@ const useVideoStore = create(
         // Navigation should be handled by the component that calls this.
       },
 
-      showMiniPlayer: (isPlaying = true) => {
-        if (get().currentVideo) {
-          set({ isMiniPlayerVisible: true, isMiniPlayerPlaying: isPlaying });
+      showMiniPlayer: (video, position, isPlaying = true) => {
+        if (video) {
+          set({ 
+            isMiniPlayerVisible: true, 
+            isMiniPlayerPlaying: isPlaying,
+            miniPlayerVideo: video,
+            miniPlayerPosition: position,
+          });
         }
       },
 
@@ -129,8 +136,8 @@ const useVideoStore = create(
         set({ 
           isMiniPlayerVisible: false, 
           isMiniPlayerPlaying: false,
-          currentVideo: null, 
-          currentVideoIndex: -1 
+          miniPlayerVideo: null,
+          miniPlayerPosition: 0,
         });
       },
 

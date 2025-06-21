@@ -50,13 +50,14 @@ const AllScreen = ({ showSearch = false, onCloseSearch }) => {
 
   const handlePlaySong = useCallback(async (item) => {
     try {
-      await audioControl.setAndPlayPlaylist([item]);
+      const index = filteredTracks.findIndex(track => track.id === item.id);
+      await audioControl.setAndPlayPlaylist(filteredTracks, index);
       router.push('/(tabs)/(audio)/player');
     } catch (error) {
       console.error("Error playing song:", error);
       Alert.alert("Error", "Failed to play song");
     }
-  }, [audioControl]);
+  }, [audioControl, filteredTracks]);
 
   const handleMoreOptions = (item) => {
     setSelectedTrack(item);

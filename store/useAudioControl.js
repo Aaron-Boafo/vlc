@@ -44,7 +44,29 @@ const useAudioControl = create((set, get) => ({
     return true; // For now, assume it's initialized if no error was thrown
   },
 
-  // Set play queue and start playing
+  setAndPlayPlaylist: async (tracks, startIndex = 0) => {
+    const { sound } = get();
+    if (sound) {
+      try {
+        await sound.stopAsync();
+        await sound.unloadAsync();
+      } catch (error) {
+        console.error("Error stopping/unloading previous sound:", error);
+      }
+    }
+    const trackToPlay = tracks[startIndex];
+    set({
+      playQueue: tracks,
+      originalQueue: tracks,
+      currentIndex: startIndex,
+      currentTrack: trackToPlay,
+      sound: null,
+      isMiniPlayerVisible: true,
+    });
+    get()._loadAndPlayTrack(trackToPlay);
+  },
+
+  // Set play queue without starting
   setPlayQueue: async (tracks, startIndex = 0) => {
     const { sound } = get();
     if (sound) {
@@ -66,44 +88,74 @@ const useAudioControl = create((set, get) => ({
     });
     // Also fetch lyrics for the new track
     get().fetchLyricsFromAPI(tracks[startIndex]);
+    get().clearSleepTimer();
   },
 
-  // Play current track
+  _loadAndPlayTrack: async (track) => {
+    if (get().isLoading) {
+      console.log('[AUDIO] Play request ignored: already loading');
+      return;
+    }
+    set({ isLoading: true });
+    const { sound: existingSound } = get();
+    try {
+      if (existingSound) {
+        const status = await existingSound.getStatusAsync();
+        if (status.isLoaded) {
+          console.log('[AUDIO] Unloading sound for:', existingSound._key || 'unknown', 'Track:', get().currentTrack?.title);
+          await existingSound.stopAsync();
+          await existingSound.unloadAsync();
+        }
+      }
+    } catch (e) {
+      console.error("[AUDIO] Error ensuring single playback (unload):", e);
+      set({ sound: null, isPlaying: false });
+    }
+
+    if (!track?.uri) {
+      console.error("Attempted to play a track with no URI");
+      return set({ isLoading: false, currentTrack: null });
+    }
+    
+    set({ isLoading: true, sound: null, isPlaying: false, position: 0 });
+
+    try {
+      console.log('[AUDIO] Creating new sound for:', track.title, track.uri);
+      const { sound: newSound } = await Audio.Sound.createAsync(
+          { uri: track.uri },
+          { shouldPlay: true, volume: 1.0 },
+          (status) => onPlaybackStatusUpdate(status, set, get)
+      );
+      set({
+          sound: newSound,
+          isPlaying: true,
+          isLoading: false,
+          currentTrack: track,
+      });
+      console.log('[AUDIO] Now playing:', track.title);
+      try {
+        if (useHistoryStore.getState().saveHistory) {
+          useHistoryStore.getState().addToHistory(track);
+        }
+      } catch (e) {}
+      get().fetchLyricsFromAPI(track);
+    } catch (error) {
+      console.error("Error in _loadAndPlayTrack:", error);
+      set({ isLoading: false, isPlaying: false });
+    }
+  },
+
+  // Play current track (now primarily for resume)
   play: async () => {
     const { sound, currentTrack, isPlaying, isLoading } = get();
-    if (isPlaying || !currentTrack || isLoading) return;
-
-    set({ isLoading: true });
-    try {
-      await get().initialize();
-
-      if (sound) {
-        // Sound object exists, so it's paused. Let's resume.
-        set({ isPlaying: true });
-        await sound.playAsync();
-        set({ isLoading: false });
-      } else {
-        // No sound object, so this is a new track.
-        const { sound: newSound } = await Audio.Sound.createAsync(
-            { uri: currentTrack.uri },
-            { shouldPlay: true, volume: 1.0 },
-            (status) => onPlaybackStatusUpdate(status, set, get)
-        );
-        set({
-            sound: newSound,
-            isPlaying: true,
-            isLoading: false,
-        });
-        try {
-          if (useHistoryStore.getState().saveHistory) {
-            useHistoryStore.getState().addToHistory(currentTrack);
-          }
-        } catch (e) {}
-        get().fetchLyricsFromAPI(currentTrack);
-      }
-    } catch (error) {
-      console.error("Error playing audio:", error);
-      set({ isLoading: false, isPlaying: false });
+    if (isPlaying || isLoading) return;
+    
+    if (sound) {
+      set({ isPlaying: true });
+      console.log('[AUDIO] Resuming sound for:', currentTrack?.title);
+      await sound.playAsync();
+    } else if (currentTrack) {
+      get()._loadAndPlayTrack(currentTrack);
     }
   },
 
@@ -124,6 +176,7 @@ const useAudioControl = create((set, get) => ({
         }
       }
     }
+    get().clearSleepTimer();
   },
 
   // Stop current track
@@ -154,35 +207,34 @@ const useAudioControl = create((set, get) => ({
 
   // Next track
   next: async () => {
-    const { playQueue, currentIndex, sound } = get();
-    if (sound) {
-      await sound.stopAsync();
-      await sound.unloadAsync();
-      set({ sound: null, isPlaying: false, position: 0 });
-    }
-    if (playQueue.length > currentIndex + 1) {
-      const nextIndex = currentIndex + 1;
-      set({ currentIndex: nextIndex, currentTrack: playQueue[nextIndex] });
-      get().play();
-    } else {
-      // End of queue, what to do? Maybe stop.
-      get().stop();
-    }
+    const { playQueue, currentIndex } = get();
+    if (playQueue.length === 0) return;
+
+    const nextIndex = (currentIndex + 1) % playQueue.length;
+    const nextTrack = playQueue[nextIndex];
+
+    set({ currentIndex: nextIndex });
+    get()._loadAndPlayTrack(nextTrack);
   },
 
   // Previous track
   previous: async () => {
-    const { playQueue, currentIndex, sound } = get();
-    if (sound) {
-      await sound.stopAsync();
-      await sound.unloadAsync();
-      set({ sound: null, isPlaying: false, position: 0 });
+    const { playQueue, currentIndex, position, isPlaying } = get();
+    if (playQueue.length === 0) return;
+
+    // If track has been playing for > 3s, just restart it.
+    if (position > 3000) {
+      await get().seek(0);
+      if (!isPlaying) await get().play();
+      return;
     }
-    if (currentIndex > 0) {
-      const prevIndex = currentIndex - 1;
-      set({ currentIndex: prevIndex, currentTrack: playQueue[prevIndex] });
-      get().play();
-    }
+
+    const prevIndex =
+      currentIndex === 0 ? playQueue.length - 1 : currentIndex - 1;
+    const prevTrack = playQueue[prevIndex];
+    
+    set({ currentIndex: prevIndex });
+    get()._loadAndPlayTrack(prevTrack);
   },
 
   // Seek to position
@@ -252,15 +304,6 @@ const useAudioControl = create((set, get) => ({
         console.error("Error cleaning up audio:", error);
       }
     }
-  },
-
-  // Helper to set playlist and play immediately
-  setAndPlayPlaylist: async (tracks, startIndex = 0) => {
-    await get().setPlayQueue(tracks, startIndex);
-    // Wait a tick to ensure state is updated
-    setTimeout(() => {
-      get().play();
-    }, 50);
   },
 
   // Control mini player visibility

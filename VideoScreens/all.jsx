@@ -39,7 +39,9 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
 
   const handleVideoPress = (video) => {
     setAndPlayVideo(video);
-    router.push('/(tabs)/(video)/player');
+    setTimeout(() => {
+      router.push('/(tabs)/(video)/player');
+    }, 50);
   };
 
   const handleMoreOptions = (video) => {

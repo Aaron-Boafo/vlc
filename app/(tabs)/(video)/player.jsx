@@ -13,6 +13,8 @@ import useVideoStore from '../../../store/VideoHeadStore';
 import * as FileSystem from 'expo-file-system';
 import srtParser from 'parse-srt';
 import ytdl from 'react-native-ytdl';
+import { StatusBar } from 'expo-status-bar';
+import { useNavigation } from 'expo-router';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -28,6 +30,7 @@ const VideoPlayerScreen = () => {
   } = useVideoStore();
   const { themeColors } = useThemeStore();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const navigation = useNavigation();
 
   if (!currentVideo) {
     return (
@@ -161,8 +164,8 @@ const VideoPlayerScreen = () => {
   }, [isLocked]);
   
   const handleMinimize = () => {
-    showMiniPlayer(status.isPlaying);
-    router.replace('/');
+    showMiniPlayer(currentVideo, status.positionMillis, status.isPlaying);
+    router.back();
   };
   
   const swipeDown = Gesture.Pan()
@@ -383,6 +386,17 @@ const VideoPlayerScreen = () => {
     }
   }, [currentVideo]);
 
+  useEffect(() => {
+    if (isFullscreen) {
+      navigation?.getParent()?.setOptions?.({ tabBarStyle: { display: 'none' } });
+    } else {
+      navigation?.getParent()?.setOptions?.({ tabBarStyle: undefined });
+    }
+    return () => {
+      navigation?.getParent()?.setOptions?.({ tabBarStyle: undefined });
+    };
+  }, [isFullscreen]);
+
   if (isFetchingStream) {
     return (
       <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -439,13 +453,14 @@ const VideoPlayerScreen = () => {
   }
 
   return (
-    <SafeAreaView style={[styles.container, isFullscreen && styles.fullscreenContainer]}>
+    <SafeAreaView style={styles.container}>
+      <StatusBar hidden={isFullscreen} />
       <GestureDetector gesture={composedGesture}>
-        <View style={[styles.videoContainer, isFullscreen && styles.fullscreenVideoContainer]}>
+        <View style={styles.videoContainer}>
           <Video
             ref={videoRef}
             source={{ uri: streamUrl }}
-            style={[styles.video, isFullscreen && styles.fullscreenVideo]}
+            style={styles.video}
             resizeMode="contain"
             shouldPlay
             isMuted={false}
@@ -682,36 +697,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  fullscreenContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 1000,
-  },
   videoContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  fullscreenVideoContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    backgroundColor: '#000',
   },
   video: {
     width: '100%',
     height: '100%',
-  },
-  fullscreenVideo: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
   },
   controlsOverlay: {
     ...StyleSheet.absoluteFillObject,
