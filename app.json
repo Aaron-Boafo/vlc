@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "vlc",
+    "name": "VLC Media Player",
     "slug": "vlc",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -9,14 +9,35 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.samspeedy.vlcmediaplayer",
+      "infoPlist": {
+        "NSAppleMusicUsageDescription": "This app needs access to your media library to play your music and videos.",
+        "NSMicrophoneUsageDescription": "This app needs microphone access for audio features.",
+        "UIBackgroundModes": [
+          "audio",
+          "background-processing"
+        ]
+      }
     },
     "android": {
+      "package": "com.samspeedy.vlcmediaplayer",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "READ_EXTERNAL_STORAGE",
+        "READ_MEDIA_AUDIO",
+        "READ_MEDIA_VIDEO",
+        "READ_MEDIA_IMAGES",
+        "WRITE_EXTERNAL_STORAGE",
+        "INTERNET",
+        "WAKE_LOCK",
+        "FOREGROUND_SERVICE"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -25,6 +46,15 @@
     },
     "plugins": [
       "expo-router",
+      "expo-av",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your media library.",
+          "savePhotosPermission": "Allow $(PRODUCT_NAME) to save photos.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -33,10 +63,17 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ]
+      ],
+      "expo-screen-orientation"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "544876cb-9a8a-4e7c-80a2-50e7465d51ab"
+      }
     }
   }
 }

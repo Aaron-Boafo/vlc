@@ -1,13 +1,15 @@
-import { View, Text, TouchableOpacity, ScrollView, Switch } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, Switch, Image } from "react-native";
 import React, { useState } from "react";
 import useThemeStore from "../../../store/theme";
+import useHistoryStore from "../../../store/historyStore";
 import * as Icons from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AccentColorPicker from "../../../components/AccentColorPicker";
 
 const SettingsScreen = () => {
-  const { themeColors, toggleTheme, activeTheme, accentColor } = useThemeStore();
+  const { themeColors, toggleTheme, activeTheme, accentColor, selectedBackground, setBackground } = useThemeStore();
+  const { saveHistory, setSaveHistory } = useHistoryStore();
   const router = useRouter();
   const [autoplay, setAutoplay] = useState(false);
   const [backgroundPlay, setBackgroundPlay] = useState(false);
@@ -15,7 +17,6 @@ const SettingsScreen = () => {
   const [autoScan, setAutoScan] = useState(false);
   const [backgroundPiP, setBackgroundPiP] = useState(false);
   const [hardwareAcceleration, setHardwareAcceleration] = useState(true);
-  const [saveHistory, setSaveHistory] = useState(true);
   const [videoQueueHistory, setVideoQueueHistory] = useState(true);
   const [audioQueueHistory, setAudioQueueHistory] = useState(true);
   const [colorPickerVisible, setColorPickerVisible] = useState(false);

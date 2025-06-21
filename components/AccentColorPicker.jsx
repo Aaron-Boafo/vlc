@@ -11,7 +11,15 @@ const AccentColorPicker = ({ visible, onClose }) => {
     { id: 'blue', name: 'Blue', color: '#2563EB' },
     { id: 'orange', name: 'Orange', color: '#EA580C' },
     { id: 'green', name: 'Green', color: '#16A34A' },
+    { id: 'red', name: 'Red', color: '#EF4444' },
+    { id: 'yellow', name: 'Yellow', color: '#FACC15' },
+    { id: 'teal', name: 'Teal', color: '#14B8A6' },
+    { id: 'pink', name: 'Pink', color: '#EC4899' },
   ];
+
+  // Helper to chunk colors into rows of 4
+  const chunkArray = (arr, size) => arr.length ? [arr.slice(0, size), ...chunkArray(arr.slice(size), size)] : [];
+  const colorRows = chunkArray(colors, 4);
 
   const handleColorSelect = (colorId) => {
     setAccentColor(colorId);
@@ -50,30 +58,33 @@ const AccentColorPicker = ({ visible, onClose }) => {
           </View>
 
           <View className="flex-row flex-wrap gap-4 justify-center mb-4">
-            {colors.map((color) => (
-              <TouchableOpacity
-                key={color.id}
-                onPress={() => handleColorSelect(color.id)}
-                className="items-center"
-              >
-                <View 
-                  className="w-12 h-12 rounded-full items-center justify-center mb-2"
-                  style={{ backgroundColor: color.color }}
-                >
-                  {accentColor === color.id && (
-                    <Icons.Check size={20} color="#FFFFFF" />
-                  )}
-                </View>
-                <Text
-                  className="text-sm"
-                  style={{ 
-                    color: accentColor === color.id ? color.color : themeColors.text,
-                    opacity: accentColor === color.id ? 1 : 0.7
-                  }}
-                >
-                  {color.name}
-                </Text>
-              </TouchableOpacity>
+            {colorRows.map((row, rowIdx) => (
+              <View key={rowIdx} style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 12 }}>
+                {row.map((color) => (
+                  <TouchableOpacity
+                    key={color.id}
+                    onPress={() => handleColorSelect(color.id)}
+                    style={{ alignItems: 'center', marginHorizontal: 8 }}
+                  >
+                    <View 
+                      style={{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 6, backgroundColor: color.color }}
+                    >
+                      {accentColor === color.id && (
+                        <Icons.Check size={20} color="#FFFFFF" />
+                      )}
+                    </View>
+                    <Text
+                      style={{ 
+                        color: accentColor === color.id ? color.color : themeColors.text,
+                        opacity: accentColor === color.id ? 1 : 0.7,
+                        fontSize: 14
+                      }}
+                    >
+                      {color.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             ))}
           </View>
 

@@ -1,72 +1,56 @@
-import {View, Text, TouchableOpacity} from "react-native";
-import useThemeStore from "../store/theme";
-import clsx from "clsx";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import * as Icons from "lucide-react-native";
-import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import useThemeStore from "../store/theme";
+import AppLogo from "../components/AppLogo";
 
-const Title = ({activePage = "all"}) => {
-  const {themeColors} = useThemeStore();
-
-  const containerClasses = clsx(
-    "flex flex-row items-center justify-between px-4 py-3 border-b border-gray-500"
-  );
-  const appIconClasses = clsx(
-    "w-12 h-12 justify-center items-center rounded-md"
-  );
-  const appNameClasses = clsx("text-2xl font-bold ml-2");
-
+const AudioHeader = ({ onSearch, onFilter, onMore }) => {
+  const { themeColors } = useThemeStore();
+  
   return (
-    <View
-      className={containerClasses}
-      style={{backgroundColor: themeColors.background}}
-    >
-      {/* Left side - App icon and name */}
-      <TouchableOpacity
-        className="flex flex-row items-center gap-x-2"
-        activeOpacity={0.7}
-      >
-        <View
-          className={appIconClasses}
-          style={{
-            backgroundColor: themeColors.primary,
-            opacity: 0.4,
-          }}
-        />
-        <Text className={appNameClasses} style={{color: themeColors.text}}>
-          App
-        </Text>
-      </TouchableOpacity>
-
-      {/* Right side - Action icons */}
-      <View className="flex flex-row items-center gap-x-2">
-        {activePage !== "playlist" && (
-          <TouchableOpacity activeOpacity={0.7}>
-            <Icons.Search size={20} color={themeColors.text} />
-          </TouchableOpacity>
-        )}
-
-        {(activePage === "playlist" || activePage === "all") && (
-          <TouchableOpacity activeOpacity={0.7}>
-            <MaterialCommunityIcons
-              name="tune"
-              size={20}
-              color={themeColors.text}
-            />
-          </TouchableOpacity>
-        )}
-
-        {activePage !== "playlist" && activePage !== "all" && (
-          <TouchableOpacity activeOpacity={0.7}>
-            <Icons.History size={20} color={themeColors.text} />
-          </TouchableOpacity>
-        )}
-
-        <TouchableOpacity activeOpacity={0.7}>
-          <Icons.EllipsisVertical size={20} color={themeColors.text} />
+    <View style={styles.headerContainer}>
+      <View style={styles.headerLeft}>
+        <AppLogo width={30} height={30} />
+        <Text style={[styles.headerTitle, { color: themeColors.text }]}>VLC</Text>
+      </View>
+      <View style={styles.headerRight}>
+        <TouchableOpacity onPress={onSearch} style={styles.iconButton}>
+          <Icons.Search size={22} color={themeColors.text} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onFilter} style={styles.iconButton}>
+          <Icons.SlidersHorizontal size={22} color={themeColors.text} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onMore} style={styles.iconButton}>
+          <Icons.MoreVertical size={22} color={themeColors.text} />
         </TouchableOpacity>
       </View>
     </View>
   );
 };
 
-export default Title;
+const styles = StyleSheet.create({
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  headerLeft: { 
+    flexDirection: 'row', 
+    alignItems: 'center' 
+  },
+  headerTitle: { 
+    fontSize: 22, 
+    fontWeight: 'bold', 
+    marginLeft: 8 
+  },
+  headerRight: { 
+    flexDirection: 'row', 
+    alignItems: 'center' 
+  },
+  iconButton: { 
+    marginLeft: 16 
+  },
+});
+
+export default AudioHeader;
