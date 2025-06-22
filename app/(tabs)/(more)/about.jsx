@@ -133,7 +133,7 @@ const AboutScreen = () => {
               <InfoItem
                 icon={<Icons.MessageCircle size={24} color={themeColors.primary} />}
                 title="Feedback"
-                description="Help us improve VLC"
+                description="Help us improve Visura"
               />
             </TouchableOpacity>
           </InfoSection>
@@ -147,7 +147,7 @@ const AboutScreen = () => {
                   : themeColors.tabIconColor 
               }}
             >
-              © 2025 VideoLAN. All rights reserved.
+              © 2025 Visura. All rights reserved.
             </Text>
           </View>
         </View>
