@@ -24,12 +24,13 @@ import {
   Settings,
 } from "lucide-react-native";
 import useThemeStore from "../../store/theme";
+import Paginator from "../../components/Paginator";
 
 const {width, height} = Dimensions.get("window");
 
 const onboardingData = [
   {
-    title: "Welcome to VLC",
+    title: "Welcome to Visura",
     subtitle: "Next Generation Media Player",
     description: "Experience your entertainment in a whole new way",
     icon: "play",
@@ -199,42 +200,30 @@ const BackgroundPattern = ({pattern, colors}) => {
 
 const OnboardingScreen = () => {
     const [currentIndex, setCurrentIndex] = useState(0);
-    const [isLoading, setIsLoading] = useState(true);
     const router = useRouter();
     const scrollX = useRef(new Animated.Value(0)).current;
     const slideRef = useRef(null);
-    const progressAnim = useRef(new Animated.Value(0)).current;
-    const { themeColors } = useThemeStore();
+    const { isDark } = useThemeStore();
+    const [isChecking, setIsChecking] = useState(true);
 
     useEffect(() => {
         const checkOnboardingStatus = async () => {
-          try {
-            // Clear the flag for testing purposes
-            await AsyncStorage.removeItem('hasOnboarded');
-            
-            const hasOnboarded = await AsyncStorage.getItem('hasOnboarded');
-            if (hasOnboarded) {
-              router.replace('/(tabs)/');
-            } else {
-              setIsLoading(false);
+            try {
+                // FOR DEVELOPMENT: Force onboarding screen to appear every time
+                await AsyncStorage.removeItem('hasOnboarded');
+
+                const hasOnboarded = await AsyncStorage.getItem('hasOnboarded');
+                if (hasOnboarded) {
+                    router.replace('/(tabs)/');
+                }
+            } catch (error) {
+                console.error('Error checking onboarding status:', error);
+            } finally {
+                setIsChecking(false);
             }
-          } catch (error) {
-            console.error('Error checking onboarding status:', error);
-            setIsLoading(false);
-          }
         };
         checkOnboardingStatus();
     }, []);
-
-    useEffect(() => {
-      if (!isLoading) {
-        Animated.timing(progressAnim, {
-          toValue: currentIndex / (onboardingData.length - 1),
-          duration: 300,
-          useNativeDriver: false,
-        }).start();
-      }
-    }, [currentIndex, isLoading]);
 
     const viewableItemsChanged = useRef(({viewableItems}) => {
         if (viewableItems.length > 0) {
@@ -292,31 +281,22 @@ const OnboardingScreen = () => {
         }
     };
 
-    const ProgressBar = () => {
-        const width = progressAnim.interpolate({
-            inputRange: [0, 1],
-            outputRange: ["0%", "100%"],
-        });
-
+    if (isChecking) {
         return (
-            <View style={styles.progressContainer}>
-                <Animated.View style={[styles.progressBar, { width, backgroundColor: onboardingData[currentIndex].gradient[0] }]}/>
+            <View style={[styles.container, {justifyContent: 'center', alignItems: 'center'}]}>
+              <StatusBar hidden />
+              <ActivityIndicator size="large" color="#FFF" />
             </View>
-        );
-    };
-
-    if (isLoading) {
-      return (
-        <View style={[styles.container, {justifyContent: 'center', alignItems: 'center'}]}>
-          <StatusBar hidden />
-          <ActivityIndicator size="large" color="#FFF" />
-        </View>
-      )
+        )
     }
 
     return (
         <>
-            <StatusBar hidden />
+            <StatusBar
+              barStyle={isDark ? "light-content" : "dark-content"}
+              backgroundColor="transparent"
+              translucent
+            />
             <View style={styles.container}>
                 <Animated.FlatList
                     ref={slideRef}
@@ -349,7 +329,7 @@ const OnboardingScreen = () => {
                 />
 
                 <View style={styles.bottomContainer}>
-                    <ProgressBar />
+                    <Paginator data={onboardingData} scrollX={scrollX} />
                     <View style={styles.buttonContainer}>
                         <Pressable style={[styles.button, styles.skipButton]} onPress={skip}>
                             <Text style={styles.buttonText}>Skip</Text>
@@ -375,114 +355,105 @@ const OnboardingScreen = () => {
 };
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: "#121212",
-    },
-    slide: {
-        width,
-        height,
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    contentContainer: {
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 20,
-        zIndex: 2,
-    },
-    pattern: {
-        ...StyleSheet.absoluteFillObject,
-        opacity: 0.15,
-    },
-    patternGradient: {
-        width: width * 2,
-        height: height * 2,
-        position: "absolute",
-    },
-    diagonalPattern: {
-        transform: [{rotate: "45deg"}],
-    },
-    gridPattern: {
-        transform: [{scale: 0.5}],
-    },
-    circlesPattern: {
-        borderRadius: width,
-    },
-    wavesPattern: {
-        transform: [{rotate: "30deg"}],
-    },
-    iconWrapper: {
-        width: 160,
-        height: 160,
-        borderRadius: 80,
-        backgroundColor: "rgba(255, 255, 255, 0.1)",
-        alignItems: "center",
-        justifyContent: "center",
-        marginBottom: 40,
-    },
-    textContainer: {
-        alignItems: "center",
-        paddingHorizontal: 30,
-    },
-    subtitle: {
-        fontSize: 18,
-        textAlign: "center",
-        marginBottom: 8,
-        fontWeight: "600",
-    },
-    title: {
-        fontSize: 32,
-        fontWeight: "bold",
-        color: "#FFFFFF",
-        textAlign: "center",
-        marginBottom: 16,
-    },
-    description: {
-        fontSize: 16,
-        color: "#CCCCCC",
-        textAlign: "center",
-        lineHeight: 24,
-        maxWidth: "80%",
-    },
-    bottomContainer: {
-        position: "absolute",
-        bottom: 50,
-        left: 0,
-        right: 0,
-        paddingHorizontal: 20,
-    },
-    progressContainer: {
-        height: 4,
-        backgroundColor: "rgba(255, 255, 255, 0.1)",
-        borderRadius: 2,
-        marginBottom: 30,
-    },
-    progressBar: {
-        height: "100%",
-        borderRadius: 2,
-    },
-    buttonContainer: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-    },
-    button: {
-        paddingVertical: 16,
-        paddingHorizontal: 32,
-        borderRadius: 30,
-        minWidth: 140,
-        alignItems: "center",
-    },
-    skipButton: {
-        backgroundColor: "rgba(255, 255, 255, 0.2)",
-    },
-    buttonText: {
-        color: "#FFFFFF",
-        fontSize: 16,
-        fontWeight: "600",
-        textAlign: 'center'
-    },
+  container: {
+    flex: 1,
+    backgroundColor: "#121212",
+  },
+  slide: {
+    width,
+    height,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  contentContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+    zIndex: 2,
+  },
+  pattern: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.15,
+  },
+  patternGradient: {
+    width: width * 2,
+    height: height * 2,
+    position: "absolute",
+  },
+  diagonalPattern: {
+    transform: [{rotate: "45deg"}],
+  },
+  gridPattern: {
+    transform: [{scale: 0.5}],
+  },
+  circlesPattern: {
+    borderRadius: width,
+  },
+  wavesPattern: {
+    transform: [{rotate: "30deg"}],
+  },
+  iconWrapper: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 40,
+  },
+  textContainer: {
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  subtitle: {
+    fontSize: 18,
+    textAlign: "center",
+    marginBottom: 8,
+    fontWeight: "600",
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: "bold",
+    color: "#FFFFFF",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  description: {
+    fontSize: 16,
+    color: "#CCCCCC",
+    textAlign: "center",
+    lineHeight: 24,
+    maxWidth: "80%",
+  },
+  bottomContainer: {
+    position: "absolute",
+    bottom: 50,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 20,
+  },
+  buttonContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 20,
+  },
+  button: {
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 30,
+    minWidth: 140,
+    alignItems: "center",
+  },
+  skipButton: {
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+  },
+  buttonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
+    textAlign: 'center'
+  },
 });
 
 export default OnboardingScreen;

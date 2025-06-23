@@ -1,4 +1,4 @@
-# Welcome to Our VLC clone project 👋
+# Welcome to Visura 👋
 
 ## Get started
 

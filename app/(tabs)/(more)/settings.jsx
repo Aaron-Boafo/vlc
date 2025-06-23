@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, ScrollView, Switch, Image } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, Switch, Image, Alert } from "react-native";
 import React, { useState } from "react";
 import useThemeStore from "../../../store/theme";
 import useHistoryStore from "../../../store/historyStore";
@@ -6,13 +6,15 @@ import * as Icons from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AccentColorPicker from "../../../components/AccentColorPicker";
+import usePlaybackStore from "../../../store/playbackStore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import CustomAlert from "../../../components/CustomAlert";
 
 const SettingsScreen = () => {
   const { themeColors, toggleTheme, activeTheme, accentColor, selectedBackground, setBackground } = useThemeStore();
-  const { saveHistory, setSaveHistory } = useHistoryStore();
+  const { saveHistory, setSaveHistory, clearHistory } = useHistoryStore();
+  const { autoplay, setAutoplay, backgroundPlay, setBackgroundPlay } = usePlaybackStore();
   const router = useRouter();
-  const [autoplay, setAutoplay] = useState(false);
-  const [backgroundPlay, setBackgroundPlay] = useState(false);
   const [highQuality, setHighQuality] = useState(true);
   const [autoScan, setAutoScan] = useState(false);
   const [backgroundPiP, setBackgroundPiP] = useState(false);
@@ -20,6 +22,64 @@ const SettingsScreen = () => {
   const [videoQueueHistory, setVideoQueueHistory] = useState(true);
   const [audioQueueHistory, setAudioQueueHistory] = useState(true);
   const [colorPickerVisible, setColorPickerVisible] = useState(false);
+  const [alertInfo, setAlertInfo] = useState({ visible: false, title: '', message: '', buttons: [] });
+
+  const handleResetApp = () => {
+    setAlertInfo({
+      visible: true,
+      title: "⚠️ Reset Application",
+      message: "This will reset all your settings, including theme preferences and playback history. This action cannot be undone. Are you sure?",
+      buttons: [
+        { text: "Cancel", style: "cancel", onPress: () => setAlertInfo({ visible: false }) },
+        { 
+          text: "Reset App",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await AsyncStorage.clear();
+              setAlertInfo({ 
+                visible: true, 
+                title: "✅ Success", 
+                message: "All application data has been cleared. Please restart the app for the changes to take full effect.",
+                buttons: [{ text: "OK", onPress: () => setAlertInfo({ visible: false }) }]
+              });
+            } catch (e) {
+              setAlertInfo({ 
+                visible: true, 
+                title: "❌ Error", 
+                message: "Could not clear application data.",
+                buttons: [{ text: "OK", onPress: () => setAlertInfo({ visible: false }) }]
+              });
+            }
+          }
+        }
+      ]
+    });
+  };
+
+  const handleClearCache = () => {
+    setAlertInfo({
+      visible: true,
+      title: "🗑️ Clear History",
+      message: "Are you sure you want to clear your playback history?",
+      buttons: [
+        { text: "Cancel", style: "cancel", onPress: () => setAlertInfo({ visible: false }) },
+        { 
+          text: "Clear",
+          style: "destructive",
+          onPress: () => {
+            clearHistory();
+            setAlertInfo({ 
+              visible: true, 
+              title: "✨ Success", 
+              message: "Your playback history has been cleared.",
+              buttons: [{ text: "OK", onPress: () => setAlertInfo({ visible: false }) }]
+            });
+          }
+        }
+      ]
+    });
+  };
 
   const SettingItem = ({ icon, title, description, children }) => (
     <View className="flex-row items-center justify-between p-4 border-b" style={{ borderColor: "rgba(147, 51, 234, 0.1)" }}>
@@ -275,10 +335,26 @@ const SettingsScreen = () => {
             >
               <TouchableOpacity
                 className="px-3 py-1 rounded-full"
-                style={{ backgroundColor: "rgba(147, 51, 234, 0.1)" }}
-                onPress={() => console.log("Clear cache")}
+                style={{ backgroundColor: themeColors.primaryLight }}
+                onPress={handleClearCache}
               >
                 <Text style={{ color: themeColors.primary }}>Clear</Text>
+              </TouchableOpacity>
+            </SettingItem>
+          </Section>
+
+          <Section title="ADVANCED">
+            <SettingItem
+              icon={<Icons.Trash2 size={24} color={themeColors.primary} />}
+              title="Reset App"
+              description="Reset all settings and clear saved data"
+            >
+              <TouchableOpacity
+                className="px-3 py-1 rounded-full"
+                style={{ backgroundColor: themeColors.primaryLight }}
+                onPress={handleResetApp}
+              >
+                <Text style={{ color: themeColors.primary }}>Reset</Text>
               </TouchableOpacity>
             </SettingItem>
           </Section>
@@ -288,6 +364,13 @@ const SettingsScreen = () => {
       <AccentColorPicker
         visible={colorPickerVisible}
         onClose={() => setColorPickerVisible(false)}
+      />
+      <CustomAlert
+        visible={alertInfo.visible}
+        title={alertInfo.title}
+        message={alertInfo.message}
+        buttons={alertInfo.buttons}
+        onClose={() => setAlertInfo({ visible: false })}
       />
     </SafeAreaView>
   );

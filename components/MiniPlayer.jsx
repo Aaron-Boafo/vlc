@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet, Platform } from 'react-native';
 import { Play, Pause, X } from 'lucide-react-native';
 import useThemeStore from '../store/theme';
@@ -15,9 +15,20 @@ const MiniPlayer = () => {
     pause, 
     play,
     stop,
+    sound
   } = useAudioControl();
   const router = useRouter();
   const segments = useSegments();
+
+  useEffect(() => {
+    if (isMiniPlayerVisible && sound) {
+      sound.getStatusAsync().then(status => {
+        console.log('[MiniPlayer] Native sound status:', status);
+      }).catch(e => {
+        console.log('[MiniPlayer] Error getting sound status:', e);
+      });
+    }
+  }, [isMiniPlayerVisible, sound]);
 
   // Check if the current screen is the player screen
   const isPlayerScreen = segments.includes('player');

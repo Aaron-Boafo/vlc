@@ -17,7 +17,27 @@ const useAudioStore = create(
       // Audio files state
       audioFiles: [],
       isLoading: false,
+      sortOrder: { key: 'title', direction: 'asc' }, // default sort
       setAudioFiles: (files) => set({ audioFiles: files }),
+      
+      // Sorting function
+      sortAudioFiles: (key, direction) => {
+        console.log(`[Sort] Sorting by: ${key}, Direction: ${direction}`);
+        const sortedFiles = [...get().audioFiles].sort((a, b) => {
+          const valA = a[key] || '';
+          const valB = b[key] || '';
+          
+          if (typeof valA === 'string') {
+            return direction === 'asc' 
+              ? valA.localeCompare(valB) 
+              : valB.localeCompare(valA);
+          }
+          // For numeric values like duration or date
+          return direction === 'asc' ? valA - valB : valB - valA;
+        });
+        console.log('[Sort] First item after sort:', sortedFiles[0]?.title);
+        set({ audioFiles: sortedFiles, sortOrder: { key, direction } });
+      },
       
       // Current track and playlist
       currentTrack: null,
@@ -29,21 +49,31 @@ const useAudioStore = create(
       loadAudioFiles: async () => {
         try {
           set({ isLoading: true });
-          
-          const {status} = await MediaLibrary.requestPermissionsAsync();
+      
+          // Set a timeout for the loading process
+          const loadingTimeout = setTimeout(() => {
+            const state = get();
+            if (state.isLoading) {
+              console.log("Audio loading timed out.");
+              set({ isLoading: false }); 
+            }
+          }, 10000); // 10-second timeout
+      
+          const { status } = await MediaLibrary.requestPermissionsAsync();
           if (status !== "granted") {
             console.log("Media library permission not granted");
             set({ isLoading: false });
+            clearTimeout(loadingTimeout);
             return;
           }
-
-          // First, load basic file info without metadata
+      
           const media = await MediaLibrary.getAssetsAsync({
             mediaType: MediaLibrary.MediaType.audio,
-            first: 1000,
+            first: 10000,
           });
-
-          // Create basic file objects first (fast)
+      
+          clearTimeout(loadingTimeout);
+      
           const basicFiles = media.assets.map((asset) => ({
             id: asset.id,
             uri: asset.uri,
@@ -56,15 +86,13 @@ const useAudioStore = create(
             artwork: null,
             metadataLoaded: false,
           }));
-
-          // Set basic files immediately for fast UI response
+      
           set({ audioFiles: basicFiles, isLoading: false });
-
-          // Load metadata in background (lazy loading)
+      
           setTimeout(() => {
             loadMetadataInBackground(basicFiles);
           }, 100);
-
+      
         } catch (error) {
           console.error("Error loading audio files:", error);
           set({ isLoading: false });

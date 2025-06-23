@@ -10,7 +10,7 @@ const AudioHeader = ({ onSearch, onFilter, onMore }) => {
     <View style={styles.headerContainer}>
       <View style={styles.headerLeft}>
         <AppLogo width={30} height={30} />
-        <Text style={[styles.headerTitle, { color: themeColors.text }]}>VLC</Text>
+        <Text style={[styles.headerTitle, { color: themeColors.text }]}>Visura</Text>
       </View>
       <View style={styles.headerRight}>
         <TouchableOpacity onPress={onSearch} style={styles.iconButton}>

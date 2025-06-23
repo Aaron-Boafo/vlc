@@ -18,7 +18,7 @@ const Header = ({ onMorePress, showMoreOptions = true }) => {
           className="text-xl font-semibold ml-2"
           style={{ color: themeColors.text }}
         >
-          VLC
+          Visura
         </Text>
       </View>
 

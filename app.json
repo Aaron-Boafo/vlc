@@ -1,16 +1,16 @@
 {
   "expo": {
-    "name": "VLC Media Player",
-    "slug": "vlc",
+    "name": "Visura",
+    "slug": "visura",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "vlc",
+    "scheme": "visura",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.samspeedy.vlcmediaplayer",
+      "bundleIdentifier": "com.samspeedy.visura",
       "infoPlist": {
         "NSAppleMusicUsageDescription": "This app needs access to your media library to play your music and videos.",
         "NSMicrophoneUsageDescription": "This app needs microphone access for audio features.",
@@ -21,13 +21,16 @@
       }
     },
     "android": {
-      "package": "com.samspeedy.vlcmediaplayer",
+      "package": "com.samspeedy.visura",
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
+      "foregroundService": {
+        "mediaPlayback": "Required for background audio playback."
+      },
       "permissions": [
         "READ_EXTERNAL_STORAGE",
         "READ_MEDIA_AUDIO",
@@ -36,7 +39,12 @@
         "WRITE_EXTERNAL_STORAGE",
         "INTERNET",
         "WAKE_LOCK",
-        "FOREGROUND_SERVICE"
+        "FOREGROUND_SERVICE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.ACCESS_MEDIA_LOCATION"
       ]
     },
     "web": {
@@ -72,7 +80,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "544876cb-9a8a-4e7c-80a2-50e7465d51ab"
+        "projectId": "451c20a0-c013-475d-a621-dba344892b1d"
       }
     }
   }

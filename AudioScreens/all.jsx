@@ -21,18 +21,20 @@ import useFavouriteStore from '../store/favouriteStore';
 import CustomAlert from '../components/CustomAlert';
 import BottomSheet from '../components/BottomSheet';
 
-const AllScreen = ({ showSearch = false, onCloseSearch }) => {
+const AllScreen = ({ showSearch: initialShowSearch = false, onCloseSearch }) => {
   const {themeColors} = useThemeStore();
   const audioControl = useAudioControl();
   const favouriteStore = useFavouriteStore();
-  const { audioFiles, isLoading, loadAudioFiles } = useAudioStore();
+  const { audioFiles, isLoading, loadAudioFiles, sortOrder } = useAudioStore();
   const {width} = Dimensions.get("window");
   const [optionsVisible, setOptionsVisible] = useState(false);
   const [selectedTrack, setSelectedTrack] = useState(null);
   const [detailsVisible, setDetailsVisible] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
-  const [search, setSearch] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(initialShowSearch);
   const { currentTrack } = useAudioControl();
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     // Initialize audio control
@@ -41,23 +43,29 @@ const AllScreen = ({ showSearch = false, onCloseSearch }) => {
     loadAudioFiles();
   }, []);
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadAudioFiles();
+    setRefreshing(false);
+  };
+
   const formatDuration = (seconds) => {
-    if (!seconds) return "0:00";
+    if (!seconds || isNaN(seconds)) return "0:00";
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const handlePlaySong = useCallback(async (item) => {
+  const handleTrackPress = useCallback(async (item) => {
     try {
-      const index = filteredTracks.findIndex(track => track.id === item.id);
-      await audioControl.setAndPlayPlaylist(filteredTracks, index);
+      const index = sortedAndFilteredAudio.findIndex(track => track.id === item.id);
+      await audioControl.setAndPlayPlaylist(sortedAndFilteredAudio, index);
       router.push('/(tabs)/(audio)/player');
     } catch (error) {
       console.error("Error playing song:", error);
       Alert.alert("Error", "Failed to play song");
     }
-  }, [audioControl, filteredTracks]);
+  }, [audioControl, sortedAndFilteredAudio]);
 
   const handleMoreOptions = (item) => {
     setSelectedTrack(item);
@@ -76,7 +84,7 @@ const AllScreen = ({ showSearch = false, onCloseSearch }) => {
 
   const handlePlay = () => {
     setOptionsVisible(false);
-    if (selectedTrack) handlePlaySong(selectedTrack);
+    if (selectedTrack) handleTrackPress(selectedTrack);
   };
 
   const handleShuffle = () => {
@@ -116,17 +124,25 @@ const AllScreen = ({ showSearch = false, onCloseSearch }) => {
     setDeleteConfirmVisible(false);
   };
 
-  const filteredTracks = useMemo(() => {
-    if (!search) return audioFiles;
-    return audioFiles.filter(track =>
-      track.title.toLowerCase().includes(search.toLowerCase()) ||
-      track.artist.toLowerCase().includes(search.toLowerCase()) ||
-      track.album.toLowerCase().includes(search.toLowerCase())
+  const sortedAndFilteredAudio = useMemo(() => {
+    let sorted = [...audioFiles];
+    if (sortOrder.key) {
+        sorted.sort((a, b) => {
+            if (a[sortOrder.key] < b[sortOrder.key]) return sortOrder.direction === 'asc' ? -1 : 1;
+            if (a[sortOrder.key] > b[sortOrder.key]) return sortOrder.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }
+
+    if (!searchQuery) return sorted;
+    return sorted.filter(track =>
+      (track.title || track.filename).toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (track.artist || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }, [audioFiles, search]);
+  }, [audioFiles, searchQuery, sortOrder]);
 
   const handleCloseSearch = () => {
-    setSearch('');
+    setSearchQuery('');
     onCloseSearch?.();
   };
 
@@ -139,7 +155,7 @@ const AllScreen = ({ showSearch = false, onCloseSearch }) => {
           { backgroundColor: themeColors.card },
           isPlaying && {backgroundColor: themeColors.primary + '33'}
         ]}
-        onPress={() => handlePlaySong(item)}
+        onPress={() => handleTrackPress(item)}
         activeOpacity={0.7}
       >
         <View style={styles.trackInfo}>
@@ -156,10 +172,10 @@ const AllScreen = ({ showSearch = false, onCloseSearch }) => {
           )}
           <View style={styles.trackDetails}>
             <Text style={[styles.trackTitle, { color: isPlaying ? themeColors.text : themeColors.text }]} numberOfLines={1}>
-              {item.title}
+              {item.title || item.filename}
             </Text>
             <Text style={[styles.trackArtist, { color: themeColors.textSecondary }]} numberOfLines={1}>
-              {item.artist} • {item.album}
+              {item.artist || 'Unknown Artist'} • {formatDuration(item.duration)}
             </Text>
           </View>
           {isPlaying && (
@@ -189,9 +205,9 @@ const AllScreen = ({ showSearch = false, onCloseSearch }) => {
         </View>
       </TouchableOpacity>
     );
-  }, [themeColors, favouriteStore, handlePlaySong, handleMoreOptions, currentTrack]);
+  }, [themeColors, favouriteStore, handleTrackPress, currentTrack]);
 
-  if (isLoading) {
+  if (isLoading && sortedAndFilteredAudio.length === 0) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: themeColors.background }]}>
         <ActivityIndicator size="large" color={themeColors.primary} />
@@ -212,10 +228,10 @@ const AllScreen = ({ showSearch = false, onCloseSearch }) => {
               color: themeColors.text,
               borderColor: themeColors.primary
             }]}
-            placeholder="Search songs, artists, albums..."
+            placeholder="Search your music..."
             placeholderTextColor={themeColors.textSecondary}
-            value={search}
-            onChangeText={setSearch}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
             autoFocus
           />
           <TouchableOpacity onPress={handleCloseSearch} style={styles.closeButton}>
@@ -225,31 +241,33 @@ const AllScreen = ({ showSearch = false, onCloseSearch }) => {
       )}
 
       <FlatList
-        data={filteredTracks}
+        data={sortedAndFilteredAudio}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
         removeClippedSubviews={true}
-        maxToRenderPerBatch={10}
+        maxToRenderPerBatch={15}
         windowSize={10}
-        initialNumToRender={10}
+        initialNumToRender={15}
         getItemLayout={(data, index) => ({
-          length: 88, // height of each item
-          offset: 88 * index,
+          length: 72, 
+          offset: 72 * index,
           index,
         })}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Music4 size={64} color={themeColors.textSecondary} />
             <Text style={[styles.emptyText, { color: themeColors.text }]}>
-              {search ? 'No songs found' : 'No songs in your library'}
+              {searchQuery ? 'No music found' : 'No music in your library'}
             </Text>
             <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
-              {search ? 'Try adjusting your search' : 'Add some music to get started'}
+              {searchQuery ? 'Try adjusting your search' : 'Add some music to get started'}
             </Text>
           </View>
         }
+        refreshing={refreshing}
+        onRefresh={onRefresh}
       />
 
       {/* Modals */}
@@ -307,15 +325,15 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255, 255, 255, 0.05)",
   },
   artwork: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
+    width: 48,
+    height: 48,
+    borderRadius: 8,
     marginRight: 12,
   },
   artworkPlaceholder: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
+    width: 48,
+    height: 48,
+    borderRadius: 8,
     backgroundColor: "rgba(255, 255, 255, 0.1)",
     justifyContent: "center",
     alignItems: "center",

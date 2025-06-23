@@ -288,7 +288,7 @@ const MoreScreen = () => {
             <Icons.Play size={20} color={themeColors.primary} />
           </View>
           <Text className="text-lg font-bold" style={{ color: themeColors.text }}>
-            VLC
+            Visura
           </Text>
         </View>
         <TouchableOpacity 

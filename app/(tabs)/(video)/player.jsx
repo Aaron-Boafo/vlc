@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Dimensions, Modal, TextInput, FlatList, Alert, BackHandler, useWindowDimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Dimensions, Modal, TextInput, FlatList, Alert, BackHandler, useWindowDimensions, TouchableWithoutFeedback } from 'react-native';
 import { Video } from 'expo-av';
 import { useLocalSearchParams, router } from 'expo-router';
 import Slider from '@react-native-community/slider';
-import { ChevronDown, Play, Pause, SkipBack, SkipForward, Lock, Unlock, Clock, Minimize2, Info, Heart, ListPlus, Captions, Maximize2, Minimize, ChevronLeft, ChevronRight, Settings, PictureInPicture, Expand } from 'lucide-react-native';
+import { ChevronDown, Play, Pause, SkipBack, SkipForward, Lock, Unlock, Clock, Minimize2, Info, Heart, ListPlus, Captions, Maximize2, Minimize, ChevronLeft, ChevronRight, Settings, PictureInPicture, Expand, RotateCcw, RotateCw } from 'lucide-react-native';
 import useThemeStore from '../../../store/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -70,6 +70,14 @@ const VideoPlayerScreen = () => {
     useVideoStore.getState().favouriteVideos.some(v => v.id === currentVideo.id),
     [currentVideo.id]
   );
+
+  const sliderRef = useRef(null);
+  const [sliderWidth, setSliderWidth] = useState(0);
+
+  const playbackRateRef = useRef(playbackRate);
+  useEffect(() => {
+    playbackRateRef.current = playbackRate;
+  }, [playbackRate]);
 
   useEffect(() => {
     const processVideoUri = async () => {
@@ -181,36 +189,33 @@ const VideoPlayerScreen = () => {
     runOnJS(toggleControls)();
   });
 
-  const doubleTapHandler = (isRightSide) => {
-    'worklet';
-    handleSkip(isRightSide ? 10 : -10);
-    runOnJS(hideControls)();
-  }
-
-  const doubleTap = Gesture.Tap().numberOfTaps(2).onEnd((event) => {
-    'worklet';
-    runOnJS(doubleTapHandler)(event.absoluteX > SCREEN_WIDTH / 2);
-  });
-
   const longPressGesture = Gesture.LongPress()
     .onStart(_ => {
       'worklet';
       runOnJS(async () => {
-        if (videoRef.current) {
-          await videoRef.current.setRateAsync(2.0, true);
+        try {
+          if (videoRef.current) {
+            await videoRef.current.setRateAsync(2.0, true);
+          }
+        } catch (error) {
+          console.error('Error setting 2x speed on long press:', error);
         }
       })();
     })
     .onEnd((_e, _success) => {
       'worklet';
       runOnJS(async () => {
-        if (videoRef.current) {
-          await videoRef.current.setRateAsync(playbackRate, true);
+        try {
+          if (videoRef.current) {
+            await videoRef.current.setRateAsync(playbackRateRef.current, true);
+          }
+        } catch (error) {
+          console.error('Error resetting speed after long press:', error);
         }
       })();
     });
 
-  const composedGesture = Gesture.Exclusive(doubleTap, longPressGesture, singleTap, swipeDown);
+  const composedGesture = Gesture.Exclusive(longPressGesture, singleTap, swipeDown);
 
   useEffect(() => {
     const findSubtitles = async () => {
@@ -252,8 +257,13 @@ const VideoPlayerScreen = () => {
 
   const handleSeek = useCallback((value) => {
     'worklet';
-    runOnJS(async () => videoRef.current?.setPositionAsync(value * status.durationMillis))();
-  }, [status.durationMillis]);
+    runOnJS(async () => {
+      if (videoRef.current) {
+        await videoRef.current.setPositionAsync(value * status.durationMillis);
+        await videoRef.current.setStatusAsync({ shouldPlay: status.isPlaying });
+      }
+    })();
+  }, [status.durationMillis, status.isPlaying]);
 
   const handleSkip = useCallback((seconds) => {
     'worklet';
@@ -483,47 +493,78 @@ const VideoPlayerScreen = () => {
                 <Text style={styles.titleText} numberOfLines={1}>{currentVideo.title || currentVideo.filename}</Text>
                 <View style={{ flex: 1 }} />
               </View>
-              {!isLocked && (
+              {isLocked ? (
+                <View style={styles.lockedContainer}>
+                  <TouchableOpacity onPress={toggleLock} style={styles.lockButton}>
+                    <Lock size={28} color="#FFF" />
+                  </TouchableOpacity>
+                </View>
+              ) : (
                 <>
-                <View style={styles.middleControls}>
-                  <TouchableOpacity style={styles.skipButton} onPress={() => handleSkip(-10)}>
-                    <SkipBack size={36} color="#FFF" />
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.playPauseButton} onPress={handlePlayPause}>
-                    {status.isPlaying ? <Pause size={48} color="#FFF" /> : <Play size={48} color="#FFF" />}
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.skipButton} onPress={() => handleSkip(10)}>
-                    <SkipForward size={36} color="#FFF" />
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.footer}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Text style={styles.timeText}>{formatTime(status.positionMillis)}</Text>
-                    <Text style={styles.timeText}>{formatTime(status.durationMillis)}</Text>
-                  </View>
-                  <Slider
-                    style={styles.slider}
-                    value={status.durationMillis ? status.positionMillis / status.durationMillis : 0}
-                    onSlidingComplete={handleSeek}
-                    minimumTrackTintColor={themeColors.primary}
-                    maximumTrackTintColor="rgba(255, 255, 255, 0.5)"
-                    thumbTintColor={themeColors.primary}
-                  />
-                  <View style={styles.footerActionsBottom}>
-                    <TouchableOpacity onPress={() => setSubtitleModalVisible(true)} style={styles.controlButton}>
-                      <Captions size={22} color={selectedSubtitle ? themeColors.primary : "#FFF"} />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={toggleFullscreen} style={styles.controlButton}>
-                      {isFullscreen ? <Minimize size={22} color="#FFF" /> : <Expand size={22} color="#FFF" />}
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.controlButton} onPress={handleMinimize}>
-                      <PictureInPicture size={24} color="#FFF" />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={toggleLock} style={styles.controlButton}>
-                      {isLocked ? <Lock size={22} color="#FFF" /> : <Unlock size={22} color="#FFF" />}
+                  <View style={styles.middleContainer}>
+                    <View style={styles.middleControls}>
+                      <TouchableOpacity onPress={() => handleSkip(-10)} style={styles.skipButton}>
+                        <RotateCcw size={28} color="#FFF" />
+                        <Text style={styles.skipButtonText}>10</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={handlePlayPause} style={styles.playPauseButton}>
+                        {status.isPlaying ? <Pause size={38} color="#FFF" /> : <Play size={38} color="#FFF" />}
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => handleSkip(10)} style={styles.skipButton}>
+                        <RotateCw size={28} color="#FFF" />
+                        <Text style={styles.skipButtonText}>10</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <TouchableOpacity onPress={toggleLock} style={styles.lockButton}>
+                      <Unlock size={20} color="#FFF" />
                     </TouchableOpacity>
                   </View>
-                </View>
+                  <View style={styles.footer}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Text style={styles.timeText}>{formatTime(status.positionMillis)}</Text>
+                      <Text style={styles.timeText}>{formatTime(status.durationMillis)}</Text>
+                    </View>
+                    <View style={{ position: 'relative', width: '100%' }}>
+                      <View
+                        style={{ width: '100%' }}
+                        onLayout={e => setSliderWidth(e.nativeEvent.layout.width)}
+                      >
+                        <Slider
+                          ref={sliderRef}
+                          style={styles.slider}
+                          minimumValue={0}
+                          maximumValue={100}
+                          value={status.durationMillis ? (status.positionMillis / status.durationMillis) * 100 : 0}
+                          onSlidingComplete={value => handleSeek(value / 100)}
+                          minimumTrackTintColor={themeColors.primary}
+                          maximumTrackTintColor="rgba(255, 255, 255, 0.5)"
+                          thumbTintColor={themeColors.primary}
+                        />
+                        <TouchableWithoutFeedback
+                          onPress={e => {
+                            if (!sliderWidth || !status.durationMillis) return;
+                            const { locationX } = e.nativeEvent;
+                            let percent = locationX / sliderWidth;
+                            percent = Math.max(0, Math.min(1, percent));
+                            handleSeek(percent);
+                          }}
+                        >
+                          <View style={{ ...StyleSheet.absoluteFillObject, height: 40, zIndex: 1 }} />
+                        </TouchableWithoutFeedback>
+                      </View>
+                    </View>
+                    <View style={styles.footerActionsBottom}>
+                      <TouchableOpacity onPress={() => setSubtitleModalVisible(true)} style={styles.controlButton}>
+                        <Captions size={22} color={selectedSubtitle ? themeColors.primary : "#FFF"} />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={toggleFullscreen} style={styles.controlButton}>
+                        {isFullscreen ? <Minimize size={22} color="#FFF" /> : <Expand size={22} color="#FFF" />}
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.controlButton} onPress={handleMinimize}>
+                        <PictureInPicture size={24} color="#FFF" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
                 </>
               )}
                {status.isBuffering && !isFetchingStream && <ActivityIndicator style={StyleSheet.absoluteFill} size="large" color="#FFF" />}
@@ -741,10 +782,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginHorizontal: 10,
   },
+  middleContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   middleControls: {
     flexDirection: 'row',
-    justifyContent: 'space-evenly',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   footer: {
     paddingHorizontal: 20,
@@ -762,10 +812,24 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   skipButton: {
-    padding: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 30,
+    width: 60,
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  skipButtonText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+    position: 'absolute',
   },
   playPauseButton: {
-    padding: 20,
+    padding: 15,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 40,
+    marginHorizontal: 20,
   },
   footerActions: {
     flexDirection: 'row',
@@ -908,6 +972,20 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#eee',
     marginLeft: 20,
+  },
+  lockButton: {
+    position: 'absolute',
+    right: 30,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 50,
+    padding: 12,
+    zIndex: 10,
+  },
+  lockedContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

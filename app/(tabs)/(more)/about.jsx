@@ -1,20 +1,23 @@
-import { View, Text, TouchableOpacity, ScrollView, Alert } from "react-native";
-import React from "react";
+import { View, Text, TouchableOpacity, ScrollView } from "react-native";
+import React, { useState } from "react";
 import useThemeStore from "../../../store/theme";
 import * as Icons from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import CustomAlert from "../../../components/CustomAlert";
 
 const AboutScreen = () => {
   const { themeColors, activeTheme } = useThemeStore();
   const router = useRouter();
+  const [alertInfo, setAlertInfo] = useState({ visible: false, title: '', message: '', buttons: [] });
 
-  const showComingSoonAlert = (feature) => {
-    Alert.alert(
-      "Coming Soon! 🚀",
-      `We're working hard to bring you this exciting feature.`,
-      [{ text: "OK", style: "default" }]
-    );
+  const showComingSoonAlert = () => {
+    setAlertInfo({
+      visible: true,
+      title: "🚀 Coming Soon!",
+      message: "We're working hard to bring you this exciting feature.",
+      buttons: [{ text: "OK", onPress: () => setAlertInfo({ visible: false }) }]
+    });
   };
 
   const InfoSection = ({ title, children }) => (
@@ -80,7 +83,7 @@ const AboutScreen = () => {
           className="text-lg font-semibold ml-4"
           style={{ color: themeColors.text }}
         >
-          About VLC
+          About Visura
         </Text>
       </View>
 
@@ -92,7 +95,7 @@ const AboutScreen = () => {
           <InfoSection title="APPLICATION">
             <InfoItem
               icon={<Icons.Play size={24} color={themeColors.primary} />}
-              title="VLC Media Player"
+              title="Visura"
               description="Version 1.0.0"
             />
             <InfoItem
@@ -108,13 +111,13 @@ const AboutScreen = () => {
               title="License"
               description="GNU General Public License"
             />
-            <TouchableOpacity onPress={() => showComingSoonAlert("Privacy Policy")}>
+            <TouchableOpacity onPress={showComingSoonAlert}>
               <InfoItem
                 icon={<Icons.FileText size={24} color={themeColors.primary} />}
                 title="Privacy Policy"
               />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => showComingSoonAlert("Terms of Service")}>
+            <TouchableOpacity onPress={showComingSoonAlert}>
               <InfoItem
                 icon={<Icons.FileTerminal size={24} color={themeColors.primary} />}
                 title="Terms of Service"
@@ -123,17 +126,17 @@ const AboutScreen = () => {
           </InfoSection>
 
           <InfoSection title="SUPPORT">
-            <TouchableOpacity onPress={() => showComingSoonAlert("Help Center")}>
+            <TouchableOpacity onPress={showComingSoonAlert}>
               <InfoItem
                 icon={<Icons.HelpCircle size={24} color={themeColors.primary} />}
                 title="Help Center"
               />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => showComingSoonAlert("Feedback")}>
+            <TouchableOpacity onPress={showComingSoonAlert}>
               <InfoItem
                 icon={<Icons.MessageCircle size={24} color={themeColors.primary} />}
                 title="Feedback"
-                description="Help us improve VLC"
+                description="Help us improve Visura"
               />
             </TouchableOpacity>
           </InfoSection>
@@ -147,11 +150,18 @@ const AboutScreen = () => {
                   : themeColors.tabIconColor 
               }}
             >
-              © 2025 VideoLAN. All rights reserved.
+              © 2025 Visura. All rights reserved.
             </Text>
           </View>
         </View>
       </ScrollView>
+      <CustomAlert
+        visible={alertInfo.visible}
+        title={alertInfo.title}
+        message={alertInfo.message}
+        buttons={alertInfo.buttons}
+        onClose={() => setAlertInfo({ visible: false })}
+      />
     </SafeAreaView>
   );
 };

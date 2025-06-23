@@ -79,6 +79,9 @@ const useVideoStore = create(
       miniPlayerPosition: 0,
       miniPlayerVideo: null,
 
+      // Sorting function
+      sortOrder: { key: 'filename', direction: 'asc' }, // default sort
+
       // Load video files from device with optimization
       loadVideoFiles: async () => {
         set({ isLoading: true, error: null });
@@ -172,6 +175,23 @@ const useVideoStore = create(
       },
       
       clearCurrentVideo: () => set({ currentVideo: null, currentVideoIndex: -1 }),
+
+      // Sorting function
+      sortVideoFiles: (key, direction) => {
+        const sortedFiles = [...get().videoFiles].sort((a, b) => {
+          const valA = a[key] || '';
+          const valB = b[key] || '';
+          
+          if (key === 'filename') {
+            return direction === 'asc' 
+              ? valA.localeCompare(valB) 
+              : valB.localeCompare(valA);
+          }
+          // For numeric values like duration or modificationTime
+          return direction === 'asc' ? valA - valB : valB - valA;
+        });
+        set({ videoFiles: sortedFiles, sortOrder: { key, direction } });
+      },
     }),
 
     {

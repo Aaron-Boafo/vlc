@@ -7,6 +7,7 @@ import { useFonts } from 'expo-font';
 import { useEffect } from 'react';
 import { Audio } from 'expo-av';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import usePlaybackStore from '../store/playbackStore';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -17,6 +18,7 @@ export default function RootLayout() {
     'Inter-SemiBold': require('../assets/fonts/inter/extras/ttf/Inter-SemiBold.ttf'),
     'Inter-Bold': require('../assets/fonts/inter/extras/ttf/Inter-Bold.ttf'),
   });
+  const { backgroundPlay } = usePlaybackStore();
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
@@ -28,11 +30,11 @@ export default function RootLayout() {
     Audio.setAudioModeAsync({
       allowsRecordingIOS: false,
       playsInSilentModeIOS: true,
-      staysActiveInBackground: true,
+      staysActiveInBackground: backgroundPlay,
       shouldDuckAndroid: true,
       playThroughEarpieceAndroid: false,
     });
-  }, []);
+  }, [backgroundPlay]);
 
   if (!fontsLoaded && !fontError) {
     return null;

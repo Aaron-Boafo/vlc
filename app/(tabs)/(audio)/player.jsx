@@ -37,6 +37,7 @@ import Slider from "@react-native-community/slider";
 import useThemeStore from "../../../store/theme";
 import useAudioControl from "../../../store/useAudioControl";
 import useFavouriteStore from "../../../store/favouriteStore";
+import usePlaybackStore from "../../../store/playbackStore";
 
 const { width } = Dimensions.get("window");
 
@@ -56,8 +57,10 @@ const PlayerScreen = () => {
     toggleShuffle,
     sleepTimerId,
     setSleepTimer,
-    clearSleepTimer
+    clearSleepTimer,
+    setPlaybackSpeed,
   } = useAudioControl();
+  const { playbackRate } = usePlaybackStore();
 
   const albumArtRotation = useRef(new Animated.Value(0)).current;
   const [isTimerModalVisible, setTimerModalVisible] = useState(false);
@@ -66,6 +69,7 @@ const PlayerScreen = () => {
   const [isEQModalVisible, setEQModalVisible] = useState(false);
   const [isInfoModalVisible, setInfoModalVisible] = useState(false);
   const [isPlaylistModalVisible, setPlaylistModalVisible] = useState(false);
+  const [isSpeedModalVisible, setSpeedModalVisible] = useState(false);
   const favouriteStore = useFavouriteStore();
 
   const formatTime = (milliseconds) => {
@@ -216,11 +220,34 @@ const PlayerScreen = () => {
               <Heart size={22} color={favouriteStore.isFavourite(currentTrack?.id) ? themeColors.primary : themeColors.text} style={styles.moreOptionIcon} />
               <Text style={[styles.moreOptionLabel, {color: themeColors.text}]}>Favourite</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={styles.moreOptionRow} onPress={() => { setMoreModalVisible(false); setSpeedModalVisible(true); }}>
+              <Text style={[styles.speedLabel, {color: themeColors.text}]}>{playbackRate}x</Text>
+              <Text style={[styles.moreOptionLabel, {color: themeColors.text}]}>Playback Speed</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.moreOptionRow} onPress={() => { setMoreModalVisible(false); setTimerModalVisible(true); }}>
               <Clock size={22} color={sleepTimerId ? themeColors.primary : themeColors.text} style={styles.moreOptionIcon} />
               <Text style={[styles.moreOptionLabel, {color: themeColors.text}]}>Sleep Timer</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.closeModalButton} onPress={() => setMoreModalVisible(false)}>
+              <X size={24} color={themeColors.textSecondary} />
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Playback Speed Modal */}
+      <Modal animationType="slide" transparent={true} visible={isSpeedModalVisible} onRequestClose={() => setSpeedModalVisible(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setSpeedModalVisible(false)}>
+          <Pressable style={[styles.modalContent, {backgroundColor: themeColors.card}]}>
+            <Text style={[styles.modalTitle, {color: themeColors.text}]}>Playback Speed</Text>
+            <View style={styles.speedOptions}>
+              {[0.75, 1.0, 1.5, 2.0].map(rate => (
+                <TouchableOpacity key={rate} style={[styles.speedButton, playbackRate === rate && {backgroundColor: themeColors.primary}]} onPress={() => { setPlaybackSpeed(rate); setSpeedModalVisible(false); }}>
+                  <Text style={[styles.speedButtonText, {color: themeColors.text}]}>{rate}x</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity style={styles.closeModalButton} onPress={() => setSpeedModalVisible(false)}>
               <X size={24} color={themeColors.textSecondary} />
             </TouchableOpacity>
           </Pressable>
@@ -322,8 +349,31 @@ const styles = StyleSheet.create({
   closeModalButton: { position: 'absolute', top: 15, right: 15 },
   moreModalContent: { padding: 24, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 40, minHeight: 320 },
   moreOptionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 18, paddingHorizontal: 10 },
-  moreOptionIcon: { marginRight: 16 },
-  moreOptionLabel: { fontSize: 16, fontWeight: '500' },
+  moreOptionIcon: { marginRight: 15 },
+  moreOptionLabel: { fontSize: 16 },
+  speedLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginRight: 15,
+    minWidth: 50,
+    textAlign: 'center',
+  },
+  speedOptions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    marginVertical: 20,
+  },
+  speedButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'gray',
+  },
+  speedButtonText: {
+    fontSize: 16,
+  },
 });
 
 export default PlayerScreen; 

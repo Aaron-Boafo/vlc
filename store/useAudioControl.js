@@ -1,6 +1,7 @@
 import {create} from "zustand";
 import {Audio} from "expo-av";
 import useHistoryStore from './historyStore';
+import usePlaybackStore from "./playbackStore";
 
 const useAudioControl = create((set, get) => ({
   // Audio state
@@ -121,9 +122,23 @@ const useAudioControl = create((set, get) => ({
 
     try {
       console.log('[AUDIO] Creating new sound for:', track.title, track.uri);
+      const { playbackRate } = usePlaybackStore.getState();
+      const initialStatus = {
+        shouldPlay: true,
+        volume: 1.0,
+        rate: playbackRate,
+        androidImplementation: 'MediaPlayer',
+        metadata: {
+          title: track.title || 'Unknown Title',
+          artist: track.artist || 'Unknown Artist',
+          album: track.album || 'Unknown Album',
+          artwork: track.artwork,
+        },
+      };
+
       const { sound: newSound } = await Audio.Sound.createAsync(
           { uri: track.uri },
-          { shouldPlay: true, volume: 1.0 },
+          initialStatus,
           (status) => onPlaybackStatusUpdate(status, set, get)
       );
       set({
@@ -366,6 +381,18 @@ const useAudioControl = create((set, get) => ({
     if (currentTrack) {
       fetchLyricsFromAPI(currentTrack);
     }
+  },
+
+  setPlaybackSpeed: async (rate) => {
+    const { sound } = get();
+    if (sound) {
+      try {
+        await sound.setRateAsync(rate, true);
+        usePlaybackStore.getState().setPlaybackRate(rate);
+      } catch (error) {
+        console.error("Error setting playback speed:", error);
+      }
+    }
   }
 }));
 
@@ -373,17 +400,22 @@ const onPlaybackStatusUpdate = (status, set, get) => {
   if (!status.isLoaded) {
     if (status.error) {
       console.error(`Playback Error: ${status.error}`);
-      set({isPlaying: false, isLoading: false, error: status.error});
     }
-  } else {
-    set({
-      position: status.positionMillis,
-      duration: status.durationMillis,
-      isPlaying: status.isPlaying,
-    });
+    return;
+  }
 
-    if (status.didJustFinish) {
+  set({
+    position: status.positionMillis || 0,
+    duration: status.durationMillis || 0,
+    isPlaying: status.isPlaying,
+  });
+
+  if (status.didJustFinish) {
+    const { autoplay } = usePlaybackStore.getState();
+    if (autoplay) {
       get().next();
+    } else {
+      set({ isPlaying: false });
     }
   }
 };

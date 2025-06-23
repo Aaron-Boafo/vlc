@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { VideoOff } from 'lucide-react-native';
 import useVideoStore from '../store/VideoHeadStore';
 import useThemeStore from '../store/theme';
 import { router } from 'expo-router';
@@ -108,8 +109,7 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
         })}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <MaterialIcons 
-              name="video-off" 
+            <VideoOff 
               size={64} 
               color={themeColors.textSecondary} 
             />

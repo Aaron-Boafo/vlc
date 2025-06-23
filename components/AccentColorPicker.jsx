@@ -2,29 +2,30 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Modal, Pressable } from 'react-native';
 import useThemeStore from '../store/theme';
 import * as Icons from "lucide-react-native";
+import * as Haptics from 'expo-haptics';
 
 const AccentColorPicker = ({ visible, onClose }) => {
-  const { themeColors, setAccentColor, accentColor } = useThemeStore();
+  const { themeColors, setAccentColor, accentColor: currentAccent } = useThemeStore();
 
   const colors = [
-    { id: 'purple', name: 'Purple', color: '#F44BF8' },
-    { id: 'blue', name: 'Blue', color: '#2563EB' },
-    { id: 'orange', name: 'Orange', color: '#EA580C' },
-    { id: 'green', name: 'Green', color: '#16A34A' },
-    { id: 'red', name: 'Red', color: '#EF4444' },
-    { id: 'yellow', name: 'Yellow', color: '#FACC15' },
-    { id: 'teal', name: 'Teal', color: '#14B8A6' },
-    { id: 'pink', name: 'Pink', color: '#EC4899' },
+    { name: 'purple', hex: '#F44BF8' },
+    { name: 'blue', hex: '#00FFFF' },
+    { name: 'orange', hex: '#EA580C' },
+    { name: 'lime', hex: '#32CD32' },
+    { name: 'red', hex: '#EF4444' },
+    { name: 'amber', hex: '#FFBF00' },
+    { name: 'indigo', hex: '#4B0082' },
+    { name: 'gray', hex: '#64748B' },
   ];
 
-  // Helper to chunk colors into rows of 4
-  const chunkArray = (arr, size) => arr.length ? [arr.slice(0, size), ...chunkArray(arr.slice(size), size)] : [];
-  const colorRows = chunkArray(colors, 4);
-
-  const handleColorSelect = (colorId) => {
-    setAccentColor(colorId);
+  const handleSelectColor = (color) => {
+    setAccentColor(color.name);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onClose();
   };
+
+  const chunkArray = (arr, size) => arr.length ? [arr.slice(0, size), ...chunkArray(arr.slice(size), size)] : [];
+  const colorRows = chunkArray(colors, 4);
 
   return (
     <Modal
@@ -62,21 +63,21 @@ const AccentColorPicker = ({ visible, onClose }) => {
               <View key={rowIdx} style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 12 }}>
                 {row.map((color) => (
                   <TouchableOpacity
-                    key={color.id}
-                    onPress={() => handleColorSelect(color.id)}
+                    key={color.name}
+                    onPress={() => handleSelectColor(color)}
                     style={{ alignItems: 'center', marginHorizontal: 8 }}
                   >
                     <View 
-                      style={{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 6, backgroundColor: color.color }}
+                      style={{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 6, backgroundColor: color.hex }}
                     >
-                      {accentColor === color.id && (
+                      {currentAccent === color.name && (
                         <Icons.Check size={20} color="#FFFFFF" />
                       )}
                     </View>
                     <Text
                       style={{ 
-                        color: accentColor === color.id ? color.color : themeColors.text,
-                        opacity: accentColor === color.id ? 1 : 0.7,
+                        color: currentAccent === color.name ? color.hex : themeColors.text,
+                        opacity: currentAccent === color.name ? 1 : 0.7,
                         fontSize: 14
                       }}
                     >
