@@ -24,6 +24,15 @@ const FUN_FACTS = [
   "The Visura cone icon comes from a student project!"
 ];
 
+// Random username generator
+const generateRandomUsername = (phone) => {
+  const adjectives = ['Happy', 'Sunny', 'Brave', 'Gentle', 'Clever', 'Wild', 'Calm', 'Eager', 'Jolly', 'Kind'];
+  const nouns = ['Tiger', 'Eagle', 'Dolphin', 'Panda', 'Koala', 'Wolf', 'Owl', 'Fox', 'Lion', 'Bear'];
+  const randomAdj = adjectives[Math.floor(Math.random() * adjectives.length)];
+  const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
+  const randomNum = phone ? `_${phone.slice(-4)}` : Math.floor(100 + Math.random() * 900);
+  return `${randomAdj}${randomNoun}${randomNum}`;
+};
 
 const APP_VERSION = "1.0.0";
 const BUILD_NUMBER = "100";
@@ -70,20 +79,52 @@ export default function MoreTab() {
   const t = (str) => str;
 
   // --- Auth Handlers (replace with backend integration) ---
-  const handleLogin = async (email, password) => {
-    setIsLoggedIn(true);
-    setProfile({
-      name: email,
-      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(email)}&background=0D8ABC&color=fff&bold=true`
-    });
+  const handleLogin = async (phone, password) => {
+    try {
+      console.log('Login attempt with:', phone);
+      if (!phone || !password) {
+        Alert.alert('Error', 'Please enter both phone and password');
+        return;
+      }
+      
+      const username = generateRandomUsername(phone);
+      setIsLoggedIn(true);
+      setProfile({
+        name: username,
+        phone: phone,
+        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=0D8ABC&color=fff&bold=true`
+      });
+      setLoginVisible(false);
+    } catch (error) {
+      console.error('Login error:', error);
+      Alert.alert('Error', 'Failed to log in. Please try again.');
+    }
   };
-
-  const handleSignup = async (email, password) => {
-    setIsLoggedIn(true);
-    setProfile({
-      name: email,
-      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(email)}&background=0D8ABC&color=fff&bold=true`
-    });
+  
+  const handleSignup = async (phone, password) => {
+    try {
+      console.log('Signup attempt with:', phone);
+      if (!phone || !password) {
+        Alert.alert('Error', 'Please enter both phone and password');
+        return;
+      }
+      if (password.length < 6) {
+        Alert.alert('Error', 'Password must be at least 6 characters');
+        return;
+      }
+      
+      const username = generateRandomUsername(phone);
+      setIsLoggedIn(true);
+      setProfile({
+        name: username,
+        phone: phone,
+        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=0D8ABC&color=fff&bold=true`
+      });
+      setLoginVisible(false);
+    } catch (error) {
+      console.error('Signup error:', error);
+      Alert.alert('Error', 'Failed to create account. Please try again.');
+    }
   };
 
   // --- Profile Section ---
@@ -114,7 +155,7 @@ export default function MoreTab() {
         />
         <View style={{ flex: 1 }}>
           <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 18 }} allowFontScaling>{isLoggedIn && profile.name ? profile.name : PROFILE.name}</Text>
-          <Text style={{ color: themeColors.tabIconColor, fontSize: 13, marginTop: 2 }} allowFontScaling>{isLoggedIn ? t("Personalize your VLC experience") : t("Tap to sign in or sign up")}</Text>
+          <Text style={{ color: themeColors.tabIconColor, fontSize: 13, marginTop: 2 }} allowFontScaling>{isLoggedIn ? t("Experience Visura") : t("Tap to sign in or sign up")}</Text>
         </View>
         <Icons.Info size={22} color={themeColors.primary} />
       </LinearGradient>

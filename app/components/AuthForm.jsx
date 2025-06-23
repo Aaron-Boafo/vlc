@@ -13,6 +13,8 @@ import {
   StyleSheet,
 } from 'react-native';
 import * as Icons from 'lucide-react-native';
+import { BlurView } from 'expo-blur';
+import PhoneInput from './PhoneInput';
 
 export default function AuthForm({
   visible,
@@ -21,29 +23,33 @@ export default function AuthForm({
   onSignup,
   accentColor = "#0D8ABC"
 }) {
-  const [activeTab, setActiveTab] = useState('login'); // 'login' or 'signup'
-  const [email, setEmail] = useState('');
+  const [activeTab, setActiveTab] = useState('login');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = () => {
-    if (!email.trim() || !password.trim()) {
+    if (!phone.trim() || !password.trim()) {
       Alert.alert("Missing fields", "Please fill all fields.");
       return;
     }
-    onLogin(email.trim(), password);
-    setEmail('');
+    onLogin(phone.trim(), password);
+    setPhone('');
     setPassword('');
     onClose();
   };
 
   const handleSignup = () => {
-    if (!email.trim() || !password.trim()) {
+    if (!phone.trim() || !password.trim()) {
       Alert.alert("Missing fields", "Please fill all fields.");
       return;
     }
-    onSignup(email.trim(), password);
-    setEmail('');
+    if (password.length < 6) {
+      Alert.alert("Error", "Password must be at least 6 characters");
+      return;
+    }
+    onSignup(phone.trim(), password);
+    setPhone('');
     setPassword('');
     onClose();
   };
@@ -51,45 +57,44 @@ export default function AuthForm({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <ImageBackground
-        source={require('../../assets/images/bg-login.jpg')}
+        source={require('../../assets/images/bg-login.png')}
         resizeMode="cover"
         style={{ flex: 1 }}
       >
         <View style={styles.overlay}>
-          <View style={styles.glassyCard}>
+          <BlurView 
+            intensity={90}
+            tint="dark"
+            style={styles.blurContainer}
+          >
             <KeyboardAvoidingView
               behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
               style={{ flex: 1, width: '100%' }}
             >
               <ScrollView
-                contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center' }}
+                contentContainerStyle={styles.scrollContent}
                 keyboardShouldPersistTaps="handled"
               >
-                {/* Title & Subtitle */}
                 <Text style={styles.title}>
                   {activeTab === 'login' ? 'WELCOME BACK' : 'VISURA IS FREE'}
                 </Text>
                 <Text style={styles.subtitle}>
-                  {activeTab === 'login' ? ' Best Media Player' : 'Explore And Customize Your Media Player'}
+                  {activeTab === 'login' ? 'Best Media Player' : 'Explore And Customize Your Media Player'}
                 </Text>
-                {/* Email Field */}
+
+                {/* Phone Field */}
                 <View style={styles.inputRow}>
-                  <Text style={styles.inputIcon}>@</Text>
-                  <TextInput
-                    placeholder="Email"
-                    placeholderTextColor="#8e89a8"
-                    value={email}
-                    onChangeText={setEmail}
-                    style={styles.input}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    textContentType="emailAddress"
-                    keyboardType="email-address"
+                  <Icons.Phone size={18} color="#a1a1c5" style={styles.inputIcon} />
+                  <PhoneInput
+                    value={phone}
+                    onChange={setPhone}
+                    style={{ flex: 1 }}
                   />
                 </View>
+
                 {/* Password Field */}
                 <View style={styles.inputRow}>
-                  <Text style={styles.inputIcon}>*</Text>
+                  <Icons.Lock size={18} color="#a1a1c5" style={styles.inputIcon} />
                   <TextInput
                     placeholder="Password"
                     placeholderTextColor="#8e89a8"
@@ -111,15 +116,17 @@ export default function AuthForm({
                     )}
                   </TouchableOpacity>
                 </View>
+
                 {/* Submit Button */}
                 <TouchableOpacity
                   onPress={activeTab === 'login' ? handleLogin : handleSignup}
-                  style={[styles.submitButton, { backgroundColor: 'rgba(67, 63, 63, 0.59)'  , shadowColor: 'rgba(67, 63, 63, 0.59)' }]}
+                  style={[styles.submitButton, { backgroundColor: 'rgba(67, 63, 63, 0.59)' }]}
                 >
                   <Text style={styles.submitButtonText}>
                     {activeTab === 'login' ? 'Sign in' : 'Sign up'}
                   </Text>
                 </TouchableOpacity>
+
                 {/* Tab Switcher */}
                 <View style={styles.tabSwitcher}>
                   <TouchableOpacity
@@ -143,13 +150,13 @@ export default function AuthForm({
                   >
                     <Text style={[
                       styles.tabButtonText,
-                      activeTab === 'signup' && { color:  'rgba(26, 24, 24, 0.92)' }
+                      activeTab === 'signup' && { color: 'rgba(26, 24, 24, 0.92)' }
                     ]}>Sign Up</Text>
                   </TouchableOpacity>
                 </View>
               </ScrollView>
             </KeyboardAvoidingView>
-          </View>
+          </BlurView>
         </View>
       </ImageBackground>
     </Modal>
@@ -162,7 +169,7 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: 'rgba(23, 23, 25, 0.1)',
   },
-  glassyCard: {
+  blurContainer: {
     position: 'absolute',
     left: 0,
     right: 0,
@@ -172,33 +179,23 @@ const styles = StyleSheet.create({
     maxWidth: 480,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
     padding: 28,
-    alignItems: 'center', 
-    backgroundColor: Platform.select({
-      ios: 'rgba(40, 39, 41, 0.8)',
-      android: 'rgba(21, 21, 22, 0.8)',
-      default: 'rgba(21, 21, 22, 0.8)'
-    }),
-    shadowColor: '#000',
-    shadowOpacity: 0.16,
-    shadowRadius: 32,
-    elevation: 14,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
     overflow: 'hidden',
     justifyContent: 'flex-start',
     paddingBottom: 36,
+  },
+  scrollContent: {
+    width: '100%',
+    paddingBottom: 20,
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 4,
+    marginBottom: 8,
     textAlign: 'center',
     letterSpacing: 0.5,
-    bottom : 80,
   },
   subtitle: {
     fontSize: 15,
@@ -206,7 +203,6 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     textAlign: 'center',
     letterSpacing: 0.1,
-    bottom : 75
   },
   inputRow: {
     width: '100%',
@@ -216,7 +212,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.12)',
     borderRadius: 16,
     paddingHorizontal: 14,
-    bottom : 60,
+    height: 50,
   },
   inputIcon: {
     fontSize: 18,
@@ -225,7 +221,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    height: 50,
+    height: '100%',
     color: '#fff',
     fontSize: 16,
     letterSpacing: 0.1,
@@ -235,12 +231,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     width: '100%',
+    marginTop: 10,
     marginBottom: 18,
     backgroundColor: 'rgba(67, 63, 63, 0.59)',
     borderWidth: 1,
     borderColor: 'rgba(43, 42, 42, 0.48)',
-    bottom: 55,
-    overflow: 'hidden',
   },
   submitButtonText: {
     color: '#fff',
@@ -254,8 +249,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(67, 63, 63, 0.59)',
     borderRadius: 12,
     overflow: 'hidden',
-    bottom: 40,
-    padding: 4,
     borderWidth: 1,
     borderColor: 'rgba(43, 42, 42, 0.48)'
   },

@@ -184,9 +184,9 @@ export default function UserProfileModal({
                     <Text style={{ color: accentColor, fontWeight: '600', fontSize: 15, marginTop: 10 }}>Edit photo</Text>
                   </TouchableOpacity>
                 </View>
-
+              
                 {/* Name Field */}
-                <View style={cardStyle}>
+                <View style={[cardStyle, { borderWidth: 0 }]}>
                   <TouchableOpacity
                     style={{
                       flexDirection: 'row',
@@ -201,47 +201,32 @@ export default function UserProfileModal({
                       <Text style={{ color: themeColors.tabIconColor, fontSize: 13 }}>Name</Text>
                       <Text style={{ color: themeColors.text, fontSize: 16, fontWeight: '500', marginTop: 2 }}>{profile.name || 'User'}</Text>
                     </View>
-                    <Icons.ChevronRight size={22} color={themeColors.tabIconColor} />
+                    <Icons.User size={22} color={themeColors.tabIconColor} />
                   </TouchableOpacity>
                 </View>
-
-                {/* Diagnostics Card */}
-                <View style={cardStyle}>
-                  <Text style={{ color: accentColor, fontWeight: 'bold', fontSize: 16, marginBottom: 10, letterSpacing: 0.2, borderBottomWidth: 1, borderColor: 'transparent' }}>
-                    Diagnostics
-                  </Text>
-                  {/* Storage Progress */}
-                  <Text style={{ color: themeColors.tabIconColor, fontSize: 13, marginBottom: 4 }}>
-                    Storage
-                  </Text>
-                  <View style={{
-                    width: '100%',
-                    height: 18,
-                    backgroundColor: themeColors.background,
-                    borderRadius: 8,
-                    overflow: 'hidden',
-                    marginBottom: 6,
-                    borderWidth: 1,
-                    borderColor: accentColor + '33'
-                  }}>
-                    <View style={{
-                      width: `${storagePercent}%`,
-                      height: '100%',
-                      backgroundColor: accentColor,
-                    }} />
-                  </View>
-                  <Text style={{ color: themeColors.text, fontSize: 13, marginBottom: 8 }}>
-                    {DIAGNOSTICS.storageUsed} GB / {DIAGNOSTICS.storageTotal} GB ({storagePercent}%)
-                  </Text>
-                  {/* Other Diagnostics */}
-                  <Text style={{ color: themeColors.tabIconColor, fontSize: 13 }}>
-                    App version: <Text style={{ color: themeColors.text }}>{DIAGNOSTICS.appVersion}</Text>
-                  </Text>
-                  <Text style={{ color: themeColors.tabIconColor, fontSize: 13 }}>
-                    Device: <Text style={{ color: themeColors.text }}>{DIAGNOSTICS.device}</Text>
-                  </Text>
-                </View>
-
+                {/* Phone Number Field - Matches Name field style */}
+<View style={[cardStyle, { marginTop: 12, borderWidth: 0 }]}>
+  <View
+    style={{
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    }}
+  >
+    <View>
+        <Text style={{ color: themeColors.tabIconColor, fontSize: 13 }}>Phone Number</Text>
+        <Text style={{ 
+        color: themeColors.text, 
+        fontSize: 16, 
+        fontWeight: '500', 
+        marginTop: 2 
+      }}>
+        {profile.phone || 'Not available'}
+      </Text>
+      </View>
+     <Icons.Phone size={22} color={themeColors.tabIconColor} />
+    </View>
+  </View>
                 {/* Fun Fact Card */}
                 <Animated.View style={{
                   transform: [{ scale: funFactScale }],
@@ -329,7 +314,7 @@ export default function UserProfileModal({
   }}
 >
   <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-    <FontAwesome name="external-link" size={18} color={accentColor} style={{ marginRight: 8 }} />
+    <FontAwesome name="link" size={18} color={accentColor} style={{ marginRight: 8 }} />
     <Text style={{
       color: accentColor,
       fontWeight: 'bold',
@@ -337,7 +322,7 @@ export default function UserProfileModal({
       letterSpacing: 1,
       textTransform: 'uppercase',
     }}>
-      App Links
+      Social Links
     </Text>
   </View>
   <View style={{
@@ -412,7 +397,7 @@ export default function UserProfileModal({
                   onPress={onLogout}
                   accessibilityLabel="Log out"
                   style={{
-                    backgroundColor: accentColor, borderRadius: 22, paddingVertical: 12, paddingHorizontal: 32
+                    backgroundColor: 'rgba(228, 15, 15, 0.81)', borderRadius: 22, paddingVertical: 12, paddingHorizontal: 32
                   }}>
                   <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Log Out</Text>
                 </TouchableOpacity>
