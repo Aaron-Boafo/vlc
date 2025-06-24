@@ -1,10 +1,11 @@
-import { View, Text, TouchableOpacity, ScrollView } from "react-native";
+import { View, TouchableOpacity, ScrollView } from "react-native";
 import React, { useState } from "react";
 import useThemeStore from "../../../store/theme";
 import * as Icons from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import CustomAlert from "../../../components/CustomAlert";
+import { Text } from 'react-native';
 
 const AboutScreen = () => {
   const { themeColors, activeTheme } = useThemeStore();
@@ -22,12 +23,7 @@ const AboutScreen = () => {
 
   const InfoSection = ({ title, children }) => (
     <View className="mb-6">
-      <Text
-        className="text-sm font-medium px-4 py-2"
-        style={{ color: themeColors.primary }}
-      >
-        {title}
-      </Text>
+      <Text className="text-sm font-medium px-4 py-2" style={{ color: themeColors.primary }} weight="Bold">{title}</Text>
       <View style={{ backgroundColor: themeColors.sectionBackground }}>
         {children}
       </View>
@@ -43,23 +39,9 @@ const AboutScreen = () => {
         {icon}
       </View>
       <View className="flex-1 ml-3">
-        <Text 
-          className="font-medium"
-          style={{ color: themeColors.text }}
-        >
-          {title}
-        </Text>
+        <Text className="font-medium" style={{ color: themeColors.text }} weight="Bold">{title}</Text>
         {description && (
-          <Text 
-            className="text-sm mt-1"
-            style={{ 
-              color: activeTheme === "dark" 
-                ? "rgba(255, 255, 255, 0.7)" 
-                : themeColors.tabIconColor 
-            }}
-          >
-            {description}
-          </Text>
+          <Text className="text-sm mt-1" style={{ color: activeTheme === "dark" ? "rgba(255, 255, 255, 0.7)" : themeColors.tabIconColor }}>{description}</Text>
         )}
       </View>
     </View>
@@ -79,12 +61,7 @@ const AboutScreen = () => {
         <TouchableOpacity onPress={() => router.back()}>
           <Icons.ArrowLeft size={24} color={themeColors.primary} />
         </TouchableOpacity>
-        <Text
-          className="text-lg font-semibold ml-4"
-          style={{ color: themeColors.text }}
-        >
-          About Visura
-        </Text>
+        <Text className="text-lg font-semibold ml-4" style={{ color: themeColors.text }} weight="Bold">About Visura</Text>
       </View>
 
       <ScrollView
@@ -142,14 +119,7 @@ const AboutScreen = () => {
           </InfoSection>
 
           <View className="p-4">
-            <Text 
-              className="text-sm text-center"
-              style={{ 
-                color: activeTheme === "dark" 
-                  ? "rgba(255, 255, 255, 0.7)" 
-                  : themeColors.tabIconColor 
-              }}
-            >
+            <Text className="text-sm text-center" style={{ color: activeTheme === "dark" ? "rgba(255, 255, 255, 0.7)" : themeColors.tabIconColor }}>
               © 2025 Visura. All rights reserved.
             </Text>
           </View>

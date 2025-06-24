@@ -51,7 +51,7 @@ const ArtistScreen = () => {
         </View>
       )}
       <View style={{ flex: 1, marginLeft: 12 }}>
-        <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 16 }}>{item.artist}</Text>
+        <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 16 }} weight="Bold">{item.artist}</Text>
       </View>
     </TouchableOpacity>
   );

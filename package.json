@@ -58,7 +58,8 @@
     "react-native-webview": "13.13.5",
     "react-native-ytdl": "^4.8.3",
     "tailwindcss": "^3.4.17",
-    "zustand": "^5.0.5"
+    "zustand": "^5.0.5",
+    "expo-document-picker": "~13.1.6"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
@@ -67,6 +68,7 @@
     "@types/react": "~19.0.10",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~9.2.0",
+    "expo-module-scripts": "^4.1.7",
     "typescript": "~5.8.3"
   },
   "private": true

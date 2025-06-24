@@ -52,7 +52,7 @@ const Albums = () => {
         </View>
       )}
       <View style={{ flex: 1, marginLeft: 12 }}>
-        <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 16 }}>{item.album}</Text>
+        <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 16 }} weight="Bold">{item.album}</Text>
         <Text style={{ color: themeColors.textSecondary }}>{item.artist}</Text>
       </View>
     </TouchableOpacity>
@@ -69,7 +69,7 @@ const Albums = () => {
       />
       <Modal visible={modalVisible} animationType="slide" onRequestClose={() => setModalVisible(false)}>
         <View style={{ flex: 1, backgroundColor: themeColors.background, padding: 16 }}>
-          <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 20, marginBottom: 12 }}>{selectedAlbum?.album}</Text>
+          <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 20, marginBottom: 12 }} weight="Bold">{selectedAlbum?.album}</Text>
           <Text style={{ color: themeColors.textSecondary, marginBottom: 20 }}>{selectedAlbum?.artist}</Text>
           <FlatList
             data={albumTracks}
@@ -83,7 +83,7 @@ const Albums = () => {
             ListEmptyComponent={<Text style={{ color: themeColors.textSecondary }}>No tracks in this album.</Text>}
           />
           <TouchableOpacity onPress={() => setModalVisible(false)} style={{ marginTop: 20, alignSelf: 'center' }}>
-            <Text style={{ color: themeColors.primary, fontWeight: 'bold' }}>Close</Text>
+            <Text style={{ color: themeColors.primary, fontWeight: 'bold' }} weight="Bold">Close</Text>
           </TouchableOpacity>
         </View>
       </Modal>

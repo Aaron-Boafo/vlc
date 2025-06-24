@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { Modal, View, TouchableOpacity, StyleSheet, ActivityIndicator, Text } from 'react-native';
 import useThemeStore from '../store/theme';
 
 const CustomAlert = ({
@@ -31,7 +31,7 @@ const CustomAlert = ({
             <ActivityIndicator size="large" color={themeColors.primary} />
           ) : (
             <>
-              {title && <Text style={[styles.title, { color: themeColors.text }]}>{title}</Text>}
+              {title && <Text style={[styles.title, { color: themeColors.text }]} weight="Bold">{title}</Text>}
               {message && <Text style={[styles.message, { color: themeColors.textSecondary }]}>{message}</Text>}
               <View style={styles.buttonContainer}>
                 {buttons.map((button, index) => (

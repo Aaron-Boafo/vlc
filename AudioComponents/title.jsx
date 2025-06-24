@@ -16,9 +16,11 @@ const AudioHeader = ({ onSearch, onFilter, onMore }) => {
         <TouchableOpacity onPress={onSearch} style={styles.iconButton}>
           <Icons.Search size={22} color={themeColors.text} />
         </TouchableOpacity>
-        <TouchableOpacity onPress={onFilter} style={styles.iconButton}>
-          <Icons.SlidersHorizontal size={22} color={themeColors.text} />
-        </TouchableOpacity>
+        {onFilter && (
+          <TouchableOpacity onPress={onFilter} style={styles.iconButton}>
+            <Icons.SlidersHorizontal size={22} color={themeColors.text} />
+          </TouchableOpacity>
+        )}
         <TouchableOpacity onPress={onMore} style={styles.iconButton}>
           <Icons.MoreVertical size={22} color={themeColors.text} />
         </TouchableOpacity>

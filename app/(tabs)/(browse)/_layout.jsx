@@ -1,7 +1,11 @@
-import {Stack} from "expo-router";
+import { Stack } from "expo-router";
 
-const AudioLayout = () => {
-  return <Stack />;
+const BrowseLayout = () => {
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+    </Stack>
+  );
 };
 
-export default AudioLayout;
+export default BrowseLayout;

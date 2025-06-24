@@ -11,7 +11,7 @@ const ReusableSortOptionsSheet = ({
   onSort,
 }) => {
   const isSelected = (key, direction) => {
-    return currentSortOrder.key === key && currentSortOrder.direction === direction;
+    return currentSortOrder?.key === key && currentSortOrder?.direction === direction;
   };
 
   const options = sortOptions.map(opt => ({

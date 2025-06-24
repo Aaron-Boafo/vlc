@@ -9,10 +9,7 @@ export default function Index() {
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
 
   useEffect(() => {
-    // Temporarily force reset onboarding status to show onboarding again
-    AsyncStorage.removeItem("@onboarding_complete").then(() => {
-      checkOnboardingStatus();
-    });
+    checkOnboardingStatus();
   }, []);
 
   const checkOnboardingStatus = async () => {

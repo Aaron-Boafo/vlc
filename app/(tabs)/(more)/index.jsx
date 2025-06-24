@@ -9,6 +9,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from "react-native";
 import { router } from "expo-router";
 import * as Icons from "lucide-react-native";
@@ -18,6 +19,8 @@ import useVideoStore from "../../../store/VideoHeadStore";
 import useThemeStore from "../../../store/theme";
 import MoreOptionsMenu from "../../../components/MoreOptionsMenu";
 import { SafeAreaView } from "react-native-safe-area-context";
+import useAudioStore from '../../../store/AudioHeadStore';
+import * as FileSystem from 'expo-file-system';
 
 // Try to import ytdl, but don't fail if it's not available
 let ytdl = null;
@@ -34,9 +37,14 @@ const MoreScreen = () => {
   const [streamUrl, setStreamUrl] = useState("");
   const [isStreamLoading, setIsStreamLoading] = useState(false);
   const [streamError, setStreamError] = useState("");
-  const { history } = useHistoryStore();
+  const { history, clearHistory } = useHistoryStore();
   const audioControl = useAudioControl();
   const videoControl = useVideoStore();
+  const [downloadsModalVisible, setDownloadsModalVisible] = useState(false);
+  const [storageModalVisible, setStorageModalVisible] = useState(false);
+  const audioFiles = useAudioStore(state => state.audioFiles);
+  const videoFiles = useVideoStore(state => state.videoFiles);
+  const [storageInfo, setStorageInfo] = useState({ totalSize: 0, fileCount: 0, loading: false });
 
   const validateUrl = (url) => {
     try {
@@ -265,6 +273,31 @@ const MoreScreen = () => {
     </TouchableOpacity>
   );
 
+  const openStorageModal = async () => {
+    setStorageInfo({ totalSize: 0, fileCount: 0, loading: true });
+    let totalSize = 0;
+    let audioCount = audioFiles.length;
+    let videoCount = videoFiles.length;
+    for (const file of audioFiles) {
+      try {
+        const info = await FileSystem.getInfoAsync(file.uri);
+        if (info.exists && info.size) {
+          totalSize += info.size;
+        }
+      } catch {}
+    }
+    for (const file of videoFiles) {
+      try {
+        const info = await FileSystem.getInfoAsync(file.uri);
+        if (info.exists && info.size) {
+          totalSize += info.size;
+        }
+      } catch {}
+    }
+    setStorageInfo({ totalSize, fileCount: audioCount + videoCount, audioCount, videoCount, loading: false });
+    setStorageModalVisible(true);
+  };
+
   return (
     <SafeAreaView
       style={{ 
@@ -351,6 +384,11 @@ const MoreScreen = () => {
 
         {/* History Section */}
         <Section title="History" showArrow>
+          {history.length > 0 && (
+            <TouchableOpacity onPress={clearHistory} style={{ position: 'absolute', right: 0, top: 0, padding: 8 }}>
+              <Text style={{ color: themeColors.primary, fontWeight: 'bold', fontSize: 14 }}>Clear</Text>
+            </TouchableOpacity>
+          )}
           {history.length === 0 ? (
             <Text style={{ color: themeColors.textSecondary, marginLeft: 8 }}>No history yet</Text>
           ) : (
@@ -400,66 +438,67 @@ const MoreScreen = () => {
 
         {/* Additional Features */}
         <Section title="Features">
-          <View className="space-y-4">
+          <View style={{ gap: 16, marginTop: 8 }}>
             <TouchableOpacity
-              className="flex-row items-center justify-between p-4 rounded-lg"
-              style={{ 
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: 16,
+                borderRadius: 12,
                 backgroundColor: themeColors.sectionBackground,
                 borderWidth: activeTheme === "dark" ? 1 : 0,
-                borderColor: "rgba(255, 255, 255, 0.1)"
+                borderColor: "rgba(255, 255, 255, 0.1)",
+                width: '100%',
+                minHeight: 64,
               }}
-              onPress={() => console.log("Downloads pressed")}
+              onPress={() => setDownloadsModalVisible(true)}
             >
-              <View className="flex-row items-center">
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Icons.Download size={24} color={themeColors.primary} />
-                <Text
-                  className="ml-3 font-medium"
-                  style={{ color: themeColors.text }}
-                >
-                  Downloads
-                </Text>
+                <Text style={{ marginLeft: 12, fontWeight: '500', color: themeColors.text, fontSize: 16 }}>Downloads</Text>
               </View>
               <Icons.ChevronRight size={20} color={themeColors.primary} />
             </TouchableOpacity>
-
             <TouchableOpacity
-              className="flex-row items-center justify-between p-4 rounded-lg"
-              style={{ 
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: 16,
+                borderRadius: 12,
                 backgroundColor: themeColors.sectionBackground,
                 borderWidth: activeTheme === "dark" ? 1 : 0,
-                borderColor: "rgba(255, 255, 255, 0.1)"
+                borderColor: "rgba(255, 255, 255, 0.1)",
+                width: '100%',
+                minHeight: 64,
               }}
-              onPress={() => console.log("Network pressed")}
+              onPress={() => setStreamModalVisible(true)}
             >
-              <View className="flex-row items-center">
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Icons.Wifi size={24} color={themeColors.primary} />
-                <Text
-                  className="ml-3 font-medium"
-                  style={{ color: themeColors.text }}
-                >
-                  Network
-                </Text>
+                <Text style={{ marginLeft: 12, fontWeight: '500', color: themeColors.text, fontSize: 16 }}>Network</Text>
               </View>
               <Icons.ChevronRight size={20} color={themeColors.primary} />
             </TouchableOpacity>
-
             <TouchableOpacity
-              className="flex-row items-center justify-between p-4 rounded-lg"
-              style={{ 
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: 16,
+                borderRadius: 12,
                 backgroundColor: themeColors.sectionBackground,
                 borderWidth: activeTheme === "dark" ? 1 : 0,
-                borderColor: "rgba(255, 255, 255, 0.1)"
+                borderColor: "rgba(255, 255, 255, 0.1)",
+                width: '100%',
+                minHeight: 64,
               }}
-              onPress={() => console.log("Storage pressed")}
+              onPress={openStorageModal}
             >
-              <View className="flex-row items-center">
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Icons.HardDrive size={24} color={themeColors.primary} />
-                <Text
-                  className="ml-3 font-medium"
-                  style={{ color: themeColors.text }}
-                >
-                  Storage
-                </Text>
+                <Text style={{ marginLeft: 12, fontWeight: '500', color: themeColors.text, fontSize: 16 }}>Storage</Text>
               </View>
               <Icons.ChevronRight size={20} color={themeColors.primary} />
             </TouchableOpacity>
@@ -484,12 +523,8 @@ const MoreScreen = () => {
           style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)' }}
         >
           <View style={{ backgroundColor: themeColors.card, borderRadius: 16, padding: 24, width: '90%', elevation: 10 }}>
-            <Text style={{ color: themeColors.text, fontSize: 20, fontWeight: 'bold', marginBottom: 16, textAlign: 'center' }}>
-              Open Network Stream
-            </Text>
-            <Text style={{ color: themeColors.textSecondary, fontSize: 14, marginBottom: 16, textAlign: 'center' }}>
-              Enter a URL to stream video or audio content
-            </Text>
+            <Text style={{ color: themeColors.text, fontSize: 20, fontWeight: 'bold', marginBottom: 16, textAlign: 'center' }} weight="Bold">Open Network Stream</Text>
+            <Text style={{ color: themeColors.textSecondary, fontSize: 14, marginBottom: 16, textAlign: 'center' }}>Enter a URL to stream video or audio content</Text>
             <TextInput
               style={{
                 backgroundColor: themeColors.background,
@@ -516,7 +551,7 @@ const MoreScreen = () => {
               Supported: YouTube, MP4, MP3, RTMP, HLS, and more
             </Text>
             {isStreamLoading && (
-              <Text style={{ color: themeColors.textSecondary, marginBottom: 12 }}>Loading...</Text>
+              <Text style={{ color: themeColors.textSecondary, fontSize: 12, marginBottom: 12 }}>Loading...</Text>
             )}
             {streamError && (
               <View style={{ 
@@ -527,11 +562,12 @@ const MoreScreen = () => {
                 borderWidth: 1,
                 borderColor: themeColors.error || '#ff6b6b'
               }}>
-                <Text style={{ 
-                  color: themeColors.error || '#ff6b6b', 
-                  fontSize: 14,
-                  lineHeight: 20
-                }}>
+                <Text 
+                  style={{ 
+                    color: themeColors.error || '#ff6b6b', 
+                    fontSize: 14,
+                    lineHeight: 20
+                  }}>
                   {streamError}
                 </Text>
                 <TouchableOpacity
@@ -545,9 +581,7 @@ const MoreScreen = () => {
                     marginTop: 8
                   }}
                 >
-                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>
-                    Try Different URL
-                  </Text>
+                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }} weight="Bold">Try Different URL</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -593,6 +627,54 @@ const MoreScreen = () => {
             </View>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal
+        visible={downloadsModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDownloadsModalVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: themeColors.card, borderRadius: 16, padding: 24, width: '80%' }}>
+            <Text style={{ color: themeColors.text, fontSize: 18, fontWeight: 'bold', marginBottom: 12 }}>Downloads</Text>
+            <Text style={{ color: themeColors.textSecondary, fontSize: 15, marginBottom: 20 }}>No downloads yet.</Text>
+            <TouchableOpacity onPress={() => setDownloadsModalVisible(false)} style={{ alignSelf: 'flex-end', marginTop: 8 }}>
+              <Text style={{ color: themeColors.primary, fontWeight: 'bold' }}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={storageModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setStorageModalVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: themeColors.card, borderRadius: 16, padding: 24, width: '80%' }}>
+            <Text style={{ color: themeColors.text, fontSize: 18, fontWeight: 'bold', marginBottom: 12 }}>Storage</Text>
+            {storageInfo.loading ? (
+              <Text style={{ color: themeColors.textSecondary, fontSize: 15, marginBottom: 20 }}>Calculating storage usage...</Text>
+            ) : (
+              <>
+                <Text style={{ color: themeColors.textSecondary, fontSize: 15, marginBottom: 8 }}>
+                  Audio files: {storageInfo.audioCount || 0}
+                </Text>
+                <Text style={{ color: themeColors.textSecondary, fontSize: 15, marginBottom: 8 }}>
+                  Video files: {storageInfo.videoCount || 0}
+                </Text>
+                <Text style={{ color: themeColors.textSecondary, fontSize: 15, marginBottom: 20 }}>
+                  Total size: {(storageInfo.totalSize / (1024 * 1024)).toFixed(2)} MB
+                </Text>
+              </>
+            )}
+            <TouchableOpacity onPress={() => setStorageModalVisible(false)} style={{ alignSelf: 'flex-end', marginTop: 8 }}>
+              <Text style={{ color: themeColors.primary, fontWeight: 'bold' }}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );

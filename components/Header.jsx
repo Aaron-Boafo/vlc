@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, TouchableOpacity, Text } from 'react-native';
 import useThemeStore from '../store/theme';
 import AppLogo from './AppLogo';
 import * as Icons from "lucide-react-native";
@@ -14,12 +14,7 @@ const Header = ({ onMorePress, showMoreOptions = true }) => {
     >
       <View className="flex-row items-center">
         <AppLogo size={28} />
-        <Text 
-          className="text-xl font-semibold ml-2"
-          style={{ color: themeColors.text }}
-        >
-          Visura
-        </Text>
+        <Text className="text-xl font-semibold ml-2" style={{ color: themeColors.text }} weight="Bold">Visura</Text>
       </View>
 
       {showMoreOptions && (

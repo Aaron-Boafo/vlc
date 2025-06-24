@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, ScrollView, Switch, Image, Alert } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, Switch, Image, Alert, Modal } from "react-native";
 import React, { useState } from "react";
 import useThemeStore from "../../../store/theme";
 import useHistoryStore from "../../../store/historyStore";
@@ -11,7 +11,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import CustomAlert from "../../../components/CustomAlert";
 
 const SettingsScreen = () => {
-  const { themeColors, toggleTheme, activeTheme, accentColor, selectedBackground, setBackground } = useThemeStore();
+  const { themeColors, toggleTheme, activeTheme, accentColor, selectedBackground, setBackground, fontFamily, setFontFamily } = useThemeStore();
   const { saveHistory, setSaveHistory, clearHistory } = useHistoryStore();
   const { autoplay, setAutoplay, backgroundPlay, setBackgroundPlay } = usePlaybackStore();
   const router = useRouter();
@@ -23,6 +23,7 @@ const SettingsScreen = () => {
   const [audioQueueHistory, setAudioQueueHistory] = useState(true);
   const [colorPickerVisible, setColorPickerVisible] = useState(false);
   const [alertInfo, setAlertInfo] = useState({ visible: false, title: '', message: '', buttons: [] });
+  const [fontModalVisible, setFontModalVisible] = useState(false);
 
   const handleResetApp = () => {
     setAlertInfo({

@@ -209,9 +209,8 @@ const OnboardingScreen = () => {
     useEffect(() => {
         const checkOnboardingStatus = async () => {
             try {
-                // FOR DEVELOPMENT: Force onboarding screen to appear every time
-                await AsyncStorage.removeItem('hasOnboarded');
-
+                // Remove the force-reset for production
+                // await AsyncStorage.removeItem('hasOnboarded');
                 const hasOnboarded = await AsyncStorage.getItem('hasOnboarded');
                 if (hasOnboarded) {
                     router.replace('/(tabs)/');
@@ -308,7 +307,7 @@ const OnboardingScreen = () => {
                                 <AnimatedIcon icon={item.icon} size={80} isActive={index === currentIndex} />
                                 <View style={styles.textContainer}>
                                     <Text style={[styles.subtitle, { color: item.gradient[0] }]}>{item.subtitle}</Text>
-                                    <Text style={styles.title}>{item.title}</Text>
+                                    <Text style={styles.title} weight="Bold">{item.title}</Text>
                                     <Text style={styles.description}>{item.description}</Text>
                                 </View>
                             </View>
@@ -332,7 +331,7 @@ const OnboardingScreen = () => {
                     <Paginator data={onboardingData} scrollX={scrollX} />
                     <View style={styles.buttonContainer}>
                         <Pressable style={[styles.button, styles.skipButton]} onPress={skip}>
-                            <Text style={styles.buttonText}>Skip</Text>
+                            <Text style={styles.buttonText} weight="Bold">Skip</Text>
                         </Pressable>
                         <TouchableOpacity
                             onPress={handleMainButtonPress}
@@ -344,7 +343,7 @@ const OnboardingScreen = () => {
                                 end={{x: 1, y: 1}}
                                 style={styles.button}
                             >
-                                <Text style={styles.buttonText}>{currentIndex === onboardingData.length - 1 ? "Get Started" : "Next"}</Text>
+                                <Text style={styles.buttonText} weight="Bold">{currentIndex === onboardingData.length - 1 ? "Get Started" : "Next"}</Text>
                             </LinearGradient>
                         </TouchableOpacity>
                     </View>
