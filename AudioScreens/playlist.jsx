@@ -324,7 +324,7 @@ const PlaylistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch
       />
 
       {/* FAB */}
-      <TouchableOpacity style={styles.fab} onPress={() => setCreateModal(true)}>
+      <TouchableOpacity style={[styles.fab, { backgroundColor: themeColors.primary }]} onPress={() => setCreateModal(true)}>
         <AntDesign name="plus" size={24} color="white" />
       </TouchableOpacity>
 
@@ -545,7 +545,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 24,
     bottom: 32,
-    backgroundColor: '#e754e7',
     width: 56,
     height: 56,
     borderRadius: 28,
