@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,10 +12,11 @@ import { Trash2 } from 'lucide-react-native';
 import useVideoStore from '../store/VideoHeadStore';
 import useThemeStore from '../store/theme';
 import { router } from 'expo-router';
+import SearchBar from '../components/SearchBar';
 
 const { width } = Dimensions.get('window');
 
-const VideoHistoryScreen = () => {
+const VideoHistoryScreen = ({ showSearch, setShowSearch, searchQuery, setSearchQuery }) => {
   const { videoHistory, setCurrentVideo, removeFromHistory } = useVideoStore();
   const { themeColors } = useThemeStore();
 
@@ -44,6 +45,12 @@ const VideoHistoryScreen = () => {
       params: { uri: video.uri }
     });
   };
+
+  // Filter videoHistory by searchQuery
+  const filteredHistory = useMemo(() => {
+    if (!searchQuery) return videoHistory;
+    return videoHistory.filter(video => (video.title || video.filename).toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [videoHistory, searchQuery]);
 
   const renderVideoItem = ({ item }) => (
     <TouchableOpacity
@@ -89,8 +96,20 @@ const VideoHistoryScreen = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+      {showSearch && (
+        <SearchBar
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search history..."
+          themeColors={themeColors}
+          onClose={() => {
+            setSearchQuery("");
+            setShowSearch(false);
+          }}
+        />
+      )}
       <FlatList
-        data={videoHistory}
+        data={filteredHistory}
         renderItem={renderVideoItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
@@ -103,10 +122,10 @@ const VideoHistoryScreen = () => {
               color={themeColors.textSecondary} 
             />
             <Text style={[styles.emptyText, { color: themeColors.text }]}>
-              No video history yet
+              No video history found
             </Text>
             <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
-              Videos you watch will appear here
+              Try adjusting your search
             </Text>
           </View>
         }

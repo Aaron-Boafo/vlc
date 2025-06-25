@@ -11,8 +11,9 @@ import DraggableFlatList from 'react-native-draggable-flatlist';
 import * as ImagePicker from 'expo-image-picker';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
+import SearchBar from '../components/SearchBar';
 
-const PlaylistScreen = () => {
+const PlaylistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) => {
   const { themeColors } = useThemeStore();
   const { playlists, createPlaylist, deletePlaylist, addTrackToPlaylist, removeTrackFromPlaylist, setPlaylistArtwork } = usePlaylistStore();
   const audioControl = useAudioControl();
@@ -24,7 +25,6 @@ const PlaylistScreen = () => {
   const [allTracks, setAllTracks] = useState([]);
   const [loadingTracks, setLoadingTracks] = useState(false);
   const [selectedTracks, setSelectedTracks] = useState([]);
-  const [search, setSearch] = useState("");
   const [optionsVisible, setOptionsVisible] = useState(false);
   const [optionsPlaylist, setOptionsPlaylist] = useState(null);
   const [renameModal, setRenameModal] = useState(false);
@@ -93,6 +93,11 @@ const PlaylistScreen = () => {
     }
     setLoadingTracks(false);
   };
+
+  // Filter playlists based on search query
+  const filteredPlaylists = playlists.filter(playlist =>
+    playlist.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   // Open playlist details modal
   const openPlaylist = (playlist) => {
@@ -232,7 +237,7 @@ const PlaylistScreen = () => {
   };
 
   const filteredTracks = allTracks.filter(f => {
-    const q = search.toLowerCase();
+    const q = searchQuery.toLowerCase();
     return (
       f.title.toLowerCase().includes(q) ||
       f.artist.toLowerCase().includes(q) ||
@@ -287,177 +292,226 @@ const PlaylistScreen = () => {
 
   return (
     <View style={{ flex: 1, backgroundColor: themeColors.background }}>
+      {showSearch && (
+        <SearchBar
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search playlists..."
+          themeColors={themeColors}
+          onClose={() => {
+            setSearchQuery('');
+            if (typeof setShowSearch === 'function') setShowSearch(false);
+          }}
+        />
+      )}
       <FlatList
-        data={playlists}
+        data={filteredPlaylists}
         renderItem={renderPlaylist}
-        keyExtractor={item => item.id}
+        keyExtractor={(item) => item.id}
         numColumns={2}
-        contentContainerStyle={{ padding: 12, paddingBottom: 100 }}
-        ListFooterComponent={<View style={{ height: 80 }} />}
-        ListEmptyComponent={<Text style={{ color: themeColors.text, textAlign: 'center', marginTop: 32 }}>No playlists yet. Create one!</Text>}
+        contentContainerStyle={{ padding: 16 }}
+        ListEmptyComponent={
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 100 }}>
+            <MaterialCommunityIcons name="playlist-music" size={64} color={themeColors.textSecondary} />
+            <Text style={{ color: themeColors.text, fontSize: 18, fontWeight: '600', marginTop: 16 }}>
+              {searchQuery ? 'No playlists found' : 'No playlists yet'}
+            </Text>
+            <Text style={{ color: themeColors.textSecondary, textAlign: 'center', marginTop: 8 }}>
+              {searchQuery ? 'Try adjusting your search' : 'Create your first playlist to get started'}
+            </Text>
+          </View>
+        }
       />
+
       {/* FAB */}
-      <TouchableOpacity
-        style={[styles.fab, { backgroundColor: themeColors.primary }]}
-        onPress={() => setCreateModal(true)}
-        activeOpacity={0.8}
-      >
-        <AntDesign name="plus" size={28} color="#fff" />
+      <TouchableOpacity style={styles.fab} onPress={() => setCreateModal(true)}>
+        <AntDesign name="plus" size={24} color="white" />
       </TouchableOpacity>
-      {/* Create Playlist Modal */}
-      <Modal
-        visible={createModal}
-        animationType="slide"
-        onRequestClose={() => setCreateModal(false)}
-        transparent={true}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: themeColors.background }]}> 
-            <Text style={{ color: themeColors.text, fontSize: 20, fontWeight: 'bold', marginBottom: 12 }}>Create Playlist</Text>
+
+      {createModal && (
+        <View style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}>
+          <View style={{
+            width: '90%',
+            maxHeight: '80%',
+            borderRadius: 16,
+            padding: 20,
+            backgroundColor: themeColors.background,
+            elevation: 5,
+          }}>
+            <Text style={{ color: themeColors.text, fontSize: 20, fontWeight: 'bold', marginBottom: 12 }}>
+              Create Playlist
+            </Text>
             <TextInput
-              value={newPlaylistName}
-              onChangeText={setNewPlaylistName}
               placeholder="Playlist name"
               placeholderTextColor={themeColors.textSecondary}
-              style={styles.input(themeColors)}
+              style={{
+                height: 48,
+                borderRadius: 8,
+                paddingHorizontal: 16,
+                marginBottom: 16,
+                borderWidth: 1,
+                fontSize: 16,
+                backgroundColor: themeColors.card,
+                color: themeColors.text,
+                borderColor: themeColors.primary,
+              }}
+              value={newPlaylistName}
+              onChangeText={setNewPlaylistName}
             />
             <Text style={{ color: themeColors.text, marginVertical: 8, fontWeight: '600' }}>Select Tracks</Text>
-            <TextInput
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Search tracks..."
-              placeholderTextColor={themeColors.textSecondary}
-              style={styles.input(themeColors)}
-            />
-            {loadingTracks ? (
-              <ActivityIndicator size="large" color={themeColors.primary} style={{ marginTop: 32 }} />
-            ) : (
-              <ScrollView style={{ maxHeight: 260 }}>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start' }}>
-                  {filteredTracks.map(track => {
-                    const selected = selectedTracks.some(t => t.id === track.id);
-                    return (
-                      <TouchableOpacity
-                        key={track.id}
-                        style={[styles.trackBox(themeColors, selected)]}
-                        onPress={() => toggleTrack(track)}
-                        activeOpacity={0.7}
-                      >
-                        {track.artwork ? (
-                          <Image source={{ uri: track.artwork }} style={styles.artwork} />
-                        ) : (
-                          <View style={styles.artworkPlaceholder}>
-                            <Text style={{ color: themeColors.textSecondary, fontSize: 18 }}>♪</Text>
-                          </View>
-                        )}
-                        <Text numberOfLines={1} style={{ color: themeColors.text, fontSize: 13, marginTop: 4 }}>{track.title}</Text>
-                        <Text numberOfLines={1} style={{ color: themeColors.textSecondary, fontSize: 11 }}>{track.artist}</Text>
-                        {selected && (
-                          <View style={styles.checkCircle}>
-                            <AntDesign name="checkcircle" size={20} color={themeColors.primary} />
-                          </View>
-                        )}
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </ScrollView>
-            )}
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 16 }}>
-              <Button title="Cancel" onPress={() => setCreateModal(false)} color="#888" />
-              <View style={{ width: 12 }} />
-              <Button title="Create" onPress={handleCreatePlaylist} color={themeColors.primary} />
+            {/* Track selection grid here (unchanged) */}
+            <ScrollView style={{ maxHeight: 220 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start' }}>
+                {allTracks.map(track => {
+                  const selected = selectedTracks.some(t => t.id === track.id);
+                  return (
+                    <TouchableOpacity
+                      key={track.id}
+                      style={[styles.trackBox(themeColors, selected)]}
+                      onPress={() => toggleTrack(track)}
+                      activeOpacity={0.7}
+                    >
+                      {track.artwork ? (
+                        <Image source={{ uri: track.artwork }} style={styles.artwork} />
+                      ) : (
+                        <View style={styles.artworkPlaceholder}>
+                          <Text style={{ color: themeColors.textSecondary, fontSize: 18 }}>♪</Text>
+                        </View>
+                      )}
+                      <Text numberOfLines={1} style={{ color: themeColors.text, fontSize: 13, marginTop: 4 }}>{track.title}</Text>
+                      <Text numberOfLines={1} style={{ color: themeColors.textSecondary, fontSize: 11 }}>{track.artist}</Text>
+                      {selected && (
+                        <View style={styles.checkCircle}>
+                          <AntDesign name="checkcircle" size={20} color={themeColors.primary} />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+            <View style={{ gap: 12, marginTop: 20 }}>
+              <TouchableOpacity
+                style={{
+                  height: 48,
+                  borderRadius: 8,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  backgroundColor: themeColors.primary,
+                  marginBottom: 8,
+                }}
+                onPress={handleCreatePlaylist}
+                activeOpacity={0.8}
+              >
+                <Text style={{ color: '#fff', fontWeight: '600' }}>Create</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  height: 48,
+                  borderRadius: 8,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  backgroundColor: themeColors.card,
+                }}
+                onPress={() => setCreateModal(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={{ color: themeColors.primary, fontWeight: '600' }}>Cancel</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
-      </Modal>
+      )}
+
       {/* Playlist Details Modal */}
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        onRequestClose={() => setModalVisible(false)}
-        transparent={true}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: themeColors.background }]}> 
-            <Text style={{ color: themeColors.text, fontSize: 22, fontWeight: 'bold', marginBottom: 12 }}>{selectedPlaylist?.name}</Text>
+      <Modal visible={modalVisible} animationType="slide" onRequestClose={() => setModalVisible(false)}>
+        <View style={{ flex: 1, backgroundColor: themeColors.background }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: themeColors.card }}>
+            <Text style={{ color: themeColors.text, fontSize: 20, fontWeight: 'bold' }}>{selectedPlaylist?.name}</Text>
+            <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <AntDesign name="close" size={24} color={themeColors.text} />
+            </TouchableOpacity>
+          </View>
+          {selectedPlaylist && (
             <DraggableFlatList
-              data={selectedPlaylist?.tracks || []}
-              keyExtractor={item => item.id}
+              data={selectedPlaylist.tracks}
+              keyExtractor={(item) => item.id}
               renderItem={({ item, drag, isActive }) => (
-                <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 0.5, borderColor: '#ccc', backgroundColor: isActive ? themeColors.primary + '22' : 'transparent' }}>
-                  <TouchableOpacity onLongPress={drag} style={{ marginRight: 12 }}>
-                    <Feather name="menu" size={20} color={themeColors.textSecondary} />
+                <TouchableOpacity
+                  style={[
+                    styles.trackItem,
+                    { backgroundColor: isActive ? themeColors.primary + '20' : 'transparent' }
+                  ]}
+                  onLongPress={drag}
+                  onPress={() => handlePlayTrack(item)}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    <Text style={{ color: themeColors.text, marginRight: 12 }}>⋮⋮</Text>
+                    <Text style={{ color: themeColors.text, flex: 1 }}>{item.title}</Text>
+                    <Text style={{ color: themeColors.textSecondary, fontSize: 12 }}>{item.artist}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => handleRemoveTrack(selectedPlaylist.id, item.id)}>
+                    <AntDesign name="delete" size={20} color="#FF5722" />
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => handlePlayTrack(item)} style={{ flex: 1 }}>
-                    <Text style={{ color: themeColors.text, fontSize: 16 }}>{item.title}</Text>
-                    <Text style={{ color: themeColors.textSecondary, fontSize: 13 }}>{item.artist}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => handleRemoveTrack(selectedPlaylist.id, item.id)} style={{ marginLeft: 12 }}>
-                    <Text style={{ color: 'red', fontSize: 18 }}>✕</Text>
-                  </TouchableOpacity>
-                </View>
+                </TouchableOpacity>
               )}
               onDragEnd={({ data }) => handleReorderTracks(data)}
-              ListEmptyComponent={<Text style={{ color: themeColors.textSecondary, textAlign: 'center', marginTop: 32 }}>No tracks in this playlist.</Text>}
+              contentContainerStyle={{ padding: 16 }}
             />
-            <TouchableOpacity onPress={() => setAddTrackModal(true)} style={{ margin: 16, alignSelf: 'center', padding: 12, backgroundColor: themeColors.primary, borderRadius: 24 }}>
-              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>+ Add Track</Text>
+          )}
+        </View>
+      </Modal>
+
+      {/* Options Modal */}
+      <Modal visible={optionsVisible} transparent animationType="fade" onRequestClose={handleCloseOptions}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: themeColors.background }]}>
+            <Text style={{ color: themeColors.text, fontSize: 18, fontWeight: 'bold', marginBottom: 20 }}>Playlist Options</Text>
+            <TouchableOpacity style={styles.optionRow} onPress={() => handlePlayPlaylist(optionsPlaylist)}>
+              <AntDesign name="play" size={20} color={themeColors.text} style={styles.optionIcon} />
+              <Text style={{ color: themeColors.text, fontSize: 16 }}>Play</Text>
             </TouchableOpacity>
-            <Button title="Close" onPress={() => setModalVisible(false)} color={themeColors.primary} />
+            <TouchableOpacity style={styles.optionRow} onPress={() => handleShufflePlaylist(optionsPlaylist)}>
+              <MaterialCommunityIcons name="shuffle-variant" size={20} color={themeColors.text} style={styles.optionIcon} />
+              <Text style={{ color: themeColors.text, fontSize: 16 }}>Shuffle</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.optionRow} onPress={() => { setRenameModal(true); setRenameValue(optionsPlaylist.name); }}>
+              <AntDesign name="edit" size={20} color={themeColors.text} style={styles.optionIcon} />
+              <Text style={{ color: themeColors.text, fontSize: 16 }}>Rename</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.optionRow} onPress={() => handleChangeArtwork(optionsPlaylist)}>
+              <AntDesign name="picture" size={20} color={themeColors.text} style={styles.optionIcon} />
+              <Text style={{ color: themeColors.text, fontSize: 16 }}>Change Artwork</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.optionRow} onPress={() => handleSharePlaylist(optionsPlaylist)}>
+              <AntDesign name="sharealt" size={20} color={themeColors.text} style={styles.optionIcon} />
+              <Text style={{ color: themeColors.text, fontSize: 16 }}>Share</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.optionRow} onPress={() => handleDeletePlaylist(optionsPlaylist.id, optionsPlaylist.name)}>
+              <AntDesign name="delete" size={20} color="#FF5722" style={styles.optionIcon} />
+              <Text style={{ color: '#FF5722', fontSize: 16 }}>Delete</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.modalButton, { backgroundColor: themeColors.card, marginTop: 20 }]} onPress={handleCloseOptions}>
+              <Text style={{ color: themeColors.text }}>Cancel</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
-      {/* More Options Modal */}
-      <Modal
-        visible={optionsVisible}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={handleCloseOptions}
-      >
-        <TouchableOpacity style={styles.optionsOverlay} activeOpacity={1} onPress={handleCloseOptions}>
-          <View style={[styles.optionsSheet, { backgroundColor: themeColors.background }]}> 
-            <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center', padding: 16 }}
-              onPress={() => { setRenameValue(optionsPlaylist?.name || ''); setRenameModal(true); }}
-            >
-              <Feather name="edit-2" size={20} color={themeColors.primary} style={{ marginRight: 12 }} />
-              <Text style={{ color: themeColors.text, fontSize: 16 }}>Rename Playlist</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center', padding: 16 }}
-              onPress={() => handleDeletePlaylist(optionsPlaylist?.id, optionsPlaylist?.name)}
-            >
-              <Feather name="trash-2" size={20} color="red" style={{ marginRight: 12 }} />
-              <Text style={{ color: 'red', fontSize: 16 }}>Delete Playlist</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center', padding: 16 }}
-              onPress={() => handleChangeArtwork(optionsPlaylist)}
-            >
-              <Feather name="image" size={20} color={themeColors.primary} style={{ marginRight: 12 }} />
-              <Text style={{ color: themeColors.text, fontSize: 16 }}>Change Cover</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center', padding: 16 }}
-              onPress={() => handleSharePlaylist(optionsPlaylist)}
-            >
-              <Feather name="share-2" size={20} color={themeColors.primary} style={{ marginRight: 12 }} />
-              <Text style={{ color: themeColors.text, fontSize: 16 }}>Share Playlist</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+
       {/* Rename Modal */}
-      <Modal
-        visible={renameModal}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setRenameModal(false)}
-      >
-        <TouchableOpacity style={styles.optionsOverlay} activeOpacity={1} onPress={() => setRenameModal(false)}>
-          <View style={[styles.optionsSheet, { backgroundColor: themeColors.background }]}> 
-            <Text style={{ color: themeColors.text, fontSize: 18, fontWeight: 'bold', marginBottom: 12 }}>Rename Playlist</Text>
+      <Modal visible={renameModal} transparent animationType="fade" onRequestClose={() => setRenameModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: themeColors.background }]}>
+            <Text style={{ color: themeColors.text, fontSize: 18, fontWeight: 'bold', marginBottom: 20 }}>Rename Playlist</Text>
             <TextInput
               value={renameValue}
               onChangeText={setRenameValue}
@@ -465,13 +519,22 @@ const PlaylistScreen = () => {
               placeholderTextColor={themeColors.textSecondary}
               style={styles.input(themeColors)}
             />
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12 }}>
-              <Button title="Cancel" onPress={() => setRenameModal(false)} color="#888" />
-              <View style={{ width: 12 }} />
-              <Button title="Save" onPress={handleRenamePlaylist} color={themeColors.primary} />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 }}>
+              <TouchableOpacity 
+                style={[styles.modalButton, { backgroundColor: themeColors.card }]} 
+                onPress={() => setRenameModal(false)}
+              >
+                <Text style={{ color: themeColors.text }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, { backgroundColor: themeColors.primary }]} 
+                onPress={handleRenamePlaylist}
+              >
+                <Text style={{ color: 'white' }}>Rename</Text>
+              </TouchableOpacity>
             </View>
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
     </View>
   );
@@ -480,7 +543,7 @@ const PlaylistScreen = () => {
 const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
-    right: 24,
+    left: 24,
     bottom: 32,
     backgroundColor: '#e754e7',
     width: 56,
@@ -554,8 +617,8 @@ const styles = StyleSheet.create({
   },
   shuffleBtn: {
     position: 'absolute',
-    right: 52,
-    bottom: 12,
+    right: 12,
+    bottom: 52,
     backgroundColor: '#fff',
     borderRadius: 16,
     width: 32,
@@ -566,64 +629,88 @@ const styles = StyleSheet.create({
   },
   moreBtn: {
     position: 'absolute',
-    right: 8,
-    top: 8,
-    padding: 4,
-  },
-  optionsOverlay: {
-    flex: 1,
+    right: 12,
+    top: 12,
     backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'flex-end',
+    borderRadius: 16,
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  optionsSheet: {
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-    paddingBottom: 24,
-    paddingTop: 8,
-    paddingHorizontal: 12,
-    minHeight: 80,
+  playlistArtwork: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 18,
   },
   trackBox: (themeColors, selected) => ({
-    width: '30%',
-    margin: '1.5%',
-    padding: 8,
+    width: 80,
+    height: 100,
+    backgroundColor: selected ? themeColors.primary + '20' : themeColors.card,
     borderRadius: 12,
-    backgroundColor: selected ? themeColors.primary + '22' : 'rgba(255,255,255,0.08)',
+    padding: 8,
+    margin: 4,
     alignItems: 'center',
     borderWidth: selected ? 2 : 0,
     borderColor: selected ? themeColors.primary : 'transparent',
     position: 'relative',
   }),
   artwork: {
-    width: 56,
-    height: 56,
+    width: 48,
+    height: 48,
     borderRadius: 8,
-    marginBottom: 2,
   },
   artworkPlaceholder: {
-    width: 56,
-    height: 56,
+    width: 48,
+    height: 48,
     borderRadius: 8,
     backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 2,
   },
   checkCircle: {
     position: 'absolute',
     top: 4,
     right: 4,
-    backgroundColor: '#fff',
-    borderRadius: 10,
   },
-  playlistArtwork: {
-    width: 64,
-    height: 64,
-    borderRadius: 12,
-    alignSelf: 'center',
-    marginTop: 14,
-    marginBottom: 4,
-    resizeMode: 'cover',
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginHorizontal: 4,
+  },
+  trackItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  optionIcon: {
+    marginRight: 16,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 12,
+  },
+  searchInput: {
+    flex: 1,
+    height: 40,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    borderWidth: 1,
   },
 });
 

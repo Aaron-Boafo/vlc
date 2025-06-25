@@ -40,7 +40,7 @@ const BrowseTab = () => {
 
   const categories = [
     { id: 'all', name: 'All Files', icon: 'folder-multiple', color: '#4CAF50' },
-    { id: 'videos', name: 'Videos', icon: 'video', color: '#FF5722' },
+    { id: 'video', name: 'Videos', icon: 'video', color: '#FF5722' },
     { id: 'audio', name: 'Audio', icon: 'music', color: '#2196F3' },
     { id: 'images', name: 'Images', icon: 'image', color: '#9C27B0' },
     { id: 'documents', name: 'Documents', icon: 'file-document', color: '#607D8B' },
@@ -348,12 +348,24 @@ const BrowseTab = () => {
               </Text>
             </TouchableOpacity>
           </View>
-          <FlatList
-            data={recentFiles.filter(f => f.type === 'audio' || f.type === 'video')}
-            renderItem={renderRecentFile}
-            keyExtractor={(item) => item.id}
-            scrollEnabled={false}
-          />
+          {(selectedCategory === 'images' || selectedCategory === 'documents') ? (
+            <View style={{ alignItems: 'center', marginVertical: 24 }}>
+              <Text style={{ color: themeColors.textSecondary, fontSize: 16, fontWeight: '500' }}>
+                {selectedCategory === 'images' ? 'Image browsing' : 'Document browsing'} is coming soon!
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={
+                selectedCategory === 'all'
+                  ? recentFiles
+                  : recentFiles.filter(f => f.type === selectedCategory)
+              }
+              renderItem={renderRecentFile}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+            />
+          )}
         </View>
 
         {/* Storage Info */}

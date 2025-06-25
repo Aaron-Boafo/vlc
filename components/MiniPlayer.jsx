@@ -65,9 +65,9 @@ const MiniPlayer = () => {
         }}
       >
         {isPlaying ? (
-          <Play size={24} color={themeColors.primary} />
-        ) : (
           <Pause size={24} color={themeColors.primary} />
+        ) : (
+          <Play size={24} color={themeColors.primary} />
         )}
       </TouchableOpacity>
       <TouchableOpacity

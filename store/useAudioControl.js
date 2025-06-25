@@ -1,5 +1,5 @@
-import {create} from "zustand";
-import {Audio} from "expo-av";
+import { create } from "zustand";
+import { Audio } from "expo-av";
 import useHistoryStore from './historyStore';
 import usePlaybackStore from "./playbackStore";
 
@@ -88,7 +88,7 @@ const useAudioControl = create((set, get) => ({
       isMiniPlayerVisible: true,
     });
     // Also fetch lyrics for the new track
-    get().fetchLyricsFromAPI(tracks[startIndex]);
+    get().fetchLyrics(tracks[startIndex]);
     get().clearSleepTimer();
   },
 
@@ -153,7 +153,7 @@ const useAudioControl = create((set, get) => ({
           useHistoryStore.getState().addToHistory(track);
         }
       } catch (e) {}
-      get().fetchLyricsFromAPI(track);
+      get().fetchLyrics(track);
     } catch (error) {
       console.error("Error in _loadAndPlayTrack:", error);
       set({ isLoading: false, isPlaying: false });
@@ -321,68 +321,6 @@ const useAudioControl = create((set, get) => ({
     }
   },
 
-  // Control mini player visibility
-  hideMiniPlayer: () => set({ isMiniPlayerVisible: false }),
-  showMiniPlayer: () => set({ isMiniPlayerVisible: true }),
-  toggleMiniPlayer: () => set((state) => ({ isMiniPlayerVisible: !state.isMiniPlayerVisible })),
-
-  // Shuffle playlist
-  toggleShuffle: () => {
-    set((state) => {
-      const isShuffleOn = !state.isShuffleOn;
-      let newQueue = [...state.playQueue];
-      
-      if (isShuffleOn) {
-        // Shuffle the queue, keeping the current track at the beginning
-        const current = newQueue[state.currentIndex];
-        const rest = newQueue.filter((_, i) => i !== state.currentIndex);
-        for (let i = rest.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [rest[i], rest[j]] = [rest[j], rest[i]];
-        }
-        newQueue = [current, ...rest];
-      } else {
-        // Restore the original order
-        newQueue = [...state.originalQueue];
-      }
-      
-      // Find the new index of the current track
-      const newIndex = newQueue.findIndex(track => track.id === state.currentTrack.id);
-
-      return { isShuffleOn, playQueue: newQueue, currentIndex: newIndex };
-    });
-  },
-
-  // Fetch lyrics from Lyrics.ovh
-  fetchLyricsFromAPI: async (track) => {
-    if (!track) return;
-    set({ lyricsLoading: true, lyricsError: null });
-
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      // In a real app, replace this with an actual API call
-      // e.g., const response = await fetch(`https://api.lyrics.com/v1/${track.artist}/${track.title}`);
-      // const data = await response.json();
-      
-      const hasLyrics = Math.random() > 0.3; // 70% chance of having lyrics
-      if (hasLyrics) {
-        set({ lyrics: `[00:01.00] Lyrics for ${track.title}\n[00:05.00] Fetched from an API.`, lyricsLoading: false });
-      } else {
-        throw new Error("No lyrics found for this track.");
-      }
-    } catch (error) {
-      set({ lyrics: null, lyricsError: error.message, lyricsLoading: false });
-    }
-  },
-
-  refreshLyrics: () => {
-    const { currentTrack, fetchLyricsFromAPI } = get();
-    if (currentTrack) {
-      fetchLyricsFromAPI(currentTrack);
-    }
-  },
-
   setPlaybackSpeed: async (rate) => {
     const { sound } = get();
     if (sound) {
@@ -393,7 +331,9 @@ const useAudioControl = create((set, get) => ({
         console.error("Error setting playback speed:", error);
       }
     }
-  }
+  },
+
+  hideMiniPlayer: () => set({ isMiniPlayerVisible: false }),
 }));
 
 const onPlaybackStatusUpdate = (status, set, get) => {

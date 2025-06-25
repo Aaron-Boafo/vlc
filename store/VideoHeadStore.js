@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import {create} from "zustand";
 import {persist, createJSONStorage} from "zustand/middleware";
 import * as MediaLibrary from "expo-media-library";
+import * as FileSystem from "expo-file-system";
 import { router } from 'expo-router';
 
 const useVideoStore = create(
@@ -191,6 +192,69 @@ const useVideoStore = create(
           return direction === 'asc' ? valA - valB : valB - valA;
         });
         set({ videoFiles: sortedFiles, sortOrder: { key, direction } });
+      },
+
+      // Remove video from library and all related collections
+      removeVideo: async (videoId) => {
+        const state = get();
+        
+        // Remove from videoFiles
+        const updatedVideoFiles = state.videoFiles.filter(v => v.id !== videoId);
+        
+        // Remove from favorites
+        const updatedFavouriteVideos = state.favouriteVideos.filter(v => v.id !== videoId);
+        
+        // Remove from history
+        const updatedVideoHistory = state.videoHistory.filter(v => v.id !== videoId);
+        
+        // Remove from all playlists
+        const updatedVideoPlaylists = state.videoPlaylists.map(playlist => ({
+          ...playlist,
+          videos: playlist.videos.filter(v => v.id !== videoId)
+        }));
+        
+        // Clear current video if it's the one being deleted
+        let updatedCurrentVideo = state.currentVideo;
+        let updatedCurrentVideoIndex = state.currentVideoIndex;
+        
+        if (state.currentVideo && state.currentVideo.id === videoId) {
+          updatedCurrentVideo = null;
+          updatedCurrentVideoIndex = -1;
+        } else if (state.currentVideoIndex >= 0) {
+          // Adjust current video index if needed
+          const newIndex = updatedVideoFiles.findIndex(v => v.id === state.currentVideo?.id);
+          updatedCurrentVideoIndex = newIndex;
+        }
+        
+        set({
+          videoFiles: updatedVideoFiles,
+          favouriteVideos: updatedFavouriteVideos,
+          videoHistory: updatedVideoHistory,
+          videoPlaylists: updatedVideoPlaylists,
+          currentVideo: updatedCurrentVideo,
+          currentVideoIndex: updatedCurrentVideoIndex,
+        });
+      },
+
+      // Rename video file
+      renameVideo: async (videoId, newFileName) => {
+        const state = get();
+        const video = state.videoFiles.find(v => v.id === videoId);
+        
+        if (!video) {
+          throw new Error('Video not found');
+        }
+
+        try {
+          // Use MediaLibrary to update the asset's filename
+          await MediaLibrary.updateAssetAsync(videoId, { filename: newFileName });
+
+          // Reload the video files to reflect the new name
+          await get().loadVideoFiles();
+        } catch (error) {
+          console.error('Failed to rename video:', error);
+          throw error;
+        }
       },
     }),
 

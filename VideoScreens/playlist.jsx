@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,13 +8,18 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Modal,
+  Pressable,
+  Image,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import useVideoStore from '../store/VideoHeadStore';
 import useThemeStore from '../store/theme';
 import { router } from 'expo-router';
+import * as VideoThumbnails from 'expo-video-thumbnails';
+import SearchBar from '../components/SearchBar';
 
-const VideoPlaylistScreen = () => {
+const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearchQuery }) => {
   const { themeColors } = useThemeStore();
   const { videoFiles, setCurrentVideo } = useVideoStore();
   const [playlists, setPlaylists] = useState([
@@ -25,16 +30,43 @@ const VideoPlaylistScreen = () => {
   const [playlistName, setPlaylistName] = useState('');
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
   const [playlistModalVisible, setPlaylistModalVisible] = useState(false);
+  const [selectedVideos, setSelectedVideos] = useState([]);
+  const [optionsVisible, setOptionsVisible] = useState(false);
+  const [optionsPlaylist, setOptionsPlaylist] = useState(null);
+  const [videoThumbnails, setVideoThumbnails] = useState({});
+
+  useEffect(() => {
+    const generateThumbnails = async () => {
+      const thumbs = {};
+      for (const video of videoFiles) {
+        if (!videoThumbnails[video.id]) {
+          try {
+            const { uri } = await VideoThumbnails.getThumbnailAsync(video.uri, { time: 1000 });
+            thumbs[video.id] = uri;
+          } catch (e) {
+            thumbs[video.id] = null;
+          }
+        } else {
+          thumbs[video.id] = videoThumbnails[video.id];
+        }
+      }
+      setVideoThumbnails(thumbs);
+    };
+    if (modalVisible && videoFiles.length > 0) {
+      generateThumbnails();
+    }
+  }, [modalVisible, videoFiles]);
 
   const handleCreatePlaylist = () => {
-    if (playlistName.trim()) {
+    if (playlistName.trim() && selectedVideos.length > 0) {
       const newPlaylist = {
         id: Date.now().toString(),
         name: playlistName,
-        tracks: []
+        tracks: selectedVideos,
       };
       setPlaylists([...playlists, newPlaylist]);
       setPlaylistName('');
+      setSelectedVideos([]);
       setModalVisible(false);
     }
   };
@@ -51,6 +83,33 @@ const VideoPlaylistScreen = () => {
       params: { uri: video.uri }
     });
   };
+
+  const handleToggleVideo = (video) => {
+    setSelectedVideos((prev) =>
+      prev.some((v) => v.id === video.id)
+        ? prev.filter((v) => v.id !== video.id)
+        : [...prev, video]
+    );
+  };
+
+  const handleOpenOptions = (playlist) => {
+    setOptionsPlaylist(playlist);
+    setOptionsVisible(true);
+  };
+
+  const handleDeletePlaylist = () => {
+    if (optionsPlaylist) {
+      setPlaylists(playlists.filter(p => p.id !== optionsPlaylist.id));
+      setOptionsVisible(false);
+      setOptionsPlaylist(null);
+    }
+  };
+
+  // Filter playlists and videos by searchQuery
+  const filteredPlaylists = useMemo(() => {
+    if (!searchQuery) return playlists;
+    return playlists.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [playlists, searchQuery]);
 
   const renderPlaylistItem = ({ item }) => (
     <TouchableOpacity
@@ -71,7 +130,7 @@ const VideoPlaylistScreen = () => {
           <TouchableOpacity style={styles.actionButton}>
             <MaterialIcons name="shuffle" size={22} color={themeColors.primary} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity style={styles.actionButton} onPress={() => handleOpenOptions(item)}>
             <MaterialIcons name="more-vert" size={22} color={themeColors.textSecondary} />
           </TouchableOpacity>
         </View>
@@ -87,21 +146,33 @@ const VideoPlaylistScreen = () => {
 
   return (
     <View style={{ flex: 1, backgroundColor: themeColors.background }}>
+      {showSearch && (
+        <SearchBar
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search playlists..."
+          themeColors={themeColors}
+          onClose={() => {
+            setSearchQuery("");
+            setShowSearch(false);
+          }}
+        />
+      )}
       <FlatList
-        data={playlists}
+        data={filteredPlaylists}
         renderItem={renderPlaylistItem}
         keyExtractor={(item) => item.id}
         numColumns={2}
         contentContainerStyle={styles.container}
         ListEmptyComponent={
           <Text style={{ color: themeColors.text, textAlign: 'center', marginTop: 32 }}>
-            No playlists yet. Create one!
+            No playlists found.
           </Text>
         }
       />
 
       <TouchableOpacity
-        style={[styles.fab, { backgroundColor: themeColors.primary }]}
+        style={[styles.fab, { backgroundColor: themeColors.primary, left: 24, right: undefined }]}
         onPress={() => setModalVisible(true)}
       >
         <MaterialIcons name="add" size={24} color="white" />
@@ -125,21 +196,102 @@ const VideoPlaylistScreen = () => {
               value={playlistName}
               onChangeText={setPlaylistName}
             />
-            <TouchableOpacity
-              style={[styles.createButton, { backgroundColor: themeColors.primary }]}
-              onPress={handleCreatePlaylist}
-            >
-              <Text style={{ color: 'white', fontWeight: '600' }}>Create</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={() => setModalVisible(false)}
-            >
-              <Text style={{ color: themeColors.textSecondary }}>Cancel</Text>
-            </TouchableOpacity>
+            <Text style={{ color: themeColors.text, marginVertical: 8, fontWeight: '600' }}>Select Videos</Text>
+            <View style={{ maxHeight: 220 }}>
+              <FlatList
+                data={videoFiles}
+                keyExtractor={item => item.id}
+                numColumns={3}
+                renderItem={({ item }) => {
+                  const selected = selectedVideos.some(v => v.id === item.id);
+                  return (
+                    <TouchableOpacity
+                      style={{
+                        width: '30%',
+                        margin: '1.5%',
+                        borderRadius: 12,
+                        backgroundColor: selected ? themeColors.primary + '22' : 'rgba(255,255,255,0.08)',
+                        alignItems: 'center',
+                        borderWidth: selected ? 2 : 0,
+                        borderColor: selected ? themeColors.primary : 'transparent',
+                        position: 'relative',
+                        padding: 8,
+                      }}
+                      onPress={() => handleToggleVideo(item)}
+                      activeOpacity={0.7}
+                    >
+                      {/* Thumbnail or icon */}
+                      {videoThumbnails[item.id] ? (
+                        <Image source={{ uri: videoThumbnails[item.id] }} style={{ width: 56, height: 56, borderRadius: 8, marginBottom: 2 }} />
+                      ) : (
+                        <View style={{ width: 56, height: 56, borderRadius: 8, backgroundColor: 'rgba(0,0,0,0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 2 }}>
+                          <MaterialIcons name="video-library" size={28} color={themeColors.primary} />
+                        </View>
+                      )}
+                      <Text numberOfLines={1} style={{ color: themeColors.text, fontSize: 13, marginTop: 4 }}>{item.title || item.filename}</Text>
+                      <Text numberOfLines={1} style={{ color: themeColors.textSecondary, fontSize: 11 }}>{item.artist || ''}</Text>
+                      {selected && (
+                        <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: '#fff', borderRadius: 10 }}>
+                          <MaterialIcons name="check-circle" size={20} color={themeColors.primary} />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                }}
+                ListEmptyComponent={<Text style={{ color: themeColors.textSecondary, textAlign: 'center' }}>No videos found.</Text>}
+              />
+            </View>
+            <View style={{ gap: 12, marginTop: 20 }}>
+              <TouchableOpacity
+                style={{
+                  height: 48,
+                  borderRadius: 8,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  backgroundColor: themeColors.primary,
+                  marginBottom: 8,
+                }}
+                onPress={handleCreatePlaylist}
+                activeOpacity={0.8}
+              >
+                <Text style={{ color: '#fff', fontWeight: '600' }}>Create</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  height: 48,
+                  borderRadius: 8,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  backgroundColor: themeColors.card,
+                }}
+                onPress={() => setModalVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={{ color: themeColors.primary, fontWeight: '600' }}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       )}
+
+      {/* More Options Modal */}
+      <Modal
+        visible={optionsVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOptionsVisible(false)}
+      >
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' }} onPress={() => setOptionsVisible(false)}>
+          <View style={{ backgroundColor: themeColors.card, borderRadius: 16, padding: 24, minWidth: 220 }}>
+            <TouchableOpacity onPress={handleDeletePlaylist} style={{ paddingVertical: 12 }}>
+              <Text style={{ color: 'red', fontWeight: 'bold', fontSize: 16 }}>Delete Playlist</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setOptionsVisible(false)} style={{ paddingVertical: 12 }}>
+              <Text style={{ color: themeColors.text, fontSize: 16 }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
 
       {/* Playlist Details Modal */}
       {playlistModalVisible && selectedPlaylist && (
@@ -218,7 +370,7 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     bottom: 24,
-    right: 24,
+    left: 24,
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -250,19 +402,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     fontSize: 16,
-  },
-  createButton: {
-    height: 48,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  cancelButton: {
-    height: 48,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   trackItem: {
     flexDirection: 'row',

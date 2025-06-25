@@ -8,7 +8,12 @@ const VideoToggleBar = () => {
   const { activeTab, toggleTabs } = useVideoStore();
 
   return (
-    <View style={styles.container}>
+    <View style={[
+      styles.container,
+      {
+        backgroundColor: themeColors.background,
+      },
+    ]}>
       {tags.map((tag) => {
         const isActive = activeTab === tag.name;
         return (

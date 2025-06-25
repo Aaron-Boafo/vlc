@@ -484,7 +484,16 @@ const VideoPlayerScreen = () => {
               <Text style={styles.subtitleText}>{currentSubtitleLine}</Text>
             </View>
           ) : null}
-          {isControlsVisible && (
+
+          {/* Always show lock button when locked, even if controls are hidden */}
+          {isLocked && (
+            <TouchableOpacity onPress={toggleLock} style={styles.lockButton}>
+              <Lock size={28} color="#FFF" />
+            </TouchableOpacity>
+          )}
+
+          {/* Show controls only if visible and not locked */}
+          {isControlsVisible && !isLocked && (
             <View style={styles.controlsOverlay}>
               <View style={styles.headerTop}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.controlButton}>
@@ -493,83 +502,73 @@ const VideoPlayerScreen = () => {
                 <Text style={styles.titleText} numberOfLines={1}>{currentVideo.title || currentVideo.filename}</Text>
                 <View style={{ flex: 1 }} />
               </View>
-              {isLocked ? (
-                <View style={styles.lockedContainer}>
-                  <TouchableOpacity onPress={toggleLock} style={styles.lockButton}>
-                    <Lock size={28} color="#FFF" />
+              <View style={styles.middleContainer}>
+                <View style={styles.middleControls}>
+                  <TouchableOpacity onPress={() => handleSkip(-10)} style={styles.skipButton}>
+                    <RotateCcw size={28} color="#FFF" />
+                    <Text style={styles.skipButtonText}>10</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handlePlayPause} style={styles.playPauseButton}>
+                    {status.isPlaying ? <Pause size={38} color="#FFF" /> : <Play size={38} color="#FFF" />}
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleSkip(10)} style={styles.skipButton}>
+                    <RotateCw size={28} color="#FFF" />
+                    <Text style={styles.skipButtonText}>10</Text>
                   </TouchableOpacity>
                 </View>
-              ) : (
-                <>
-                  <View style={styles.middleContainer}>
-                    <View style={styles.middleControls}>
-                      <TouchableOpacity onPress={() => handleSkip(-10)} style={styles.skipButton}>
-                        <RotateCcw size={28} color="#FFF" />
-                        <Text style={styles.skipButtonText}>10</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={handlePlayPause} style={styles.playPauseButton}>
-                        {status.isPlaying ? <Pause size={38} color="#FFF" /> : <Play size={38} color="#FFF" />}
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleSkip(10)} style={styles.skipButton}>
-                        <RotateCw size={28} color="#FFF" />
-                        <Text style={styles.skipButtonText}>10</Text>
-                      </TouchableOpacity>
-                    </View>
-                    <TouchableOpacity onPress={toggleLock} style={styles.lockButton}>
-                      <Unlock size={20} color="#FFF" />
-                    </TouchableOpacity>
+                <TouchableOpacity onPress={toggleLock} style={styles.lockButton}>
+                  <Unlock size={20} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.footer}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={styles.timeText}>{formatTime(status.positionMillis)}</Text>
+                  <Text style={styles.timeText}>{formatTime(status.durationMillis)}</Text>
+                </View>
+                <View style={{ position: 'relative', width: '100%' }}>
+                  <View
+                    style={{ width: '100%' }}
+                    onLayout={e => setSliderWidth(e.nativeEvent.layout.width)}
+                  >
+                    <Slider
+                      ref={sliderRef}
+                      style={styles.slider}
+                      minimumValue={0}
+                      maximumValue={100}
+                      value={status.durationMillis ? (status.positionMillis / status.durationMillis) * 100 : 0}
+                      onSlidingComplete={value => handleSeek(value / 100)}
+                      minimumTrackTintColor={themeColors.primary}
+                      maximumTrackTintColor="rgba(255, 255, 255, 0.5)"
+                      thumbTintColor={themeColors.primary}
+                    />
+                    <TouchableWithoutFeedback
+                      onPress={e => {
+                        if (!sliderWidth || !status.durationMillis) return;
+                        const { locationX } = e.nativeEvent;
+                        let percent = locationX / sliderWidth;
+                        percent = Math.max(0, Math.min(1, percent));
+                        handleSeek(percent);
+                      }}
+                    >
+                      <View style={{ ...StyleSheet.absoluteFillObject, height: 40, zIndex: 1 }} />
+                    </TouchableWithoutFeedback>
                   </View>
-                  <View style={styles.footer}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Text style={styles.timeText}>{formatTime(status.positionMillis)}</Text>
-                      <Text style={styles.timeText}>{formatTime(status.durationMillis)}</Text>
-                    </View>
-                    <View style={{ position: 'relative', width: '100%' }}>
-                      <View
-                        style={{ width: '100%' }}
-                        onLayout={e => setSliderWidth(e.nativeEvent.layout.width)}
-                      >
-                        <Slider
-                          ref={sliderRef}
-                          style={styles.slider}
-                          minimumValue={0}
-                          maximumValue={100}
-                          value={status.durationMillis ? (status.positionMillis / status.durationMillis) * 100 : 0}
-                          onSlidingComplete={value => handleSeek(value / 100)}
-                          minimumTrackTintColor={themeColors.primary}
-                          maximumTrackTintColor="rgba(255, 255, 255, 0.5)"
-                          thumbTintColor={themeColors.primary}
-                        />
-                        <TouchableWithoutFeedback
-                          onPress={e => {
-                            if (!sliderWidth || !status.durationMillis) return;
-                            const { locationX } = e.nativeEvent;
-                            let percent = locationX / sliderWidth;
-                            percent = Math.max(0, Math.min(1, percent));
-                            handleSeek(percent);
-                          }}
-                        >
-                          <View style={{ ...StyleSheet.absoluteFillObject, height: 40, zIndex: 1 }} />
-                        </TouchableWithoutFeedback>
-                      </View>
-                    </View>
-                    <View style={styles.footerActionsBottom}>
-                      <TouchableOpacity onPress={() => setSubtitleModalVisible(true)} style={styles.controlButton}>
-                        <Captions size={22} color={selectedSubtitle ? themeColors.primary : "#FFF"} />
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={toggleFullscreen} style={styles.controlButton}>
-                        {isFullscreen ? <Minimize size={22} color="#FFF" /> : <Expand size={22} color="#FFF" />}
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.controlButton} onPress={handleMinimize}>
-                        <PictureInPicture size={24} color="#FFF" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </>
-              )}
-               {status.isBuffering && !isFetchingStream && <ActivityIndicator style={StyleSheet.absoluteFill} size="large" color="#FFF" />}
+                </View>
+                <View style={styles.footerActionsBottom}>
+                  <TouchableOpacity onPress={() => setSubtitleModalVisible(true)} style={styles.controlButton}>
+                    <Captions size={22} color={selectedSubtitle ? themeColors.primary : "#FFF"} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={toggleFullscreen} style={styles.controlButton}>
+                    {isFullscreen ? <Minimize size={22} color="#FFF" /> : <Expand size={22} color="#FFF" />}
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.controlButton} onPress={handleMinimize}>
+                    <PictureInPicture size={24} color="#FFF" />
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
           )}
+          {status.isBuffering && !isFetchingStream && <ActivityIndicator style={StyleSheet.absoluteFill} size="large" color="#FFF" />}
         </View>
       </GestureDetector>
       

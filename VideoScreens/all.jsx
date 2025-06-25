@@ -7,19 +7,32 @@ import {
   StyleSheet,
   TextInput,
   ActivityIndicator,
+  Modal,
+  Pressable,
+  Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { VideoOff } from 'lucide-react-native';
+import { VideoOff, Play, Heart, Share2, Trash2, Info, Clock, Star, Edit3 } from 'lucide-react-native';
 import useVideoStore from '../store/VideoHeadStore';
 import useThemeStore from '../store/theme';
+import useFavouriteStore from '../store/favouriteStore';
+import useHistoryStore from '../store/historyStore';
 import { router } from 'expo-router';
 import VideoCard from '../components/VideoCard';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
 
 const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
-  const { videoFiles, isLoading, loadVideoFiles, setAndPlayVideo } = useVideoStore();
+  const { videoFiles, isLoading, loadVideoFiles, setAndPlayVideo, removeVideo, renameVideo } = useVideoStore();
   const { themeColors } = useThemeStore();
+  const favouriteStore = useFavouriteStore();
+  const historyStore = useHistoryStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedVideo, setSelectedVideo] = useState(null);
+  const [showMoreModal, setShowMoreModal] = useState(false);
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [newFileName, setNewFileName] = useState('');
 
   useEffect(() => {
     loadVideoFiles();
@@ -46,7 +59,114 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
   };
 
   const handleMoreOptions = (video) => {
-    console.log('More options for video:', video);
+    setSelectedVideo(video);
+    setShowMoreModal(true);
+  };
+
+  const handlePlay = () => {
+    if (selectedVideo) {
+      setAndPlayVideo(selectedVideo);
+      setShowMoreModal(false);
+      setTimeout(() => {
+        router.push('/(tabs)/(video)/player');
+      }, 50);
+    }
+  };
+
+  const handleAddToFavorites = () => {
+    if (selectedVideo) {
+      favouriteStore.toggleFavourite(selectedVideo.id);
+      setShowMoreModal(false);
+    }
+  };
+
+  const handleShare = async () => {
+    if (selectedVideo) {
+      try {
+        const isAvailable = await Sharing.isAvailableAsync();
+        if (isAvailable) {
+          await Sharing.shareAsync(selectedVideo.uri, {
+            mimeType: 'video/mp4',
+            dialogTitle: `Share ${selectedVideo.filename}`,
+          });
+        } else {
+          Alert.alert('Sharing not available', 'Sharing is not available on this device.');
+        }
+      } catch (error) {
+        Alert.alert('Error', 'Failed to share video.');
+      }
+      setShowMoreModal(false);
+    }
+  };
+
+  const handleRename = () => {
+    if (selectedVideo) {
+      setNewFileName(selectedVideo.filename.replace(/\.mp4$/, ''));
+      setShowMoreModal(false);
+      setShowRenameModal(true);
+    }
+  };
+
+  const handleRenameConfirm = async () => {
+    if (selectedVideo && newFileName.trim()) {
+      try {
+        const finalFileName = newFileName.trim() + '.mp4';
+        await renameVideo(selectedVideo.id, finalFileName);
+        setShowRenameModal(false);
+        setNewFileName('');
+        Alert.alert('Success', 'Video renamed successfully.');
+      } catch (error) {
+        Alert.alert('Error', 'Failed to rename video.');
+      }
+    } else {
+      Alert.alert('Error', 'Please enter a valid file name.');
+    }
+  };
+
+  const handleDelete = () => {
+    if (selectedVideo) {
+      Alert.alert(
+        'Delete Video',
+        `Are you sure you want to delete "${selectedVideo.filename}"?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await removeVideo(selectedVideo.id);
+                setShowMoreModal(false);
+                Alert.alert('Success', 'Video deleted successfully.');
+              } catch (error) {
+                Alert.alert('Error', 'Failed to delete video.');
+              }
+            },
+          },
+        ]
+      );
+    }
+  };
+
+  const handleInfo = () => {
+    if (selectedVideo) {
+      Alert.alert(
+        'Video Information',
+        `Title: ${selectedVideo.filename}\n` +
+        `Duration: ${Math.floor(selectedVideo.duration / 60)}:${(selectedVideo.duration % 60).toString().padStart(2, '0')}\n` +
+        `Size: ${(selectedVideo.size / (1024 * 1024)).toFixed(2)} MB\n` +
+        `Path: ${selectedVideo.uri}`,
+        [{ text: 'OK' }]
+      );
+      setShowMoreModal(false);
+    }
+  };
+
+  const formatDuration = (seconds) => {
+    if (!seconds || isNaN(seconds)) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   const renderItem = useCallback(({ item }) => (
@@ -124,6 +244,163 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
         refreshing={refreshing}
         onRefresh={onRefresh}
       />
+
+      {/* More Options Modal */}
+      <Modal
+        visible={showMoreModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowMoreModal(false)}
+      >
+        <Pressable 
+          style={styles.modalOverlay} 
+          onPress={() => setShowMoreModal(false)}
+        >
+          <Pressable 
+            style={[styles.modalContent, { backgroundColor: themeColors.card }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            {selectedVideo && (
+              <>
+                <View style={styles.modalHeader}>
+                  <Text style={[styles.modalTitle, { color: themeColors.text }]}>
+                    {selectedVideo.filename.replace(/\.mp4$/, '')}
+                  </Text>
+                  <TouchableOpacity 
+                    onPress={() => setShowMoreModal(false)}
+                    style={styles.closeModalButton}
+                  >
+                    <MaterialIcons name="close" size={24} color={themeColors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.modalOptions}>
+                  <TouchableOpacity 
+                    style={styles.optionRow} 
+                    onPress={handlePlay}
+                  >
+                    <Play size={22} color={themeColors.primary} style={styles.optionIcon} />
+                    <Text style={[styles.optionText, { color: themeColors.text }]}>Play</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={styles.optionRow} 
+                    onPress={handleRename}
+                  >
+                    <Edit3 size={22} color={themeColors.text} style={styles.optionIcon} />
+                    <Text style={[styles.optionText, { color: themeColors.text }]}>Rename</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={styles.optionRow} 
+                    onPress={handleAddToFavorites}
+                  >
+                    <Heart 
+                      size={22} 
+                      color={favouriteStore.isFavourite(selectedVideo.id) ? themeColors.primary : themeColors.text} 
+                      style={styles.optionIcon} 
+                    />
+                    <Text style={[styles.optionText, { color: themeColors.text }]}>
+                      {favouriteStore.isFavourite(selectedVideo.id) ? 'Remove from Favorites' : 'Add to Favorites'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={styles.optionRow} 
+                    onPress={handleShare}
+                  >
+                    <Share2 size={22} color={themeColors.text} style={styles.optionIcon} />
+                    <Text style={[styles.optionText, { color: themeColors.text }]}>Share</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={styles.optionRow} 
+                    onPress={handleInfo}
+                  >
+                    <Info size={22} color={themeColors.text} style={styles.optionIcon} />
+                    <Text style={[styles.optionText, { color: themeColors.text }]}>Info</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={styles.optionRow} 
+                    onPress={handleDelete}
+                  >
+                    <Trash2 size={22} color={themeColors.error} style={styles.optionIcon} />
+                    <Text style={[styles.optionText, { color: themeColors.error }]}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Rename Modal */}
+      <Modal
+        visible={showRenameModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowRenameModal(false)}
+      >
+        <Pressable 
+          style={styles.modalOverlay} 
+          onPress={() => setShowRenameModal(false)}
+        >
+          <Pressable 
+            style={[styles.renameModalContent, { backgroundColor: themeColors.card }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.renameModalHeader}>
+              <Text style={[styles.renameModalTitle, { color: themeColors.text }]}>
+                Rename Video
+              </Text>
+              <TouchableOpacity 
+                onPress={() => setShowRenameModal(false)}
+                style={styles.closeModalButton}
+              >
+                <MaterialIcons name="close" size={24} color={themeColors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.renameModalBody}>
+              <Text style={[styles.renameLabel, { color: themeColors.text }]}>
+                Enter new name:
+              </Text>
+              <TextInput
+                style={[styles.renameInput, { 
+                  backgroundColor: themeColors.background,
+                  color: themeColors.text,
+                  borderColor: themeColors.primary
+                }]}
+                value={newFileName}
+                onChangeText={setNewFileName}
+                placeholder="Enter video name"
+                placeholderTextColor={themeColors.textSecondary}
+                autoFocus
+                maxLength={100}
+              />
+              <Text style={[styles.renameHint, { color: themeColors.textSecondary }]}>
+                The .mp4 extension will be added automatically
+              </Text>
+            </View>
+
+            <View style={styles.renameModalActions}>
+              <TouchableOpacity 
+                style={[styles.renameButton, styles.cancelButton]} 
+                onPress={() => setShowRenameModal(false)}
+              >
+                <Text style={[styles.renameButtonText, { color: themeColors.text }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.renameButton, styles.confirmButton, { backgroundColor: themeColors.primary }]} 
+                onPress={handleRenameConfirm}
+              >
+                <Text style={[styles.renameButtonText, { color: themeColors.background }]}>Rename</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 };
@@ -181,6 +458,109 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
     paddingHorizontal: 32,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalContent: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 40,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    flex: 1,
+    marginRight: 16,
+  },
+  closeModalButton: {
+    padding: 4,
+  },
+  modalOptions: {
+    paddingTop: 10,
+  },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+  },
+  optionIcon: {
+    marginRight: 16,
+  },
+  optionText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  renameModalContent: {
+    margin: 20,
+    borderRadius: 16,
+    padding: 20,
+    maxWidth: 400,
+    alignSelf: 'center',
+  },
+  renameModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  renameModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  renameModalBody: {
+    marginBottom: 20,
+  },
+  renameLabel: {
+    fontSize: 16,
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+  renameInput: {
+    height: 48,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  renameHint: {
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+  renameModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  renameButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: 'rgba(0,0,0,0.1)',
+  },
+  confirmButton: {
+    // backgroundColor is set dynamically
+  },
+  renameButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

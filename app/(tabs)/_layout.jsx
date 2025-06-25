@@ -6,11 +6,14 @@ import { Video } from 'lucide-react-native';
 import VideoMiniPlayer from '../../VideoComponents/VideoMiniPlayer';
 
 export default function TabLayouts() {
-  const { themeColors, isDarkMode } = useThemeStore();
+  const { themeColors, isDarkMode, activeTheme, accentColor } = useThemeStore();
+
+  const tabKey = `${activeTheme}-${accentColor}`;
 
   return (
     <>
       <Tabs
+        key={tabKey}
         screenOptions={{
           headerShown: false,
           tabBarActiveTintColor: themeColors.primary,

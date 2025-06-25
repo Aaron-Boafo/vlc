@@ -6,6 +6,7 @@ const usePlaylistStore = create(persist((set, get) => ({
   playlists: [],
   createPlaylist: (name, tracks = [], artwork = null) => {
     const id = uuid.v4();
+    console.log('createPlaylist called', name, tracks, artwork, id);
     set(state => ({
       playlists: [
         ...state.playlists,

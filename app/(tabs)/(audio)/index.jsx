@@ -27,6 +27,7 @@ const AudioTabScreen = () => {
   const [showMore, setShowMore] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showSort, setShowSort] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const audioSortOptions = [
     { label: 'Title (A-Z)', key: 'title', direction: 'asc', icon: Icons.ArrowDownAZ },
@@ -120,17 +121,17 @@ const AudioTabScreen = () => {
 
     switch (activeTab) {
       case "all":
-        return <AllScreen showSearch={showSearch} onCloseSearch={() => setShowSearch(false)} />;
+        return <AllScreen showSearch={showSearch} searchQuery={searchQuery} setSearchQuery={setSearchQuery} setShowSearch={setShowSearch} />;
       case "playlist":
-        return <PlaylistScreen />;
+        return <PlaylistScreen showSearch={showSearch} searchQuery={searchQuery} setSearchQuery={setSearchQuery} setShowSearch={setShowSearch} />;
       case "album":
-        return <AlbumsScreen />;
+        return <AlbumsScreen showSearch={showSearch} searchQuery={searchQuery} setSearchQuery={setSearchQuery} setShowSearch={setShowSearch} />;
       case "artist":
-        return <ArtistScreen />;
+        return <ArtistScreen showSearch={showSearch} searchQuery={searchQuery} setSearchQuery={setSearchQuery} setShowSearch={setShowSearch} />;
       case "favourite":
-        return <FavouriteScreen />;
+        return <FavouriteScreen showSearch={showSearch} searchQuery={searchQuery} setSearchQuery={setSearchQuery} setShowSearch={setShowSearch} />;
       default:
-        return <AllScreen showSearch={showSearch} onCloseSearch={() => setShowSearch(false)} />;
+        return <AllScreen showSearch={showSearch} searchQuery={searchQuery} setSearchQuery={setSearchQuery} setShowSearch={setShowSearch} />;
     }
   };
 

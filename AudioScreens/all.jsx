@@ -20,8 +20,9 @@ import {router} from "expo-router";
 import useFavouriteStore from '../store/favouriteStore';
 import CustomAlert from '../components/CustomAlert';
 import BottomSheet from '../components/BottomSheet';
+import SearchBar from '../components/SearchBar';
 
-const AllScreen = ({ showSearch: initialShowSearch = false, onCloseSearch }) => {
+const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) => {
   const {themeColors} = useThemeStore();
   const audioControl = useAudioControl();
   const favouriteStore = useFavouriteStore();
@@ -31,8 +32,6 @@ const AllScreen = ({ showSearch: initialShowSearch = false, onCloseSearch }) => 
   const [selectedTrack, setSelectedTrack] = useState(null);
   const [detailsVisible, setDetailsVisible] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showSearch, setShowSearch] = useState(initialShowSearch);
   const { currentTrack } = useAudioControl();
   const [refreshing, setRefreshing] = useState(false);
 
@@ -141,11 +140,6 @@ const AllScreen = ({ showSearch: initialShowSearch = false, onCloseSearch }) => 
     );
   }, [audioFiles, searchQuery, sortOrder]);
 
-  const handleCloseSearch = () => {
-    setSearchQuery('');
-    onCloseSearch?.();
-  };
-
   const renderItem = useCallback(({ item }) => {
     const isPlaying = currentTrack && item.id === currentTrack.id;
     return (
@@ -221,23 +215,16 @@ const AllScreen = ({ showSearch: initialShowSearch = false, onCloseSearch }) => 
   return (
     <View style={[styles.container, { backgroundColor: themeColors.background }]}>
       {showSearch && (
-        <View style={[styles.searchContainer, { backgroundColor: themeColors.sectionBackground }]}>
-          <TextInput
-            style={[styles.searchInput, { 
-              backgroundColor: themeColors.card,
-              color: themeColors.text,
-              borderColor: themeColors.primary
-            }]}
-            placeholder="Search your music..."
-            placeholderTextColor={themeColors.textSecondary}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            autoFocus
-          />
-          <TouchableOpacity onPress={handleCloseSearch} style={styles.closeButton}>
-            <ArrowLeft size={24} color={themeColors.text} />
-          </TouchableOpacity>
-        </View>
+        <SearchBar
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search your music..."
+          themeColors={themeColors}
+          onClose={() => {
+            setSearchQuery('');
+            if (typeof setShowSearch === 'function') setShowSearch(false);
+          }}
+        />
       )}
 
       <FlatList
@@ -287,6 +274,7 @@ const AllScreen = ({ showSearch: initialShowSearch = false, onCloseSearch }) => 
         ]}
         onClose={() => setOptionsVisible(false)}
       />
+      {optionsVisible && console.log('BottomSheet visible:', optionsVisible)}
 
       <CustomAlert
         visible={deleteConfirmVisible}
@@ -433,9 +421,6 @@ const styles = StyleSheet.create({
     padding: 12,
     borderWidth: 1,
     borderColor: 'transparent',
-  },
-  closeButton: {
-    padding: 4,
   },
   emptyContainer: {
     flex: 1,

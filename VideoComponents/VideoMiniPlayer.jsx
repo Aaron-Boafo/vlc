@@ -4,7 +4,9 @@ import { Video } from 'expo-av';
 import { Play, Pause, X } from 'lucide-react-native';
 import useVideoStore from '../store/VideoHeadStore';
 import { router } from 'expo-router';
-import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, withTiming, useSharedValue, useAnimatedGestureHandler } from 'react-native-reanimated';
+import { PanGestureHandler } from 'react-native-gesture-handler';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const VideoMiniPlayer = () => {
   const { 
@@ -15,17 +17,55 @@ const VideoMiniPlayer = () => {
     toggleMiniPlayerPlayback, 
     closeMiniPlayer 
   } = useVideoStore();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const videoRef = React.useRef(null);
   const [showControls, setShowControls] = useState(false);
   const controlsTimer = useRef(null);
 
+  const miniPlayerWidth = (width - 48) / 2;
+  const miniPlayerHeight = (miniPlayerWidth * 9) / 16;
+
+  // Initial position: bottom right
+  const defaultX = 0;
+  const defaultY = 0;
+  const translateX = useSharedValue(defaultX);
+  const translateY = useSharedValue(defaultY);
+
+  useEffect(() => {
+    // Reset position when mini player is shown
+    if (isMiniPlayerVisible) {
+      translateX.value = defaultX;
+      translateY.value = defaultY;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMiniPlayerVisible, width, height]);
+
+  const panGesture = useAnimatedGestureHandler({
+    onStart: (_, ctx) => {
+      ctx.startX = translateX.value;
+      ctx.startY = translateY.value;
+    },
+    onActive: (event, ctx) => {
+      translateX.value = ctx.startX + event.translationX;
+      translateY.value = ctx.startY + event.translationY;
+    },
+    onEnd: () => {
+      // Boundaries
+      const minX = -(width - miniPlayerWidth - 16);
+      const maxX = 0;
+      const minY = -(height - miniPlayerHeight - 65);
+      const maxY = 0;
+      translateX.value = Math.max(minX, Math.min(translateX.value, maxX));
+      translateY.value = Math.max(minY, Math.min(translateY.value, maxY));
+    },
+  });
+
   const containerAnimatedStyle = useAnimatedStyle(() => {
     return {
       transform: [
-        { 
-          translateY: withTiming(isMiniPlayerVisible ? 0 : 120, { duration: 300 })
-        },
+        { translateX: translateX.value },
+        { translateY: translateY.value },
       ],
       opacity: withTiming(isMiniPlayerVisible ? 1 : 0, { duration: 250 })
     };
@@ -76,47 +116,46 @@ const VideoMiniPlayer = () => {
     closeMiniPlayer();
   };
 
-  const miniPlayerWidth = (width - 48) / 2;
-  const miniPlayerHeight = (miniPlayerWidth * 9) / 16;
-
   return (
-    <Animated.View style={[
-      styles.container,
-      { width: miniPlayerWidth, height: miniPlayerHeight },
-      containerAnimatedStyle
-    ]}>
-      {miniPlayerVideo && (
-        <TouchableOpacity 
-          style={styles.pressableArea} 
-          onPress={handlePlayerPress}
-          activeOpacity={1}
-        >
-          <Video
-            ref={videoRef}
-            source={{ uri: miniPlayerVideo.uri }}
-            style={styles.video}
-            resizeMode="cover"
-            shouldPlay={isMiniPlayerPlaying}
-            positionMillis={miniPlayerPosition}
-            isMuted={false}
-            volume={1.0}
-            isLooping
-          />
-          <Animated.View style={[styles.overlay, controlsAnimatedStyle]}>
-            <TouchableOpacity onPress={handleTogglePlayback} style={[styles.controlButton, { left: 8 }]}>
-              {isMiniPlayerPlaying ? (
-                <Pause size={18} color="white" fill="white" />
-              ) : (
-                <Play size={18} color="white" fill="white" style={{ marginLeft: 2 }}/>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleClose} style={[styles.controlButton, { right: 8 }]}>
-              <X size={18} color="white" />
-            </TouchableOpacity>
-          </Animated.View>
-        </TouchableOpacity>
-      )}
-    </Animated.View>
+    <PanGestureHandler onGestureEvent={panGesture} enabled={isMiniPlayerVisible}>
+      <Animated.View style={[
+        styles.container,
+        { width: miniPlayerWidth, height: miniPlayerHeight },
+        containerAnimatedStyle
+      ]}>
+        {miniPlayerVideo && (
+          <TouchableOpacity 
+            style={styles.pressableArea} 
+            onPress={handlePlayerPress}
+            activeOpacity={1}
+          >
+            <Video
+              ref={videoRef}
+              source={{ uri: miniPlayerVideo.uri }}
+              style={styles.video}
+              resizeMode="cover"
+              shouldPlay={isMiniPlayerPlaying}
+              positionMillis={miniPlayerPosition}
+              isMuted={false}
+              volume={1.0}
+              isLooping
+            />
+            <Animated.View style={[styles.overlay, controlsAnimatedStyle]}>
+              <TouchableOpacity onPress={handleTogglePlayback} style={[styles.controlButton, { left: 8 }]}> 
+                {isMiniPlayerPlaying ? (
+                  <Pause size={18} color="white" fill="white" />
+                ) : (
+                  <Play size={18} color="white" fill="white" style={{ marginLeft: 2 }}/>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleClose} style={[styles.controlButton, { right: 8 }]}> 
+                <X size={18} color="white" />
+              </TouchableOpacity>
+            </Animated.View>
+          </TouchableOpacity>
+        )}
+      </Animated.View>
+    </PanGestureHandler>
   );
 };
 

@@ -22,6 +22,7 @@ export default function VideoTabScreen() {
   const [showSort, setShowSort] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const router = useRouter();
 
   const videoSortOptions = [
@@ -34,17 +35,23 @@ export default function VideoTabScreen() {
   ];
 
   const renderContent = () => {
+    const sharedSearchProps = {
+      showSearch,
+      setShowSearch,
+      searchQuery,
+      setSearchQuery,
+    };
     switch (activeTab) {
       case "all":
-        return <VideoAllScreen showSearch={showSearch} onCloseSearch={() => setShowSearch(false)} />;
+        return <VideoAllScreen {...sharedSearchProps} onCloseSearch={() => setShowSearch(false)} />;
       case "playlist":
-        return <VideoPlaylistScreen />;
+        return <VideoPlaylistScreen {...sharedSearchProps} />;
       case "favourite":
-        return <VideoFavouriteScreen />;
+        return <VideoFavouriteScreen {...sharedSearchProps} />;
       case "history":
-        return <VideoHistoryScreen />;
+        return <VideoHistoryScreen {...sharedSearchProps} />;
       default:
-        return <VideoAllScreen />;
+        return <VideoAllScreen {...sharedSearchProps} onCloseSearch={() => setShowSearch(false)} />;
     }
   };
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,11 @@ import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import useVideoStore from '../store/VideoHeadStore';
 import useThemeStore from '../store/theme';
 import { router } from 'expo-router';
+import SearchBar from '../components/SearchBar';
 
 const { width } = Dimensions.get('window');
 
-const VideoFavouriteScreen = () => {
+const VideoFavouriteScreen = ({ showSearch, setShowSearch, searchQuery, setSearchQuery }) => {
   const { favouriteVideos, setCurrentVideo, removeFromFavourites } = useVideoStore();
   const { themeColors } = useThemeStore();
 
@@ -36,6 +37,12 @@ const VideoFavouriteScreen = () => {
   const handleRemoveFromFavourites = (videoId) => {
     removeFromFavourites(videoId);
   };
+
+  // Filter favouriteVideos by searchQuery
+  const filteredFavourites = useMemo(() => {
+    if (!searchQuery) return favouriteVideos;
+    return favouriteVideos.filter(video => (video.title || video.filename).toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [favouriteVideos, searchQuery]);
 
   const renderVideoItem = ({ item }) => (
     <TouchableOpacity
@@ -85,8 +92,20 @@ const VideoFavouriteScreen = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+      {showSearch && (
+        <SearchBar
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search favourites..."
+          themeColors={themeColors}
+          onClose={() => {
+            setSearchQuery("");
+            setShowSearch(false);
+          }}
+        />
+      )}
       <FlatList
-        data={favouriteVideos}
+        data={filteredFavourites}
         renderItem={renderVideoItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
@@ -99,10 +118,10 @@ const VideoFavouriteScreen = () => {
               color={themeColors.textSecondary} 
             />
             <Text style={[styles.emptyText, { color: themeColors.text }]}>
-              No favourite videos yet
+              No favourite videos found
             </Text>
             <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
-              Videos you mark as favourite will appear here
+              Try adjusting your search
             </Text>
           </View>
         }

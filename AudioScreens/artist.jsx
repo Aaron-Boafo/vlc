@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Image, Modal, StyleSheet } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, Image, Modal, StyleSheet, TextInput } from 'react-native';
 import useThemeStore from '../store/theme';
 import useAudioStore from '../store/AudioHeadStore';
 import useAudioControl from '../store/useAudioControl';
+import SearchBar from '../components/SearchBar';
 
-const ArtistScreen = () => {
+const ArtistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) => {
   const { themeColors } = useThemeStore();
   const { audioFiles } = useAudioStore();
   const audioControl = useAudioControl();
@@ -25,6 +26,14 @@ const ArtistScreen = () => {
     return Array.from(map.values());
   }, [audioFiles]);
 
+  // Filter artists based on search query
+  const filteredArtists = useMemo(() => {
+    if (!searchQuery) return artists;
+    return artists.filter(artist =>
+      artist.artist.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [artists, searchQuery]);
+
   // Get tracks for selected artist
   const artistTracks = useMemo(() => {
     if (!selectedArtist) return [];
@@ -37,8 +46,13 @@ const ArtistScreen = () => {
   };
 
   const handlePlayTrack = async (track) => {
-    await audioControl.setAndPlayPlaylist(artistTracks, track);
-    setModalVisible(false);
+    const index = artistTracks.findIndex(t => t.id === track.id);
+    if (index !== -1 && track.uri) {
+      await audioControl.setAndPlayPlaylist(artistTracks, index);
+      setModalVisible(false);
+    } else {
+      alert('This track has no valid audio file.');
+    }
   };
 
   const renderArtist = ({ item }) => (
@@ -58,12 +72,28 @@ const ArtistScreen = () => {
 
   return (
     <View style={{ flex: 1, backgroundColor: themeColors.background }}>
+      {showSearch && (
+        <SearchBar
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search artists..."
+          themeColors={themeColors}
+          onClose={() => {
+            setSearchQuery('');
+            if (typeof setShowSearch === 'function') setShowSearch(false);
+          }}
+        />
+      )}
       <FlatList
-        data={artists}
+        data={filteredArtists}
         keyExtractor={item => item.artist}
         renderItem={renderArtist}
         contentContainerStyle={{ padding: 16 }}
-        ListEmptyComponent={<Text style={{ color: themeColors.textSecondary, textAlign: 'center', marginTop: 40 }}>No artists found.</Text>}
+        ListEmptyComponent={
+          <Text style={{ color: themeColors.textSecondary, textAlign: 'center', marginTop: 40 }}>
+            {searchQuery ? 'No artists found' : 'No artists found.'}
+          </Text>
+        }
       />
       <Modal visible={modalVisible} animationType="slide" onRequestClose={() => setModalVisible(false)}>
         <View style={{ flex: 1, backgroundColor: themeColors.background, padding: 16 }}>
@@ -105,6 +135,20 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 12,
+  },
+  searchInput: {
+    flex: 1,
+    height: 40,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    borderWidth: 1,
   },
 });
 

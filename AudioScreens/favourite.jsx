@@ -1,16 +1,27 @@
-import React from 'react';
-import { View, Text, FlatList, TouchableOpacity, Image, StyleSheet } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Text, FlatList, TouchableOpacity, Image, StyleSheet, TextInput } from 'react-native';
 import useFavouriteStore from '../store/favouriteStore';
 import useThemeStore from '../store/theme';
 import useAudioControl from '../store/useAudioControl';
 import { useRouter } from 'expo-router';
 import { Music4, Heart, MoreVertical } from 'lucide-react-native';
+import SearchBar from '../components/SearchBar';
 
-const FavouriteScreen = () => {
+const FavouriteScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) => {
   const { favourites, toggleFavourite } = useFavouriteStore();
   const { themeColors } = useThemeStore();
   const audioControl = useAudioControl();
   const router = useRouter();
+
+  // Filter favourites based on search query
+  const filteredFavourites = useMemo(() => {
+    if (!searchQuery) return favourites;
+    return favourites.filter(item =>
+      (item.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.artist || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.album || '').toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [favourites, searchQuery]);
 
   const handlePlaySong = async (item) => {
     await audioControl.setAndPlayPlaylist([item]);
@@ -51,21 +62,54 @@ const FavouriteScreen = () => {
 
   if (favourites.length === 0) {
     return (
-      <View style={styles.centeredContainer}>
-        <Music4 size={80} color={themeColors.textSecondary} />
-        <Text style={[styles.title, { color: themeColors.text }]}>No Favourites Yet</Text>
-        <Text style={[styles.artist, { color: themeColors.textSecondary }]}>Tap the heart icon on a song to add it here.</Text>
+      <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+        {showSearch && (
+          <SearchBar
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search favourites..."
+            themeColors={themeColors}
+            onClose={() => {
+              setSearchQuery('');
+              if (typeof setShowSearch === 'function') setShowSearch(false);
+            }}
+          />
+        )}
+        <View style={styles.centeredContainer}>
+          <Heart size={80} color={themeColors.textSecondary} />
+          <Text style={[styles.title, { color: themeColors.text }]}>No Favourites Yet</Text>
+          <Text style={[styles.artist, { color: themeColors.textSecondary }]}>Like some songs to see them here.</Text>
+        </View>
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: themeColors.background }]}> 
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+      {showSearch && (
+        <SearchBar
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search favourites..."
+          themeColors={themeColors}
+          onClose={() => {
+            setSearchQuery('');
+            if (typeof setShowSearch === 'function') setShowSearch(false);
+          }}
+        />
+      )}
       <FlatList
-        data={favourites}
+        data={filteredFavourites}
         renderItem={renderItem}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
+        ListEmptyComponent={
+          <View style={styles.centeredContainer}>
+            <Heart size={64} color={themeColors.textSecondary} />
+            <Text style={[styles.title, { color: themeColors.text }]}>No favourites found</Text>
+            <Text style={[styles.artist, { color: themeColors.textSecondary }]}>Try adjusting your search</Text>
+          </View>
+        }
       />
     </View>
   );
@@ -73,17 +117,78 @@ const FavouriteScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  centeredContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
-  listContainer: { paddingHorizontal: 16, paddingVertical: 8 },
-  itemContainer: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, marginVertical: 4, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)' },
-  artwork: { width: 56, height: 56, borderRadius: 8, marginRight: 16 },
-  artworkPlaceholder: { width: 56, height: 56, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', marginRight: 16 },
-  infoContainer: { flex: 1, marginRight: 12 },
-  title: { fontSize: 16, fontWeight: '600', marginBottom: 4 },
-  artist: { fontSize: 14, marginBottom: 2 },
-  duration: { fontSize: 12 },
-  actionsContainer: { flexDirection: 'row', alignItems: 'center' },
-  actionButton: { padding: 8, marginLeft: 4 },
+  centeredContainer: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    paddingHorizontal: 20 
+  },
+  listContainer: { 
+    paddingHorizontal: 16, 
+    paddingVertical: 8 
+  },
+  itemContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingVertical: 12, 
+    paddingHorizontal: 16, 
+    marginVertical: 4, 
+    borderRadius: 12, 
+    backgroundColor: 'rgba(255,255,255,0.05)' 
+  },
+  artwork: { 
+    width: 56, 
+    height: 56, 
+    borderRadius: 8, 
+    marginRight: 16 
+  },
+  artworkPlaceholder: { 
+    width: 56, 
+    height: 56, 
+    borderRadius: 8, 
+    backgroundColor: 'rgba(255,255,255,0.1)', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginRight: 16 
+  },
+  infoContainer: { 
+    flex: 1, 
+    marginRight: 12 
+  },
+  title: { 
+    fontSize: 16, 
+    fontWeight: '600', 
+    marginBottom: 4 
+  },
+  artist: { 
+    fontSize: 14, 
+    marginBottom: 2 
+  },
+  duration: { 
+    fontSize: 12 
+  },
+  actionsContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'center' 
+  },
+  actionButton: { 
+    padding: 8, 
+    marginLeft: 4 
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 12,
+  },
+  searchInput: {
+    flex: 1,
+    height: 40,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    borderWidth: 1,
+  },
 });
 
 export default FavouriteScreen; 
