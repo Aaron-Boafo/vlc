@@ -35,7 +35,7 @@ const getThemeColors = (themeType, accentColor = "purple") => {
       }
     : {
         ...baseTheme,
-        background: "#111017",
+        background: "#191919",
         sectionBackground: "#222",
         card: "#374151",
         tabIconColor: "#fff",
