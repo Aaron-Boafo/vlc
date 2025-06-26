@@ -236,21 +236,69 @@ const useVideoStore = create(
         });
       },
 
+      // Copy video to app storage and import to gallery
+      copyVideoToAppStorageAndGallery: async (videoId, newFileName) => {
+        const state = get();
+        const video = state.videoFiles.find(v => v.id === videoId);
+        if (!video) {
+          throw new Error('Video not found');
+        }
+        if (!video.uri || !video.uri.startsWith('file://')) {
+          throw new Error('Unsupported file location.');
+        }
+        try {
+          // Copy to app storage
+          const appDir = FileSystem.documentDirectory + 'videos/';
+          await FileSystem.makeDirectoryAsync(appDir, { intermediates: true }).catch(() => {});
+          const newUri = appDir + newFileName;
+          await FileSystem.copyAsync({ from: video.uri, to: newUri });
+          // Import to gallery
+          const asset = await MediaLibrary.createAssetAsync(newUri);
+          await get().loadVideoFiles();
+          return asset;
+        } catch (error) {
+          console.error('Failed to copy and import video:', error);
+          throw error;
+        }
+      },
+
       // Rename video file
       renameVideo: async (videoId, newFileName) => {
         const state = get();
         const video = state.videoFiles.find(v => v.id === videoId);
-        
         if (!video) {
           throw new Error('Video not found');
         }
-
+        // Check for restricted locations (any file in shared storage /storage/emulated/0/)
+        const restrictedBase = '/storage/emulated/0/';
+        if (video.uri && video.uri.startsWith('file://' + restrictedBase)) {
+          const err = new Error("This file cannot be renamed due to Android restrictions. Please use your device's file manager to rename it.");
+          err.code = 'RESTRICTED_LOCATION';
+          throw err;
+        }
         try {
-          // Use MediaLibrary to update the asset's filename
-          await MediaLibrary.updateAssetAsync(videoId, { filename: newFileName });
-
-          // Reload the video files to reflect the new name
-          await get().loadVideoFiles();
+          // Check for MediaLibrary permissions
+          const { status } = await MediaLibrary.requestPermissionsAsync();
+          if (status !== 'granted') {
+            throw new Error('Permission to access media library is required to rename this video.');
+          }
+          // Try MediaLibrary rename first
+          try {
+            await MediaLibrary.updateAssetAsync(videoId, { filename: newFileName });
+            await get().loadVideoFiles();
+            return;
+          } catch (mediaLibErr) {
+            // Fallback: Try FileSystem move if MediaLibrary fails
+            if (video.uri && video.uri.startsWith('file://')) {
+              const parentDir = video.uri.substring(0, video.uri.lastIndexOf('/') + 1);
+              const newUri = parentDir + newFileName;
+              await FileSystem.moveAsync({ from: video.uri, to: newUri });
+              await get().loadVideoFiles();
+              return;
+            } else {
+              throw new Error('Cannot rename this video. It may not be in a supported location.');
+            }
+          }
         } catch (error) {
           console.error('Failed to rename video:', error);
           throw error;

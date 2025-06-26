@@ -9,6 +9,7 @@ export default function TabLayouts() {
   const { themeColors, isDarkMode, activeTheme, accentColor } = useThemeStore();
 
   const tabKey = `${activeTheme}-${accentColor}`;
+  console.log('Tab key:', tabKey, 'Theme:', themeColors);
 
   return (
     <>

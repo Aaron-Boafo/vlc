@@ -17,7 +17,7 @@ import SortOptionsSheet from "../../../components/SortOptionsSheet";
 import * as Icons from 'lucide-react-native';
 
 export default function VideoTabScreen() {
-  const { activeTab } = useVideoStore();
+  const { activeTab, loadVideoFiles } = useVideoStore();
   const { themeColors } = useThemeStore();
   const [showSort, setShowSort] = useState(false);
   const [showMore, setShowMore] = useState(false);
@@ -89,6 +89,7 @@ export default function VideoTabScreen() {
         onClose={() => setShowMore(false)}
         onSettings={() => router.push('/(tabs)/(more)/settings')}
         onAbout={() => router.push('/(tabs)/(more)/about')}
+        onRefresh={loadVideoFiles}
       />
     </SafeAreaView>
   );

@@ -7,7 +7,7 @@ import useThemeStore from '../store/theme';
 const { width } = Dimensions.get('window');
 const cardWidth = (width - 48) / 2; // 16px padding on sides, 16px gap
 
-const VideoCard = ({ video, onPress, onMoreOptions }) => {
+const VideoCard = ({ video, onPress, onMoreOptions, onThumbnailReady }) => {
   const { themeColors } = useThemeStore();
   const [thumbnailUri, setThumbnailUri] = useState(null);
 
@@ -24,6 +24,9 @@ const VideoCard = ({ video, onPress, onMoreOptions }) => {
         );
         if (isMounted) {
           setThumbnailUri(uri);
+          if (onThumbnailReady) {
+            onThumbnailReady(uri, video);
+          }
         }
       } catch (e) {
         console.warn('Could not generate thumbnail for', video.filename, e);

@@ -21,6 +21,7 @@ import useFavouriteStore from '../store/favouriteStore';
 import CustomAlert from '../components/CustomAlert';
 import BottomSheet from '../components/BottomSheet';
 import SearchBar from '../components/SearchBar';
+import usePlaylistStore from '../store/playlistStore';
 
 const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) => {
   const {themeColors} = useThemeStore();
@@ -34,12 +35,16 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const { currentTrack } = useAudioControl();
   const [refreshing, setRefreshing] = useState(false);
+  const playlistStore = usePlaylistStore();
+  const [customAlert, setCustomAlert] = useState({ visible: false, title: '', message: '', buttons: [] });
 
   useEffect(() => {
     // Initialize audio control
     audioControl.initialize();
-    // Load audio files using the optimized store
-    loadAudioFiles();
+    // Only load if not already loaded
+    if (!audioFiles || audioFiles.length === 0) {
+      loadAudioFiles();
+    }
   }, []);
 
   const onRefresh = async () => {
@@ -103,7 +108,40 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
 
   const handleAddToPlaylist = () => {
     setOptionsVisible(false);
-    // Placeholder: Add to playlist logic
+    if (!selectedTrack) return;
+    const playlists = playlistStore.playlists;
+    if (playlists.length === 0) {
+      // No playlists: create a new one and add the track
+      const defaultName = 'My Playlist';
+      const id = playlistStore.createPlaylist(defaultName);
+      playlistStore.addTrackToPlaylist(id, selectedTrack);
+      setCustomAlert({
+        visible: true,
+        title: 'Playlist Created',
+        message: `A new playlist called "${defaultName}" was created and the song was added!`,
+        buttons: [{ text: 'OK', style: 'primary', onPress: () => setCustomAlert(alert => ({ ...alert, visible: false })) }],
+      });
+    } else {
+      // Show a CustomAlert to pick a playlist
+      setCustomAlert({
+        visible: true,
+        title: 'Add to Playlist',
+        message: 'Select a playlist to add this song:',
+        buttons: playlists.map(p => ({
+          text: p.name,
+          style: 'primary',
+          onPress: () => {
+            playlistStore.addTrackToPlaylist(p.id, selectedTrack);
+            setCustomAlert({
+              visible: true,
+              title: 'Added to Playlist',
+              message: `Song added to "${p.name}"!`,
+              buttons: [{ text: 'OK', style: 'primary', onPress: () => setCustomAlert(alert => ({ ...alert, visible: false })) }],
+            });
+          }
+        })).concat([{ text: 'Cancel', onPress: () => setCustomAlert(alert => ({ ...alert, visible: false })) }]),
+      });
+    }
   };
 
   const handleCreateShortcut = () => {
@@ -285,6 +323,14 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
           { label: "Delete", onPress: confirmDelete },
         ]}
         onClose={() => setDeleteConfirmVisible(false)}
+      />
+
+      <CustomAlert
+        visible={customAlert.visible}
+        title={customAlert.title}
+        message={customAlert.message}
+        buttons={customAlert.buttons}
+        onClose={() => setCustomAlert(alert => ({ ...alert, visible: false }))}
       />
     </View>
   );

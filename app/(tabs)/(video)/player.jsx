@@ -358,26 +358,26 @@ const VideoPlayerScreen = () => {
     })();
   }, []);
 
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/');
+    }
+  }, []);
+
   useEffect(() => {
-    // When the player screen is active, ensure the miniplayer is hidden.
     hideMiniPlayer();
-
     const backAction = () => {
-      if (router.canGoBack()) {
-        showMiniPlayer(status.isPlaying);
-        router.replace('/');
-        return true; // Prevent default behavior
-      }
-      return false; // Allow default behavior if we can't go back
+      handleBack();
+      return true;
     };
-
     const backHandler = BackHandler.addEventListener(
       'hardwareBackPress',
       backAction
     );
-
     return () => backHandler.remove();
-  }, [showMiniPlayer, status?.isPlaying]);
+  }, [handleBack]);
 
   useEffect(() => {
     // When the component mounts, if the miniplayer was playing, continue playback here.
@@ -400,12 +400,24 @@ const VideoPlayerScreen = () => {
     if (isFullscreen) {
       navigation?.getParent()?.setOptions?.({ tabBarStyle: { display: 'none' } });
     } else {
-      navigation?.getParent()?.setOptions?.({ tabBarStyle: undefined });
+      navigation?.getParent()?.setOptions?.({
+        tabBarStyle: {
+          backgroundColor: themeColors.background,
+          borderTopColor: themeColors.card,
+          borderTopWidth: 1,
+        }
+      });
     }
     return () => {
-      navigation?.getParent()?.setOptions?.({ tabBarStyle: undefined });
+      navigation?.getParent()?.setOptions?.({
+        tabBarStyle: {
+          backgroundColor: themeColors.background,
+          borderTopColor: themeColors.card,
+          borderTopWidth: 1,
+        }
+      });
     };
-  }, [isFullscreen]);
+  }, [isFullscreen, themeColors]);
 
   if (isFetchingStream) {
     return (
@@ -496,7 +508,7 @@ const VideoPlayerScreen = () => {
           {isControlsVisible && !isLocked && (
             <View style={styles.controlsOverlay}>
               <View style={styles.headerTop}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.controlButton}>
+                <TouchableOpacity onPress={handleBack} style={styles.controlButton}>
                   <ChevronLeft size={24} color="#FFF" />
                 </TouchableOpacity>
                 <Text style={styles.titleText} numberOfLines={1}>{currentVideo.title || currentVideo.filename}</Text>
@@ -520,7 +532,7 @@ const VideoPlayerScreen = () => {
                   <Unlock size={20} color="#FFF" />
                 </TouchableOpacity>
               </View>
-              <View style={styles.footer}>
+              <SafeAreaView edges={['bottom']} style={styles.footer}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Text style={styles.timeText}>{formatTime(status.positionMillis)}</Text>
                   <Text style={styles.timeText}>{formatTime(status.durationMillis)}</Text>
@@ -555,17 +567,17 @@ const VideoPlayerScreen = () => {
                   </View>
                 </View>
                 <View style={styles.footerActionsBottom}>
-                  <TouchableOpacity onPress={() => setSubtitleModalVisible(true)} style={styles.controlButton}>
-                    <Captions size={22} color={selectedSubtitle ? themeColors.primary : "#FFF"} />
+                  <TouchableOpacity style={styles.controlButton} onPress={handleMinimize}>
+                    <PictureInPicture size={24} color="#FFF" />
                   </TouchableOpacity>
                   <TouchableOpacity onPress={toggleFullscreen} style={styles.controlButton}>
                     {isFullscreen ? <Minimize size={22} color="#FFF" /> : <Expand size={22} color="#FFF" />}
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.controlButton} onPress={handleMinimize}>
-                    <PictureInPicture size={24} color="#FFF" />
+                  <TouchableOpacity onPress={() => setSubtitleModalVisible(true)} style={styles.controlButton}>
+                    <Captions size={22} color={selectedSubtitle ? themeColors.primary : "#FFF"} />
                   </TouchableOpacity>
                 </View>
-              </View>
+              </SafeAreaView>
             </View>
           )}
           {status.isBuffering && !isFetchingStream && <ActivityIndicator style={StyleSheet.absoluteFill} size="large" color="#FFF" />}
@@ -765,6 +777,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 10,
     gap: 8,
+    paddingHorizontal: 24,
   },
   header: {
     flexDirection: 'row',
@@ -809,6 +822,8 @@ const styles = StyleSheet.create({
   },
   controlButton: {
     padding: 10,
+    zIndex: 100,
+    elevation: 10,
   },
   skipButton: {
     backgroundColor: 'rgba(0, 0, 0, 0.5)',

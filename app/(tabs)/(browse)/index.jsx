@@ -298,7 +298,7 @@ const BrowseTab = () => {
       <ScrollView style={[styles.content, { paddingTop: 0, marginTop: 0 }]} showsVerticalScrollIndicator={false}>
         {/* Categories */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
+          <Text style={[styles.sectionTitle, { color: themeColors.primary }]}>
             Categories
           </Text>
           <FlatList
@@ -313,7 +313,7 @@ const BrowseTab = () => {
 
         {/* Quick Actions */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
+          <Text style={[styles.sectionTitle, { color: themeColors.primary }]}>
             Quick Actions
           </Text>
           <View style={styles.quickActionsGrid}>
@@ -339,7 +339,7 @@ const BrowseTab = () => {
         {/* Recent Files */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
+            <Text style={[styles.sectionTitle, { color: themeColors.primary }]}>
               Recent Files
             </Text>
             <TouchableOpacity>
@@ -370,7 +370,7 @@ const BrowseTab = () => {
 
         {/* Storage Info */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Storages</Text>
+          <Text style={[styles.sectionTitle, { color: themeColors.primary }]}>Storages</Text>
           <View style={{ flexDirection: 'row', gap: 16 }}>
             {storages.map(storage => (
               <TouchableOpacity

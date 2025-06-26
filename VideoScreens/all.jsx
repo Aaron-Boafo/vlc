@@ -21,9 +21,10 @@ import { router } from 'expo-router';
 import VideoCard from '../components/VideoCard';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
+import CustomAlert from '../components/CustomAlert';
 
 const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
-  const { videoFiles, isLoading, loadVideoFiles, setAndPlayVideo, removeVideo, renameVideo } = useVideoStore();
+  const { videoFiles, isLoading, loadVideoFiles, setAndPlayVideo, removeVideo, renameVideo, toggleFavouriteVideo } = useVideoStore();
   const { themeColors } = useThemeStore();
   const favouriteStore = useFavouriteStore();
   const historyStore = useHistoryStore();
@@ -33,9 +34,18 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
   const [showMoreModal, setShowMoreModal] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [newFileName, setNewFileName] = useState('');
+  const [customAlert, setCustomAlert] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    buttons: [],
+  });
+  const [videoThumbnails, setVideoThumbnails] = useState({});
 
   useEffect(() => {
-    loadVideoFiles();
+    if (!videoFiles || videoFiles.length === 0) {
+      loadVideoFiles();
+    }
   }, []);
 
   const onRefresh = async () => {
@@ -51,8 +61,28 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
     );
   }, [videoFiles, searchQuery]);
 
+  // Callback to receive thumbnail from VideoCard
+  const handleThumbnailReady = useCallback((uri, video) => {
+    setVideoThumbnails(prev => {
+      if (prev[video.id] === uri) return prev;
+      return { ...prev, [video.id]: uri };
+    });
+  }, []);
+
   const handleVideoPress = (video) => {
-    setAndPlayVideo(video);
+    // Check for invalid characters in filename
+    if (video.filename && (video.filename.includes('?') || video.filename.includes('#'))) {
+      setCustomAlert({
+        visible: true,
+        title: '⚠️ Invalid Filename',
+        message: "This video cannot be played because its filename contains invalid characters ('?' or '#'). Please rename the file before playing.",
+        buttons: [{ text: 'OK', style: 'primary', onPress: () => setCustomAlert(alert => ({ ...alert, visible: false })) }],
+      });
+      return;
+    }
+    // Attach thumbnail if available
+    const videoWithThumb = videoThumbnails[video.id] ? { ...video, thumbnail: videoThumbnails[video.id] } : video;
+    setAndPlayVideo(videoWithThumb);
     setTimeout(() => {
       router.push('/(tabs)/(video)/player');
     }, 50);
@@ -65,7 +95,8 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
 
   const handlePlay = () => {
     if (selectedVideo) {
-      setAndPlayVideo(selectedVideo);
+      const videoWithThumb = videoThumbnails[selectedVideo.id] ? { ...selectedVideo, thumbnail: videoThumbnails[selectedVideo.id] } : selectedVideo;
+      setAndPlayVideo(videoWithThumb);
       setShowMoreModal(false);
       setTimeout(() => {
         router.push('/(tabs)/(video)/player');
@@ -75,7 +106,8 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
 
   const handleAddToFavorites = () => {
     if (selectedVideo) {
-      favouriteStore.toggleFavourite(selectedVideo.id);
+      const videoWithThumb = videoThumbnails[selectedVideo.id] ? { ...selectedVideo, thumbnail: videoThumbnails[selectedVideo.id] } : selectedVideo;
+      toggleFavouriteVideo(videoWithThumb);
       setShowMoreModal(false);
     }
   };
@@ -116,7 +148,16 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
         setNewFileName('');
         Alert.alert('Success', 'Video renamed successfully.');
       } catch (error) {
-        Alert.alert('Error', 'Failed to rename video.');
+        if (error.code === 'RESTRICTED_LOCATION') {
+          setCustomAlert({
+            visible: true,
+            title: '🚫 Cannot Rename File',
+            message: "This file cannot be renamed from within the app due to Android restrictions. Please use your device's file manager to rename it.",
+            buttons: [{ text: 'OK', style: 'primary', onPress: () => setCustomAlert(alert => ({ ...alert, visible: false })) }],
+          });
+        } else {
+          Alert.alert('Error', 'Failed to rename video.');
+        }
       }
     } else {
       Alert.alert('Error', 'Please enter a valid file name.');
@@ -174,8 +215,9 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
       video={item}
       onPress={() => handleVideoPress(item)}
       onMoreOptions={() => handleMoreOptions(item)}
+      onThumbnailReady={handleThumbnailReady}
     />
-  ), [handleVideoPress, handleMoreOptions]);
+  ), [handleVideoPress, handleMoreOptions, handleThumbnailReady]);
 
   if (isLoading) {
     return (
@@ -401,6 +443,14 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <CustomAlert
+        visible={customAlert.visible}
+        title={customAlert.title}
+        message={customAlert.message}
+        buttons={customAlert.buttons}
+        onClose={() => setCustomAlert(alert => ({ ...alert, visible: false }))}
+      />
     </View>
   );
 };

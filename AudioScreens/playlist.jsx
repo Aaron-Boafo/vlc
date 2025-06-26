@@ -368,9 +368,8 @@ const PlaylistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch
               onChangeText={setNewPlaylistName}
             />
             <Text style={{ color: themeColors.text, marginVertical: 8, fontWeight: '600' }}>Select Tracks</Text>
-            {/* Track selection grid here (unchanged) */}
             <ScrollView style={{ maxHeight: 220 }}>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start' }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
                 {allTracks.map(track => {
                   const selected = selectedTracks.some(t => t.id === track.id);
                   return (
@@ -643,12 +642,14 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
   trackBox: (themeColors, selected) => ({
-    width: 80,
-    height: 100,
+    width: '30%',
+    minWidth: 90,
+    maxWidth: 120,
+    height: 110,
     backgroundColor: selected ? themeColors.primary + '20' : themeColors.card,
     borderRadius: 12,
     padding: 8,
-    margin: 4,
+    marginBottom: 12,
     alignItems: 'center',
     borderWidth: selected ? 2 : 0,
     borderColor: selected ? themeColors.primary : 'transparent',

@@ -154,6 +154,7 @@ const AudioTabScreen = () => {
         onClose={() => setShowMore(false)}
         onSettings={() => navigation.push('(tabs)/(more)/settings')}
         onAbout={() => navigation.push('(tabs)/(more)/about')}
+        onRefresh={loadAudioFiles}
       />
       <SortOptionsSheet
         visible={showSort}

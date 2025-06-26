@@ -6,12 +6,14 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
+  Image,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import useVideoStore from '../store/VideoHeadStore';
 import useThemeStore from '../store/theme';
 import { router } from 'expo-router';
 import SearchBar from '../components/SearchBar';
+import { VideoOff } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 
@@ -50,11 +52,13 @@ const VideoFavouriteScreen = ({ showSearch, setShowSearch, searchQuery, setSearc
       onPress={() => handleVideoPress(item)}
     >
       <View style={styles.videoThumbnail}>
-        <MaterialCommunityIcons 
-          name="video" 
-          size={32} 
-          color={themeColors.primary} 
-        />
+        {item.thumbnail ? (
+          <Image source={{ uri: item.thumbnail }} style={styles.artwork} />
+        ) : (
+          <View style={styles.artworkPlaceholder}>
+            <VideoOff size={24} color={themeColors.text} />
+          </View>
+        )}
         <View style={styles.durationBadge}>
           <Text style={[styles.durationText, { color: themeColors.background }]}>
             {formatDuration(item.duration)}
@@ -206,6 +210,18 @@ const styles = StyleSheet.create({
   emptySubtext: {
     fontSize: 14,
     textAlign: 'center',
+  },
+  artwork: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 8,
+  },
+  artworkPlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
   },
 });
 

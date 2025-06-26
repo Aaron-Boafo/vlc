@@ -166,3 +166,24 @@ return themeType === "light"
       text: "#fff",
     };
 ```
+
+## Sample Video Links for Streaming Demo
+
+Use these direct video links to test the streaming functionality during your presentation:
+
+1. **Big Buck Bunny (MP4)**
+   https://www.w3schools.com/html/mov_bbb.mp4
+
+2. **Sintel Trailer (MP4)**
+   https://media.w3.org/2010/05/sintel/trailer.mp4
+
+3. **Tears of Steel (MP4)**
+   https://archive.org/download/TearsOfSteel/tears_of_steel_1080p.mp4
+
+4. **Elephants Dream (MP4)**
+   https://archive.org/download/ElephantsDream/ed_1024_512kb.mp4
+
+5. **For Bigger Blazes (MP4, Google Sample)**
+   https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4
+
+Copy and paste any of these links into the stream modal to quickly demonstrate video streaming.

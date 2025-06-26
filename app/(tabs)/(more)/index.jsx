@@ -21,6 +21,7 @@ import MoreOptionsMenu from "../../../components/MoreOptionsMenu";
 import { SafeAreaView } from "react-native-safe-area-context";
 import useAudioStore from '../../../store/AudioHeadStore';
 import * as FileSystem from 'expo-file-system';
+import CustomAlert from '../../../components/CustomAlert';
 
 // Try to import ytdl, but don't fail if it's not available
 let ytdl = null;
@@ -45,6 +46,7 @@ const MoreScreen = () => {
   const audioFiles = useAudioStore(state => state.audioFiles);
   const videoFiles = useVideoStore(state => state.videoFiles);
   const [storageInfo, setStorageInfo] = useState({ totalSize: 0, fileCount: 0, loading: false });
+  const [customAlert, setCustomAlert] = useState({ visible: false, title: '', message: '', buttons: [] });
 
   const validateUrl = (url) => {
     try {
@@ -108,16 +110,34 @@ const MoreScreen = () => {
         }
         
         try {
-          const videoInfo = await ytdl.getInfo(streamUrl);
+          let videoInfo;
+          if (typeof ytdl.getInfo === 'function') {
+            videoInfo = await ytdl.getInfo(streamUrl);
+          } else if (typeof ytdl.getBasicInfo === 'function') {
+            videoInfo = await ytdl.getBasicInfo(streamUrl);
+          } else if (ytdl.default && typeof ytdl.default.getInfo === 'function') {
+            videoInfo = await ytdl.default.getInfo(streamUrl);
+          } else {
+            setStreamError("YouTube extraction is not supported by the installed ytdl version.");
+            return;
+          }
           const format = ytdl.chooseFormat(videoInfo.formats, { quality: 'highest', filter: 'videoandaudio' });
-          
           if (!format || !format.url) {
             setStreamError("Could not extract YouTube video. The video might be private, restricted, or unavailable.");
             return;
           }
         } catch (ytdlError) {
           console.error('YouTube extraction failed:', ytdlError);
-          setStreamError("YouTube video extraction failed. This could be due to:\n\n• Private or restricted video\n• Invalid or expired link\n• Network connectivity issues\n• YouTube API changes");
+          if (ytdlError && ytdlError.message && ytdlError.message.includes('signature deciphering')) {
+            setCustomAlert({
+              visible: true,
+              title: '⚠️ YouTube Streaming Unavailable',
+              message: 'YouTube streaming is temporarily unavailable due to changes on YouTube. Please try again later or use a direct video/audio link.',
+              buttons: [{ text: 'OK', style: 'primary', onPress: () => setCustomAlert(alert => ({ ...alert, visible: false })) }],
+            });
+          } else {
+            setStreamError("YouTube video extraction failed. This could be due to:\n\n• Private or restricted video\n• Invalid or expired link\n• Network connectivity issues\n• YouTube API changes");
+          }
           return;
         }
       }
@@ -676,6 +696,14 @@ const MoreScreen = () => {
           </View>
         </View>
       </Modal>
+
+      <CustomAlert
+        visible={customAlert.visible}
+        title={customAlert.title}
+        message={customAlert.message}
+        buttons={customAlert.buttons}
+        onClose={() => setCustomAlert(alert => ({ ...alert, visible: false }))}
+      />
     </SafeAreaView>
   );
 };
