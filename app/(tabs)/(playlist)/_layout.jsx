@@ -74,5 +74,3 @@ const styles = StyleSheet.create({
     clearButton: { backgroundColor: '#2196f3', padding: 12, marginTop: 10, borderRadius: 5 },
     buttonText: { color: '#fff', fontWeight: 'bold' },
 });
-
-export default Playlist;
