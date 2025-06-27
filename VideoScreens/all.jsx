@@ -10,6 +10,7 @@ import {
   Modal,
   Pressable,
   Alert,
+  Button,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { VideoOff, Play, Heart, Share2, Trash2, Info, Clock, Star, Edit3 } from 'lucide-react-native';
@@ -151,7 +152,7 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
         if (error.code === 'RESTRICTED_LOCATION') {
           setCustomAlert({
             visible: true,
-            title: '🚫 Cannot Rename File',
+            title: '�� Cannot Rename File',
             message: "This file cannot be renamed from within the app due to Android restrictions. Please use your device's file manager to rename it.",
             buttons: [{ text: 'OK', style: 'primary', onPress: () => setCustomAlert(alert => ({ ...alert, visible: false })) }],
           });

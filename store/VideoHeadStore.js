@@ -83,28 +83,40 @@ const useVideoStore = create(
       // Sorting function
       sortOrder: { key: 'filename', direction: 'asc' }, // default sort
 
-      // Load video files from device with optimization
+      // Load video files from device with optimization (with extra debug logs)
       loadVideoFiles: async () => {
+        console.log('[Video] loadVideoFiles called');
         set({ isLoading: true, error: null });
         try {
+          console.log('[Video] Requesting media library permissions...');
           const { status } = await MediaLibrary.requestPermissionsAsync();
+          console.log('[Video] Permission status:', status);
           if (status !== 'granted') {
             set({
               error: 'Permission to access media library is required!',
               isLoading: false,
             });
+            console.log('[Video] Permission not granted, aborting.');
             return;
           }
 
+          console.log('[Video] Fetching video assets...');
           const media = await MediaLibrary.getAssetsAsync({
             mediaType: MediaLibrary.MediaType.video,
             first: 1000,
           });
+          console.log('[Video] Assets fetched:', media.assets.length);
+          if (media.assets.length > 0) {
+            console.log('[Video] First asset:', media.assets[0]);
+          } else {
+            console.log('[Video] No video assets found.');
+          }
 
           const sortedVideos = media.assets.sort((a, b) => b.creationTime - a.creationTime);
           set({ videoFiles: sortedVideos, isLoading: false });
+          console.log('[Video] videoFiles state set. Loading complete.');
         } catch (e) {
-          console.error('Failed to load videos', e);
+          console.error('[Video] Failed to load videos', e);
           set({ error: 'Failed to load videos.', isLoading: false });
         }
       },

@@ -45,54 +45,53 @@ const useAudioStore = create(
       setCurrentTrack: (track) => set({ currentTrack: track }),
       setPlaylist: (tracks) => set({ playlist: tracks }),
 
-      // Load audio files from device with optimization
+      // Load audio files progressively in batches
       loadAudioFiles: async () => {
         try {
-          set({ isLoading: true });
-      
-          // Set a timeout for the loading process
-          const loadingTimeout = setTimeout(() => {
-            const state = get();
-            if (state.isLoading) {
-              console.log("Audio loading timed out.");
-              set({ isLoading: false }); 
-            }
-          }, 10000); // 10-second timeout
-      
+          set({ isLoading: true, audioFiles: [] });
+
           const { status } = await MediaLibrary.requestPermissionsAsync();
           if (status !== "granted") {
             console.log("Media library permission not granted");
             set({ isLoading: false });
-            clearTimeout(loadingTimeout);
             return;
           }
-      
-          const media = await MediaLibrary.getAssetsAsync({
-            mediaType: MediaLibrary.MediaType.audio,
-            first: 10000,
-          });
-      
-          clearTimeout(loadingTimeout);
-      
-          const basicFiles = media.assets.map((asset) => ({
-            id: asset.id,
-            uri: asset.uri,
-            filename: asset.filename,
-            duration: asset.duration,
-            album: "Unknown Album",
-            artist: "Unknown Artist",
-            title: asset.filename.replace(/\.[^/.]+$/, ""),
-            year: null,
-            artwork: null,
-            metadataLoaded: false,
-          }));
-      
-          set({ audioFiles: basicFiles, isLoading: false });
-      
+
+          let allFiles = [];
+          let hasNextPage = true;
+          let after = undefined;
+          const batchSize = 32;
+
+          while (hasNextPage) {
+            const media = await MediaLibrary.getAssetsAsync({
+              mediaType: MediaLibrary.MediaType.audio,
+              first: batchSize,
+              after,
+            });
+            const basicFiles = media.assets.map((asset) => ({
+              id: asset.id,
+              uri: asset.uri,
+              filename: asset.filename,
+              duration: asset.duration,
+              album: "Unknown Album",
+              artist: "Unknown Artist",
+              title: asset.filename.replace(/\.[^/.]+$/, ""),
+              year: null,
+              artwork: null,
+              metadataLoaded: false,
+            }));
+            allFiles = allFiles.concat(basicFiles);
+            // Sort by title (default)
+            const sortedFiles = [...allFiles].sort((a, b) => a.title.localeCompare(b.title));
+            set({ audioFiles: sortedFiles }); // Update UI after each batch
+            hasNextPage = media.hasNextPage;
+            after = media.endCursor;
+          }
+
+          set({ isLoading: false });
           setTimeout(() => {
-            loadMetadataInBackground(basicFiles);
+            loadMetadataInBackground(allFiles);
           }, 100);
-      
         } catch (error) {
           console.error("Error loading audio files:", error);
           set({ isLoading: false });

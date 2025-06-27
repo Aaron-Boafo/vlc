@@ -259,11 +259,11 @@ const VideoPlayerScreen = () => {
     'worklet';
     runOnJS(async () => {
       if (videoRef.current) {
-        await videoRef.current.setPositionAsync(value * status.durationMillis);
+        await videoRef.current.setPositionAsync(value * (status.duration || currentVideo.duration || 0) * 1000);
         await videoRef.current.setStatusAsync({ shouldPlay: status.isPlaying });
       }
     })();
-  }, [status.durationMillis, status.isPlaying]);
+  }, [status.duration, status.isPlaying]);
 
   const handleSkip = useCallback((seconds) => {
     'worklet';
@@ -534,8 +534,8 @@ const VideoPlayerScreen = () => {
               </View>
               <SafeAreaView edges={['bottom']} style={styles.footer}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Text style={styles.timeText}>{formatTime(status.positionMillis)}</Text>
-                  <Text style={styles.timeText}>{formatTime(status.durationMillis)}</Text>
+                  <Text style={styles.timeText}>{formatTime((status.duration || currentVideo.duration || 0) * 1000)}</Text>
+                  <Text style={styles.timeText}>{formatTime((status.duration || currentVideo.duration || 0) * 1000)}</Text>
                 </View>
                 <View style={{ position: 'relative', width: '100%' }}>
                   <View
@@ -547,7 +547,7 @@ const VideoPlayerScreen = () => {
                       style={styles.slider}
                       minimumValue={0}
                       maximumValue={100}
-                      value={status.durationMillis ? (status.positionMillis / status.durationMillis) * 100 : 0}
+                      value={status.duration ? (status.position / status.duration) * 100 : 0}
                       onSlidingComplete={value => handleSeek(value / 100)}
                       minimumTrackTintColor={themeColors.primary}
                       maximumTrackTintColor="rgba(255, 255, 255, 0.5)"
@@ -555,7 +555,7 @@ const VideoPlayerScreen = () => {
                     />
                     <TouchableWithoutFeedback
                       onPress={e => {
-                        if (!sliderWidth || !status.durationMillis) return;
+                        if (!sliderWidth || !status.duration) return;
                         const { locationX } = e.nativeEvent;
                         let percent = locationX / sliderWidth;
                         percent = Math.max(0, Math.min(1, percent));
@@ -595,7 +595,7 @@ const VideoPlayerScreen = () => {
             <Text style={[styles.modalTitle, {color: themeColors.text}]}>Video Information</Text>
             <Text style={[styles.infoText, {color: themeColors.text}]}>Filename: {currentVideo.filename || 'N/A'}</Text>
             <Text style={[styles.infoText, {color: themeColors.text}]}>Resolution: {currentVideo.width && currentVideo.height ? `${currentVideo.width}x${currentVideo.height}`: 'N/A'}</Text>
-            <Text style={[styles.infoText, {color: themeColors.text}]}>Duration: {formatTime(currentVideo.duration * 1000)}</Text>
+            <Text style={[styles.infoText, {color: themeColors.text}]}>Duration: {formatTime((status.duration || currentVideo.duration || 0) * 1000)}</Text>
             <Text style={[styles.infoText, {color: themeColors.text}]}>File Size: {formatBytes(fileSize)}</Text>
             <Text style={[styles.infoText, {color: themeColors.text}]} numberOfLines={2}>Path: {currentVideo.uri}</Text>
             <TouchableOpacity style={styles.closeModalButton} onPress={() => setInfoModalVisible(false)}>

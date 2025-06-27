@@ -346,7 +346,7 @@ const onPlaybackStatusUpdate = (status, set, get) => {
 
   set({
     position: status.positionMillis || 0,
-    duration: status.durationMillis || 0,
+    duration: status.duration || 0,
     isPlaying: status.isPlaying,
   });
 

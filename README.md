@@ -184,6 +184,6 @@ Use these direct video links to test the streaming functionality during your pre
    https://archive.org/download/ElephantsDream/ed_1024_512kb.mp4
 
 5. **For Bigger Blazes (MP4, Google Sample)**
-   https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4
+
 
 Copy and paste any of these links into the stream modal to quickly demonstrate video streaming.

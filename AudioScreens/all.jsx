@@ -4,7 +4,6 @@ import {
   Text,
   FlatList,
   TouchableOpacity,
-  Image,
   ActivityIndicator,
   Alert,
   Dimensions,
@@ -12,6 +11,7 @@ import {
   Share,
   StyleSheet,
 } from "react-native";
+import { Image } from 'expo-image';
 import {Music4, Play, Heart, MoreVertical, ListPlus, Info, Shuffle, PlusSquare, ArrowDownLeftSquare, Smartphone, ArrowLeft, Share2} from "lucide-react-native";
 import useThemeStore from "../store/theme";
 import useAudioControl from "../store/useAudioControl";
@@ -22,6 +22,7 @@ import CustomAlert from '../components/CustomAlert';
 import BottomSheet from '../components/BottomSheet';
 import SearchBar from '../components/SearchBar';
 import usePlaylistStore from '../store/playlistStore';
+import CustomAudioPlayer from '../AudioComponents/CustomAudioPlayer';
 
 const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) => {
   const {themeColors} = useThemeStore();
@@ -196,6 +197,7 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
               source={{ uri: item.artwork }} 
               style={styles.artwork}
               resizeMode="cover"
+              cachePolicy="disk"
             />
           ) : (
             <View style={[styles.artworkPlaceholder, { backgroundColor: themeColors.primary }]}>
@@ -252,6 +254,9 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
 
   return (
     <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+      {/* Custom Audio Player with Test Notification Button */}
+      <CustomAudioPlayer />
+
       {showSearch && (
         <SearchBar
           value={searchQuery}
