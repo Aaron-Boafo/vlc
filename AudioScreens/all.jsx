@@ -22,7 +22,6 @@ import CustomAlert from '../components/CustomAlert';
 import BottomSheet from '../components/BottomSheet';
 import SearchBar from '../components/SearchBar';
 import usePlaylistStore from '../store/playlistStore';
-import CustomAudioPlayer from '../AudioComponents/CustomAudioPlayer';
 
 const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) => {
   const {themeColors} = useThemeStore();
@@ -254,9 +253,6 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
 
   return (
     <View style={[styles.container, { backgroundColor: themeColors.background }]}>
-      {/* Custom Audio Player with Test Notification Button */}
-      <CustomAudioPlayer />
-
       {showSearch && (
         <SearchBar
           value={searchQuery}

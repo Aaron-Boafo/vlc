@@ -38,6 +38,7 @@ import useThemeStore from "../../../store/theme";
 import useAudioControl from "../../../store/useAudioControl";
 import useFavouriteStore from "../../../store/favouriteStore";
 import usePlaybackStore from "../../../store/playbackStore";
+import * as NavigationBar from 'expo-navigation-bar';
 
 const { width } = Dimensions.get("window");
 
@@ -92,6 +93,15 @@ const PlayerScreen = () => {
   const handleClose = () => {
     router.back();
   };
+
+  React.useEffect(() => {
+    NavigationBar.setVisibilityAsync('hidden');
+    NavigationBar.setBehaviorAsync('immersive');
+    return () => {
+      NavigationBar.setVisibilityAsync('visible');
+      NavigationBar.setBehaviorAsync('overlay-swipe');
+    };
+  }, []);
 
   if (!currentTrack) {
     return (

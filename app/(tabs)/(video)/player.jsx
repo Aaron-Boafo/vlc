@@ -15,6 +15,7 @@ import srtParser from 'parse-srt';
 import ytdl from 'react-native-ytdl';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from 'expo-router';
+import * as NavigationBar from 'expo-navigation-bar';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -418,6 +419,15 @@ const VideoPlayerScreen = () => {
       });
     };
   }, [isFullscreen, themeColors]);
+
+  React.useEffect(() => {
+    NavigationBar.setVisibilityAsync('hidden');
+    NavigationBar.setBehaviorAsync('immersive');
+    return () => {
+      NavigationBar.setVisibilityAsync('visible');
+      NavigationBar.setBehaviorAsync('overlay-swipe');
+    };
+  }, []);
 
   if (isFetchingStream) {
     return (
