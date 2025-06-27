@@ -74,3 +74,17 @@ const styles = StyleSheet.create({
     clearButton: { backgroundColor: '#2196f3', padding: 12, marginTop: 10, borderRadius: 5 },
     buttonText: { color: '#fff', fontWeight: 'bold' },
 });
+import { PlaylistProvider } from './context/PlaylistContext';
+
+export default function RootLayout() {
+  return (
+    <PlaylistProvider>
+      {/* your navigation and screens */}
+    </PlaylistProvider>
+  );
+}
+import { usePlaylist } from '../context/PlaylistContext';
+
+const { playlist, dispatch } = usePlaylist();
+
+dispatch({ type: 'ADD_TRACK', payload: newTrack });
