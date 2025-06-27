@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import {create} from "zustand";
 import {persist, createJSONStorage} from "zustand/middleware";
 
-const getThemeColors = (themeType, accentColor = "purple") => {
+const getThemeColors = (themeType, accentColor = accentColors) => {
   const accentColors = {
     purple: "#F44BF8",
     blue: "#2563EB",
