@@ -172,7 +172,7 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
       />
 
       <TouchableOpacity
-        style={[styles.fab, { backgroundColor: themeColors.primary, left: 24, right: undefined }]}
+        style={[styles.fab, { backgroundColor: themeColors.primary, left: 24 }]}
         onPress={() => setModalVisible(true)}
       >
         <MaterialIcons name="add" size={24} color="white" />

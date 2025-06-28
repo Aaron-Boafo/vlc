@@ -1,7 +1,12 @@
 import {Stack} from "expo-router";
+import { PlaylistProvider } from "./Context";
 
 const AudioLayout = () => {
-  return <Stack />;
+  return (
+    <PlaylistProvider>
+      <Stack />
+    </PlaylistProvider>
+  );
 };
 
 export default AudioLayout;

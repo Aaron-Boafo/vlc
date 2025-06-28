@@ -59,14 +59,12 @@ const useAudioStore = create(
 
           let allFiles = [];
           let hasNextPage = true;
-          let after = undefined;
           const batchSize = 32;
 
           while (hasNextPage) {
             const media = await MediaLibrary.getAssetsAsync({
               mediaType: MediaLibrary.MediaType.audio,
               first: batchSize,
-              after,
             });
             const basicFiles = media.assets.map((asset) => ({
               id: asset.id,
@@ -85,7 +83,6 @@ const useAudioStore = create(
             const sortedFiles = [...allFiles].sort((a, b) => a.title.localeCompare(b.title));
             set({ audioFiles: sortedFiles }); // Update UI after each batch
             hasNextPage = media.hasNextPage;
-            after = media.endCursor;
           }
 
           set({ isLoading: false });
