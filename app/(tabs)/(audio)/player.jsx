@@ -150,9 +150,9 @@ const PlayerScreen = () => {
         <Slider
           style={styles.progressSlider}
           minimumValue={0}
-          maximumValue={100}
-          value={duration > 0 ? (position / duration) * 100 : 0}
-          onSlidingComplete={handleSeek}
+          maximumValue={duration > 0 ? duration : 1}
+          value={position}
+          onSlidingComplete={async (value) => { await seek(value); }}
           minimumTrackTintColor={themeColors.primary}
           maximumTrackTintColor={themeColors.textSecondary}
           thumbTintColor={themeColors.primary}
