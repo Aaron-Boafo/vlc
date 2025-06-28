@@ -38,11 +38,15 @@ const MiniPlayer = () => {
     return null;
   }
 
+  const handleOpenFullPlayer = () => {
+    router.push('/player/audio');
+  };
+
   return (
     <TouchableOpacity
       style={[styles.container, { backgroundColor: themeColors.background, borderColor: themeColors.primary }]}
       activeOpacity={0.95}
-      onPress={() => router.push('/(tabs)/(audio)/player')}
+      onPress={handleOpenFullPlayer}
     >
       {currentTrack.artwork ? (
         <Image source={{ uri: currentTrack.artwork }} style={styles.artwork} />

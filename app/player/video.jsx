@@ -1,15 +1,15 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Dimensions, Modal, TextInput, FlatList, Alert, BackHandler, useWindowDimensions, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Dimensions, Modal, TextInput, FlatList, Alert, BackHandler, useWindowDimensions, TouchableWithoutFeedback, Animated, Easing } from 'react-native';
 import { Video } from 'expo-av';
 import { useLocalSearchParams, router } from 'expo-router';
 import Slider from '@react-native-community/slider';
 import { ChevronDown, Play, Pause, SkipBack, SkipForward, Lock, Unlock, Clock, Minimize2, Info, Heart, ListPlus, Captions, Maximize2, Minimize, ChevronLeft, ChevronRight, Settings, PictureInPicture, Expand, RotateCcw, RotateCw } from 'lucide-react-native';
-import useThemeStore from '../../../store/theme';
+import useThemeStore from '../../store/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, TapGestureHandler } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
-import useVideoStore from '../../../store/VideoHeadStore';
+import useVideoStore from "../../store/VideoHeadStore";
 import * as FileSystem from 'expo-file-system';
 import srtParser from 'parse-srt';
 import ytdl from 'react-native-ytdl';
@@ -33,15 +33,7 @@ const VideoPlayerScreen = () => {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const navigation = useNavigation();
 
-  if (!currentVideo) {
-    return (
-      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: themeColors.background }]}>
-        <ActivityIndicator size="large" color={themeColors.primary} />
-        <Text style={{ color: themeColors.text, marginTop: 10 }}>Loading Video...</Text>
-      </SafeAreaView>
-    );
-  }
-
+  // All hooks must be called before any return
   const videoRef = useRef(null);
   const [status, setStatus] = useState({});
   const [isControlsVisible, setControlsVisible] = useState(true);
@@ -66,22 +58,62 @@ const VideoPlayerScreen = () => {
   const [isSpeedModalVisible, setSpeedModalVisible] = useState(false);
   const [isMoreModalVisible, setMoreModalVisible] = useState(false);
   const availableSpeeds = [1.0, 1.5, 1.75, 2.0];
-
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
+  const [loadingError, setLoadingError] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const maxRetries = 2;
+  const loadingTimeoutDuration = 15000; // 15 seconds
+  const [bufferingTimeout, setBufferingTimeout] = useState(false);
+  const bufferingTimeoutDuration = 10000; // 10 seconds for buffering
+  const [showSkipFeedback, setShowSkipFeedback] = useState(null); // 'forward' | 'backward' | null
+  const skipFeedbackTimeout = useRef(null);
+  const [skipFeedbackAnim] = useState({
+    forward: new Animated.Value(0),
+    backward: new Animated.Value(0),
+  });
+  const [skipFeedbackSeconds, setSkipFeedbackSeconds] = useState({
+    forward: 0,
+    backward: 0,
+  });
   const isFavourited = useMemo(() => 
-    useVideoStore.getState().favouriteVideos.some(v => v.id === currentVideo.id),
-    [currentVideo.id]
+    useVideoStore.getState().favouriteVideos.some(v => v.id === currentVideo?.id),
+    [currentVideo?.id]
   );
-
   const sliderRef = useRef(null);
   const [sliderWidth, setSliderWidth] = useState(0);
-
   const playbackRateRef = useRef(playbackRate);
   useEffect(() => {
     playbackRateRef.current = playbackRate;
   }, [playbackRate]);
 
+  const resetLoadingStates = () => {
+    setLoadingTimeout(false);
+    setLoadingError(null);
+    setIsFetchingStream(false);
+    setBufferingTimeout(false);
+  };
+
+  const handleRetry = () => {
+    if (retryCount < maxRetries) {
+      setRetryCount(prev => prev + 1);
+      resetLoadingStates();
+      // Trigger re-processing of video URI
+      if (currentVideo && currentVideo.uri) {
+        processVideoUri();
+      }
+    }
+  };
+
   useEffect(() => {
     const processVideoUri = async () => {
+      resetLoadingStates();
+      
+      // Set timeout for loading
+      const timeoutId = setTimeout(() => {
+        setLoadingTimeout(true);
+        setIsFetchingStream(false);
+      }, loadingTimeoutDuration);
+
       if (currentVideo.uri && (currentVideo.uri.includes('youtube.com') || currentVideo.uri.includes('youtu.be'))) {
         setIsFetchingStream(true);
         try {
@@ -89,30 +121,42 @@ const VideoPlayerScreen = () => {
           const format = ytdl.chooseFormat(videoInfo.formats, { quality: 'highest', filter: 'videoandaudio' });
           if (format && format.url) {
             setStreamUrl(format.url);
+            clearTimeout(timeoutId);
           } else {
             const videoFormat = ytdl.chooseFormat(videoInfo.formats, { quality: 'highestvideo' });
             if (videoFormat && videoFormat.url) {
               setStreamUrl(videoFormat.url);
+              clearTimeout(timeoutId);
             } else {
               console.error('No suitable video format found');
               setStreamUrl(null);
+              setLoadingError('No suitable video format found');
+              clearTimeout(timeoutId);
             }
           }
         } catch (error) {
           console.error("YTDL Error:", error);
           setStreamUrl(null);
+          setLoadingError(`YouTube extraction failed: ${error.message}`);
+          clearTimeout(timeoutId);
         } finally {
           setIsFetchingStream(false);
         }
       } else {
         setStreamUrl(currentVideo.uri);
+        clearTimeout(timeoutId);
       }
     };
 
     if (currentVideo && currentVideo.uri) {
       processVideoUri();
     }
-  }, [currentVideo.uri]);
+    
+    return () => {
+      // Cleanup timeout on unmount or dependency change
+      resetLoadingStates();
+    };
+  }, [currentVideo.uri, retryCount]);
 
   useEffect(() => {
     const getFileSize = async () => {
@@ -133,13 +177,27 @@ const VideoPlayerScreen = () => {
   }, [currentVideo.uri]);
 
   // Handle orientation changes
+  const fullscreenAnim = useRef(new Animated.Value(0)).current; // 0 = portrait, 1 = fullscreen
   useEffect(() => {
     if (isFullscreen) {
-      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT);
+      Animated.timing(fullscreenAnim, {
+        toValue: 1,
+        duration: 350,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start(() => {
+        ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT);
+      });
     } else {
-      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+      Animated.timing(fullscreenAnim, {
+        toValue: 0,
+        duration: 350,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start(() => {
+        ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+      });
     }
-    
     return () => {
       ScreenOrientation.unlockAsync();
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.DEFAULT);
@@ -189,6 +247,26 @@ const VideoPlayerScreen = () => {
     'worklet';
     runOnJS(toggleControls)();
   });
+
+  const doubleTapLeft = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd(() => {
+      'worklet';
+      // Handle skip directly in worklet
+      runOnJS(async () => videoRef.current?.setPositionAsync((status.positionMillis || 0) - 5000))();
+      // Handle animation and feedback
+      runOnJS(handleDoubleTap)('backward');
+    });
+
+  const doubleTapRight = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd(() => {
+      'worklet';
+      // Handle skip directly in worklet
+      runOnJS(async () => videoRef.current?.setPositionAsync((status.positionMillis || 0) + 5000))();
+      // Handle animation and feedback
+      runOnJS(handleDoubleTap)('forward');
+    });
 
   const longPressGesture = Gesture.LongPress()
     .onStart(_ => {
@@ -240,6 +318,20 @@ const VideoPlayerScreen = () => {
 
   const handlePlaybackStatusUpdate = (newStatus) => {
     setStatus(newStatus);
+    
+    // Handle buffering timeout
+    if (newStatus.isBuffering) {
+      // Set a timeout for buffering
+      setTimeout(() => {
+        if (status.isBuffering) {
+          setBufferingTimeout(true);
+        }
+      }, bufferingTimeoutDuration);
+    } else {
+      // Clear buffering timeout when not buffering
+      setBufferingTimeout(false);
+    }
+    
     if (newStatus.isPlaying && subtitles.length > 0) {
       const currentMillis = newStatus.positionMillis;
       const activeLine = subtitles.find(line => 
@@ -429,11 +521,98 @@ const VideoPlayerScreen = () => {
     };
   }, []);
 
+  // Always auto-play video when streamUrl changes
+  useEffect(() => {
+    if (videoRef.current && streamUrl) {
+      videoRef.current.setStatusAsync({ shouldPlay: true });
+    }
+  }, [streamUrl]);
+
+  const handleDoubleTap = (direction) => {
+    setShowSkipFeedback(direction);
+    setSkipFeedbackSeconds(prev => ({
+      ...prev,
+      [direction]: prev[direction] + 5,
+    }));
+    // Animate feedback
+    skipFeedbackAnim[direction].setValue(0);
+    Animated.timing(skipFeedbackAnim[direction], {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start(() => {
+      setShowSkipFeedback(null);
+      setSkipFeedbackSeconds(prev => ({ ...prev, [direction]: 0 }));
+    });
+  };
+
+  // Render loading state if no currentVideo
+  if (!currentVideo) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: themeColors.background }]}> 
+        <ActivityIndicator size="large" color={themeColors.primary} />
+        <Text style={{ color: themeColors.text, marginTop: 10 }}>Loading Video...</Text>
+      </SafeAreaView>
+    );
+  }
+
   if (isFetchingStream) {
     return (
       <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color={themeColors.primary} />
-        <Text style={{ color: themeColors.text, marginTop: 10 }}>Preparing stream...</Text>
+        <Text style={{ color: themeColors.text, marginTop: 10, fontSize: 16 }}>Preparing stream...</Text>
+        <Text style={{ color: themeColors.textSecondary, marginTop: 5, fontSize: 14, textAlign: 'center', paddingHorizontal: 20 }}>
+          This may take a few moments
+        </Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (loadingTimeout) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <View style={{ alignItems: 'center', padding: 20 }}>
+          <Text style={{ color: themeColors.text, fontSize: 18, textAlign: 'center', marginBottom: 10 }}>
+            Loading Timeout
+          </Text>
+          <Text style={{ color: themeColors.textSecondary, fontSize: 14, textAlign: 'center', marginBottom: 20, paddingHorizontal: 20 }}>
+            The video is taking too long to load. This could be due to:
+          </Text>
+          <Text style={{ color: themeColors.textSecondary, fontSize: 14, textAlign: 'center', marginBottom: 20, paddingHorizontal: 20 }}>
+            • Slow internet connection{'\n'}
+            • Large video file{'\n'}
+            • Server issues{'\n'}
+            • Video format not supported
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            {retryCount < maxRetries && (
+              <TouchableOpacity 
+                style={{ 
+                  backgroundColor: themeColors.primary, 
+                  paddingHorizontal: 20, 
+                  paddingVertical: 10, 
+                  borderRadius: 8 
+                }}
+                onPress={handleRetry}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Retry ({retryCount + 1}/{maxRetries + 1})</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity 
+              style={{ 
+                backgroundColor: themeColors.sectionBackground, 
+                paddingHorizontal: 20, 
+                paddingVertical: 10, 
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: themeColors.primary
+              }}
+              onPress={() => router.push('/(tabs)/(browse)')}
+            >
+              <Text style={{ color: themeColors.primary, fontWeight: 'bold' }}>Browse Videos</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </SafeAreaView>
     );
   }
@@ -443,17 +622,37 @@ const VideoPlayerScreen = () => {
       <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <View style={{ alignItems: 'center', padding: 20 }}>
           <Text style={{ color: themeColors.text, fontSize: 16, textAlign: 'center', marginBottom: 20 }}>
-            {currentVideo.uri && (currentVideo.uri.includes('youtube.com') || currentVideo.uri.includes('youtu.be')) 
-              ? 'Unable to load YouTube video'
-              : 'No video to play'
+            {loadingError ? 'Failed to load video' : 
+              (currentVideo.uri && (currentVideo.uri.includes('youtube.com') || currentVideo.uri.includes('youtu.be')) 
+                ? 'Unable to load YouTube video'
+                : 'No video to play'
+              )
             }
           </Text>
+          {loadingError && (
+            <Text style={{ color: themeColors.textSecondary, fontSize: 14, textAlign: 'center', marginBottom: 20, paddingHorizontal: 20 }}>
+              Error: {loadingError}
+            </Text>
+          )}
           {currentVideo.uri && (currentVideo.uri.includes('youtube.com') || currentVideo.uri.includes('youtu.be')) && (
             <Text style={{ color: themeColors.textSecondary, fontSize: 14, textAlign: 'center', marginBottom: 20 }}>
               YouTube stream extraction failed. This could be due to:\n\n• Private or restricted video\n• Invalid or expired link\n• Network connectivity issues\n• YouTube API changes
             </Text>
           )}
           <View style={{ flexDirection: 'row', gap: 10 }}>
+            {retryCount < maxRetries && (
+              <TouchableOpacity 
+                style={{ 
+                  backgroundColor: themeColors.primary, 
+                  paddingHorizontal: 20, 
+                  paddingVertical: 10, 
+                  borderRadius: 8 
+                }}
+                onPress={handleRetry}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Retry ({retryCount + 1}/{maxRetries + 1})</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity 
               style={{ 
                 backgroundColor: themeColors.primary, 
@@ -484,11 +683,42 @@ const VideoPlayerScreen = () => {
     );
   }
 
+  // Animated styles for fullscreen transition
+  const animatedVideoContainerStyle = {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000',
+    transform: [
+      {
+        scale: fullscreenAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [1, 1.04], // Slight zoom for effect
+        }),
+      },
+    ],
+    opacity: fullscreenAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [1, 0.98],
+    }),
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar hidden={isFullscreen} />
+      {/* Left side - double tap to rewind */}
+      <GestureDetector gesture={doubleTapLeft}>
+        <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '40%', zIndex: 10 }} />
+      </GestureDetector>
+      
+      {/* Right side - double tap to forward */}
+      <GestureDetector gesture={doubleTapRight}>
+        <View style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '40%', zIndex: 10 }} />
+      </GestureDetector>
+      
+      {/* Center area - main controls */}
       <GestureDetector gesture={composedGesture}>
-        <View style={styles.videoContainer}>
+        <Animated.View style={animatedVideoContainerStyle}>
           <Video
             ref={videoRef}
             source={{ uri: streamUrl }}
@@ -544,8 +774,8 @@ const VideoPlayerScreen = () => {
               </View>
               <SafeAreaView edges={['bottom']} style={styles.footer}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Text style={styles.timeText}>{formatTime((status.durationMillis || 1) * 1000)}</Text>
-                  <Text style={styles.timeText}>{formatTime((status.durationMillis || 1) * 1000)}</Text>
+                  <Text style={styles.timeText}>{formatTime(status.positionMillis || 0)}</Text>
+                  <Text style={styles.timeText}>{formatTime(status.durationMillis || 1)}</Text>
                 </View>
                 <View style={{ position: 'relative', width: '100%' }}>
                   <View
@@ -590,8 +820,64 @@ const VideoPlayerScreen = () => {
               </SafeAreaView>
             </View>
           )}
-          {status.isBuffering && !isFetchingStream && <ActivityIndicator style={StyleSheet.absoluteFill} size="large" color="#FFF" />}
-        </View>
+          {status.isBuffering && !isFetchingStream && (
+            <View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.7)' }]}>
+              <ActivityIndicator size="large" color="#FFF" />
+              {bufferingTimeout && (
+                <View style={{ marginTop: 10, alignItems: 'center' }}>
+                  <Text style={{ color: '#FFF', fontSize: 16, textAlign: 'center', marginBottom: 5 }}>
+                    Still buffering...
+                  </Text>
+                  <Text style={{ color: '#FFF', fontSize: 14, textAlign: 'center', opacity: 0.8, paddingHorizontal: 20 }}>
+                    Check your connection or try another video
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+          {/* Skip feedback */}
+          {['backward', 'forward'].map(direction => {
+            if (showSkipFeedback !== direction || skipFeedbackSeconds[direction] === 0) return null;
+            const isForward = direction === 'forward';
+            const anim = skipFeedbackAnim[direction];
+            return (
+              <Animated.View
+                key={direction}
+                style={{
+                  position: 'absolute',
+                  top: '40%',
+                  left: isForward ? undefined : '15%',
+                  right: isForward ? '15%' : undefined,
+                  zIndex: 30,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 100,
+                  height: 100,
+                  borderRadius: 50,
+                  backgroundColor: 'rgba(0,0,0,0.35)',
+                  transform: [
+                    { scale: anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1.5, 1, 0.7] }) },
+                  ],
+                  opacity: anim.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.7, 1, 0] }),
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.5,
+                  shadowRadius: 10,
+                  elevation: 10,
+                }}
+              >
+                {isForward ? (
+                  <ChevronRight size={32} color="#fff" style={{ marginBottom: 4 }} />
+                ) : (
+                  <ChevronLeft size={32} color="#fff" style={{ marginBottom: 4 }} />
+                )}
+                <Text style={{ color: '#fff', fontSize: 24, fontWeight: 'bold', textShadowColor: '#000', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8 }}>
+                  {isForward ? `+${skipFeedbackSeconds[direction]}s` : `-${skipFeedbackSeconds[direction]}s`}
+                </Text>
+              </Animated.View>
+            );
+          })}
+        </Animated.View>
       </GestureDetector>
       
       <Modal

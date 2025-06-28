@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Pressable,
   Alert,
   Button,
+  Image,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { VideoOff, Play, Heart, Share2, Trash2, Info, Clock, Star, Edit3 } from 'lucide-react-native';
@@ -85,7 +86,7 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
     const videoWithThumb = videoThumbnails[video.id] ? { ...video, thumbnail: videoThumbnails[video.id] } : video;
     setAndPlayVideo(videoWithThumb);
     setTimeout(() => {
-      router.push('/(tabs)/(video)/player');
+      router.push('/player/video');
     }, 50);
   };
 
@@ -100,7 +101,7 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
       setAndPlayVideo(videoWithThumb);
       setShowMoreModal(false);
       setTimeout(() => {
-        router.push('/(tabs)/(video)/player');
+        router.push('/player/video');
       }, 50);
     }
   };
@@ -222,9 +223,9 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
 
   if (isLoading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: themeColors.background }]}>
+      <View style={[styles.loadingContainer, { backgroundColor: themeColors.background }]}> 
         <ActivityIndicator size="large" color={themeColors.primary} />
-        <Text style={[styles.loadingText, { color: themeColors.text }]}>
+        <Text style={[styles.loadingText, { color: themeColors.text }]}> 
           Loading your video library...
         </Text>
       </View>

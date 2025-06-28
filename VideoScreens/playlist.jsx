@@ -21,11 +21,7 @@ import SearchBar from '../components/SearchBar';
 
 const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearchQuery }) => {
   const { themeColors } = useThemeStore();
-  const { videoFiles, setCurrentVideo } = useVideoStore();
-  const [playlists, setPlaylists] = useState([
-    { id: '1', name: 'My Videos', tracks: videoFiles.slice(0, 5) },
-    { id: '2', name: 'Favorites', tracks: videoFiles.slice(0, 3) },
-  ]);
+  const { videoFiles, setCurrentVideo, videoPlaylists, createVideoPlaylist, addVideoToPlaylist, clearVideoPlaylists } = useVideoStore();
   const [modalVisible, setModalVisible] = useState(false);
   const [playlistName, setPlaylistName] = useState('');
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
@@ -57,14 +53,25 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
     }
   }, [modalVisible, videoFiles]);
 
+  const handleClearAllPlaylists = () => {
+    Alert.alert(
+      'Clear All Playlists',
+      'Are you sure you want to delete all video playlists? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Clear All', style: 'destructive', onPress: () => clearVideoPlaylists() }
+      ]
+    );
+  };
+
   const handleCreatePlaylist = () => {
     if (playlistName.trim() && selectedVideos.length > 0) {
-      const newPlaylist = {
-        id: Date.now().toString(),
-        name: playlistName,
-        tracks: selectedVideos,
-      };
-      setPlaylists([...playlists, newPlaylist]);
+      createVideoPlaylist(playlistName);
+      // Add videos to the newly created playlist
+      const newPlaylistId = Date.now().toString();
+      selectedVideos.forEach(video => {
+        addVideoToPlaylist(newPlaylistId, video);
+      });
       setPlaylistName('');
       setSelectedVideos([]);
       setModalVisible(false);
@@ -78,10 +85,7 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
 
   const handleVideoPress = (video) => {
     setCurrentVideo(video);
-    router.push({
-      pathname: '/(tabs)/(video)/player',
-      params: { uri: video.uri }
-    });
+    router.push('/player/video');
   };
 
   const handleToggleVideo = (video) => {
@@ -99,7 +103,9 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
 
   const handleDeletePlaylist = () => {
     if (optionsPlaylist) {
-      setPlaylists(playlists.filter(p => p.id !== optionsPlaylist.id));
+      // Remove playlist from store
+      const updatedPlaylists = videoPlaylists.filter(p => p.id !== optionsPlaylist.id);
+      useVideoStore.setState({ videoPlaylists: updatedPlaylists });
       setOptionsVisible(false);
       setOptionsPlaylist(null);
     }
@@ -107,9 +113,9 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
 
   // Filter playlists and videos by searchQuery
   const filteredPlaylists = useMemo(() => {
-    if (!searchQuery) return playlists;
-    return playlists.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  }, [playlists, searchQuery]);
+    if (!searchQuery) return videoPlaylists;
+    return videoPlaylists.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [videoPlaylists, searchQuery]);
 
   const renderPlaylistItem = ({ item }) => (
     <TouchableOpacity
@@ -158,6 +164,30 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
           }}
         />
       )}
+      
+      {/* Clear All Button - only show when there are playlists */}
+      {videoPlaylists.length > 0 && !searchQuery && (
+        <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
+          <TouchableOpacity
+            style={{
+              backgroundColor: themeColors.card,
+              paddingVertical: 12,
+              paddingHorizontal: 16,
+              borderRadius: 8,
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: themeColors.primary,
+            }}
+            onPress={handleClearAllPlaylists}
+            activeOpacity={0.8}
+          >
+            <Text style={{ color: themeColors.primary, fontWeight: '600', fontSize: 14 }}>
+              Clear All Playlists
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      
       <FlatList
         data={filteredPlaylists}
         renderItem={renderPlaylistItem}

@@ -5,6 +5,7 @@ const PlaylistContext = createContext();
 const playlistReducer = (state, action) => {
   switch (action.type) {
     case 'ADD_TRACK':
+      if (state.some(track => (track.id && action.payload.id && track.id === action.payload.id) || (track.title && action.payload.title && track.title === action.payload.title))) return state;
       return [...state, action.payload];
     case 'REMOVE_TRACK':
       return state.filter((_, i) => i !== action.payload);
@@ -27,17 +28,3 @@ export const PlaylistProvider = ({ children }) => {
 
 export const usePlaylist = () => useContext(PlaylistContext);
 import * as MediaLibrary from 'expo-media-library';
-
-const pickAudio = async () => {
-  const { status } = await MediaLibrary.requestPermissionsAsync();
-  if (status !== 'granted') return;
-
-  const assets = await MediaLibrary.getAssetsAsync({
-    mediaType: MediaLibrary.MediaType.audio,
-    first: 20,
-  });
-
-  if (assets.assets.length > 0) {
-    dispatch({ type: 'ADD_TRACK', payload: assets.assets[0] }); // or show a picker
-  }
-};

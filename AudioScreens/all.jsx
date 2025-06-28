@@ -64,7 +64,7 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
     try {
       const index = sortedAndFilteredAudio.findIndex(track => track.id === item.id);
       await audioControl.setAndPlayPlaylist(sortedAndFilteredAudio, index);
-      router.push('/(tabs)/(audio)/player');
+      router.push('/player/audio');
     } catch (error) {
       console.error("Error playing song:", error);
       Alert.alert("Error", "Failed to play song");
@@ -111,14 +111,11 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
     if (!selectedTrack) return;
     const playlists = playlistStore.playlists;
     if (playlists.length === 0) {
-      // No playlists: create a new one and add the track
-      const defaultName = 'My Playlist';
-      const id = playlistStore.createPlaylist(defaultName);
-      playlistStore.addTrackToPlaylist(id, selectedTrack);
+      // No playlists: show message to create one first
       setCustomAlert({
         visible: true,
-        title: 'Playlist Created',
-        message: `A new playlist called "${defaultName}" was created and the song was added!`,
+        title: 'No Playlists',
+        message: 'You don\'t have any playlists yet. Create a playlist first, then add songs to it.',
         buttons: [{ text: 'OK', style: 'primary', onPress: () => setCustomAlert(alert => ({ ...alert, visible: false })) }],
       });
     } else {

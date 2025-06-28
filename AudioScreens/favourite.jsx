@@ -25,7 +25,7 @@ const FavouriteScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearc
 
   const handlePlaySong = async (item) => {
     await audioControl.setAndPlayPlaylist([item]);
-    router.push('/(tabs)/(audio)/player');
+    router.push('/player/audio');
   };
 
   const renderItem = ({ item }) => (

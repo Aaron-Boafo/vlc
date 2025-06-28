@@ -44,14 +44,27 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StatusBar hidden />
-        <Stack>
+        <Stack
+          screenOptions={{
+            // Instant transitions for main navigation
+            animation: 'none',
+            animationDuration: 0,
+            // Performance optimizations
+            gestureEnabled: false,
+            detachInactiveScreens: true,
+          }}
+        >
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="video-player" options={{ headerShown: false }} />
           <Stack.Screen
             name="player"
-            options={{ headerShown: false, presentation: "modal" }}
+            options={{ 
+              headerShown: false, 
+              presentation: "modal",
+              animation: 'slide_from_bottom',
+              animationDuration: 200,
+            }}
           />
         </Stack>
       </SafeAreaProvider>

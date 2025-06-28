@@ -4,7 +4,16 @@ import { PlaylistProvider } from "./Context";
 const AudioLayout = () => {
   return (
     <PlaylistProvider>
-      <Stack />
+      <Stack
+        screenOptions={{
+          // Instant transitions
+          animation: 'none',
+          animationDuration: 0,
+          // Performance optimizations
+          gestureEnabled: false,
+          detachInactiveScreens: true,
+        }}
+      />
     </PlaylistProvider>
   );
 };

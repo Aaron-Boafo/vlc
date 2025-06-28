@@ -15,7 +15,7 @@ import SearchBar from '../components/SearchBar';
 
 const PlaylistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) => {
   const { themeColors } = useThemeStore();
-  const { playlists, createPlaylist, deletePlaylist, addTrackToPlaylist, removeTrackFromPlaylist, setPlaylistArtwork } = usePlaylistStore();
+  const { playlists, createPlaylist, deletePlaylist, addTrackToPlaylist, removeTrackFromPlaylist, setPlaylistArtwork, clearPlaylists } = usePlaylistStore();
   const audioControl = useAudioControl();
   const router = useRouter();
   const [modalVisible, setModalVisible] = useState(false);
@@ -166,7 +166,7 @@ const PlaylistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch
   const handlePlayPlaylist = (playlist) => {
     if (playlist.tracks.length > 0) {
       audioControl.setAndPlayPlaylist(playlist.tracks);
-      router.push('/(tabs)/(audio)/player');
+      router.push('/player/audio');
     } else {
       Alert.alert('No tracks', 'This playlist has no tracks to play.');
     }
@@ -176,7 +176,7 @@ const PlaylistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch
     if (playlist.tracks.length > 0) {
       const shuffled = [...playlist.tracks].sort(() => Math.random() - 0.5);
       audioControl.setAndPlayPlaylist(shuffled);
-      router.push('/(tabs)/(audio)/player');
+      router.push('/player/audio');
     } else {
       Alert.alert('No tracks', 'This playlist has no tracks to play.');
     }
@@ -234,6 +234,17 @@ const PlaylistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch
       await Share.share({ message: text });
     }
     setOptionsVisible(false);
+  };
+
+  const handleClearAllPlaylists = () => {
+    Alert.alert(
+      'Clear All Playlists',
+      'Are you sure you want to delete all playlists? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Clear All', style: 'destructive', onPress: () => clearPlaylists() }
+      ]
+    );
   };
 
   const filteredTracks = allTracks.filter(f => {
@@ -304,6 +315,30 @@ const PlaylistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch
           }}
         />
       )}
+      
+      {/* Clear All Button - only show when there are playlists */}
+      {playlists.length > 0 && !searchQuery && (
+        <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
+          <TouchableOpacity
+            style={{
+              backgroundColor: themeColors.card,
+              paddingVertical: 12,
+              paddingHorizontal: 16,
+              borderRadius: 8,
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: themeColors.primary,
+            }}
+            onPress={handleClearAllPlaylists}
+            activeOpacity={0.8}
+          >
+            <Text style={{ color: themeColors.primary, fontWeight: '600', fontSize: 14 }}>
+              Clear All Playlists
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      
       <FlatList
         data={filteredPlaylists}
         renderItem={renderPlaylist}

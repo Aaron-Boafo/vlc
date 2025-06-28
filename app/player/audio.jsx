@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef, useMemo, useEffect } from "react";
 import {
   View,
   Text,
@@ -34,11 +34,12 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import Slider from "@react-native-community/slider";
-import useThemeStore from "../../../store/theme";
-import useAudioControl from "../../../store/useAudioControl";
-import useFavouriteStore from "../../../store/favouriteStore";
-import usePlaybackStore from "../../../store/playbackStore";
+import useThemeStore from "../../store/theme";
+import useAudioControl from "../../store/useAudioControl";
+import useFavouriteStore from "../../store/favouriteStore";
+import usePlaybackStore from "../../store/playbackStore";
 import * as NavigationBar from 'expo-navigation-bar';
+import { Image as ExpoImage } from 'expo-image';
 
 const { width } = Dimensions.get("window");
 
@@ -72,6 +73,17 @@ const PlayerScreen = () => {
   const [isPlaylistModalVisible, setPlaylistModalVisible] = useState(false);
   const [isSpeedModalVisible, setSpeedModalVisible] = useState(false);
   const favouriteStore = useFavouriteStore();
+  const [sliderValue, setSliderValue] = useState(null);
+  const isSeeking = sliderValue !== null;
+  const seekTargetRef = useRef(null);
+
+  // Smoothly clear sliderValue only when position matches the seek target
+  useEffect(() => {
+    if (seekTargetRef.current !== null && Math.abs(position - seekTargetRef.current) < 1000) {
+      setSliderValue(null);
+      seekTargetRef.current = null;
+    }
+  }, [position]);
 
   const formatTime = (milliseconds) => {
     if (!milliseconds) return "0:00";
@@ -130,55 +142,95 @@ const PlayerScreen = () => {
           <MoreVertical size={28} color={themeColors.text} />
         </TouchableOpacity>
       </View>
-
-      <View style={styles.albumArtContainer}>
-        {currentTrack.artwork ? (
-          <Image source={{ uri: currentTrack.artwork }} style={styles.albumArt} />
-        ) : (
-          <View style={[styles.albumArtPlaceholder, { backgroundColor: themeColors.primary }] }>
-            <Text style={styles.defaultIconText}>♪</Text>
+      <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <View
+            style={{
+              backgroundColor: themeColors.card,
+              borderRadius: 32,
+              padding: 18,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 12,
+              // Shadow for iOS
+              shadowColor: '#000',
+              shadowOpacity: 0.18,
+              shadowRadius: 24,
+              shadowOffset: { width: 0, height: 12 },
+              // Shadow for Android
+              elevation: 16,
+            }}
+          >
+            {currentTrack.artwork ? (
+              <ExpoImage
+                source={{ uri: currentTrack.artwork }}
+                style={{ width: 300, height: 300, borderRadius: 24 }}
+                contentFit="cover"
+                cachePolicy="disk"
+              />
+            ) : (
+              <View
+                style={{
+                  width: 300,
+                  height: 300,
+                  borderRadius: 24,
+                  backgroundColor: 'rgba(255,255,255,0.08)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text style={styles.defaultIconText}>♪</Text>
+              </View>
+            )}
           </View>
-        )}
-      </View>
 
-      <View style={styles.trackInfoContainer}>
-        <Text style={[styles.trackTitle, { color: themeColors.text }]} numberOfLines={2}>{currentTrack.title || "Unknown Track"}</Text>
-        <Text style={[styles.trackArtist, { color: themeColors.textSecondary }]} numberOfLines={1}>{currentTrack.artist || "Unknown Artist"}</Text>
-      </View>
-
-      <View style={styles.progressContainer}>
-        <Slider
-          style={styles.progressSlider}
-          minimumValue={0}
-          maximumValue={duration > 0 ? duration : 1}
-          value={position}
-          onSlidingComplete={async (value) => { await seek(value); }}
-          minimumTrackTintColor={themeColors.primary}
-          maximumTrackTintColor={themeColors.textSecondary}
-          thumbTintColor={themeColors.primary}
-        />
-        <View style={styles.progressTimeContainer}>
-          <Text style={[styles.progressTimeText, { color: themeColors.textSecondary }]}>{formatTime(position)}</Text>
-          <Text style={[styles.progressTimeText, { color: themeColors.textSecondary }]}>{formatTime(duration)}</Text>
+          <View style={{ alignItems: 'center', paddingHorizontal: 20, paddingVertical: 8 }}>
+            <Text style={[styles.trackTitle, { color: themeColors.text }]} numberOfLines={2}>{currentTrack.title || "Unknown Track"}</Text>
+            <Text style={[styles.trackArtist, { color: themeColors.textSecondary }]} numberOfLines={1}>{currentTrack.artist || "Unknown Artist"}</Text>
+          </View>
         </View>
-      </View>
 
-      <View style={styles.mainControlsContainer}>
-        <TouchableOpacity style={styles.mainControlButton} onPress={toggleShuffle}>
-          <Shuffle size={24} color={isShuffleOn ? themeColors.primary : themeColors.textSecondary} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.mainControlButton} onPress={previous}>
-          <SkipBack size={32} color={themeColors.text} />
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.playPauseButton, { backgroundColor: themeColors.primary }]} onPress={handlePlayPause}>
-          {isPlaying ? <Pause size={40} color={themeColors.background} /> : <Play size={40} color={themeColors.background} />}
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.mainControlButton} onPress={next}>
-          <SkipForward size={32} color={themeColors.text} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.mainControlButton}>
-          <Repeat size={24} color={themeColors.textSecondary} />
-        </TouchableOpacity>
+        <View style={{ width: '100%' }}>
+          <View style={{ paddingHorizontal: 24, paddingVertical: 4 }}>
+            <Slider
+              style={styles.progressSlider}
+              minimumValue={0}
+              maximumValue={duration > 0 ? duration : 1}
+              value={isSeeking ? sliderValue : position}
+              onValueChange={setSliderValue}
+              onSlidingComplete={async (value) => {
+                setSliderValue(value);
+                seekTargetRef.current = value;
+                await seek(value);
+              }}
+              minimumTrackTintColor={themeColors.primary}
+              maximumTrackTintColor={themeColors.textSecondary}
+              thumbTintColor={themeColors.primary}
+            />
+            <View style={styles.progressTimeContainer}>
+              <Text style={[styles.progressTimeText, { color: themeColors.textSecondary }]}>{formatTime(position)}</Text>
+              <Text style={[styles.progressTimeText, { color: themeColors.textSecondary }]}>{formatTime(duration)}</Text>
+            </View>
+          </View>
+
+          <View style={{ flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center', paddingHorizontal: 40, paddingVertical: 8, marginTop: 0, marginBottom: 24 }}>
+            <TouchableOpacity style={styles.mainControlButton} onPress={toggleShuffle}>
+              <Shuffle size={24} color={isShuffleOn ? themeColors.primary : themeColors.textSecondary} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.mainControlButton} onPress={previous}>
+              <SkipBack size={32} color={themeColors.text} />
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.playPauseButton, { backgroundColor: themeColors.primary }]} onPress={handlePlayPause}>
+              {isPlaying ? <Pause size={40} color={themeColors.background} /> : <Play size={40} color={themeColors.background} />}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.mainControlButton} onPress={next}>
+              <SkipForward size={32} color={themeColors.text} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.mainControlButton}>
+              <Repeat size={24} color={themeColors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
 
       {/* Sleep Timer Modal */}
@@ -335,8 +387,12 @@ const styles = StyleSheet.create({
   headerCenter: { flex: 1, alignItems: "center" },
   headerTitle: { fontSize: 12, fontWeight: "bold", textTransform: 'uppercase' },
   headerSubtitle: { fontSize: 14, marginTop: 2 },
+  albumArt: {
+    width: 180,
+    height: 180,
+    borderRadius: 12,
+  },
   albumArtContainer: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 40, paddingVertical: 20 },
-  albumArt: { width: width * 0.75, height: width * 0.75, borderRadius: 20 },
   albumArtPlaceholder: { width: width * 0.75, height: width * 0.75, borderRadius: 20, justifyContent: "center", alignItems: "center" },
   defaultIconText: { fontSize: 80, color: "rgba(255, 255, 255, 0.5)" },
   trackInfoContainer: { alignItems: "center", paddingHorizontal: 30, paddingVertical: 20 },

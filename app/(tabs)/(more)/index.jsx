@@ -151,7 +151,7 @@ const MoreScreen = () => {
           artist: streamType === 'youtube' ? "YouTube" : "Unknown",
         };
         videoControl.setAndPlayVideo(videoTrack);
-        router.push('/(tabs)/(video)/player');
+        router.push('/player/video');
       } else {
         const audioTrack = {
           id: `stream-${Date.now()}`,
@@ -352,6 +352,21 @@ const MoreScreen = () => {
         </TouchableOpacity>
       </View>
 
+      {/* User Info Card */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, marginHorizontal: 16, marginTop: 18, marginBottom: 10, backgroundColor: themeColors.sectionBackground, borderRadius: 16, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
+        <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#4A90E2', alignItems: 'center', justifyContent: 'center', marginRight: 16, borderWidth: 2, borderColor: themeColors.primary }}>
+          <Icons.User size={32} color={'#fff'} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontWeight: 'bold', fontSize: 18, color: themeColors.text }}>NaN</Text>
+          <Text style={{ color: themeColors.textSecondary, fontSize: 14, marginTop: 2 }}>Experience Visura</Text>
+          <Text style={{ color: themeColors.primary, fontSize: 13, marginTop: 2 }}>Not signed in. Create an account to use cloud services.</Text>
+        </View>
+        <TouchableOpacity style={{ marginLeft: 8, padding: 6 }}>
+          <Icons.Info size={22} color={themeColors.primary} />
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
         className="flex-1 px-4"
         contentContainerStyle={{
@@ -419,7 +434,7 @@ const MoreScreen = () => {
                   className="w-24 mr-4"
                   onPress={async () => {
                     await audioControl.setAndPlayPlaylist([item]);
-                    router.push('/(tabs)/(video)/player');
+                    router.push('/player/video');
                   }}
                 >
                   <View

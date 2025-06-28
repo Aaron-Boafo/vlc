@@ -5,6 +5,15 @@ import * as MediaLibrary from "expo-media-library";
 import * as FileSystem from "expo-file-system";
 import { router } from 'expo-router';
 
+const safeParse = (value, fallback) => {
+  try {
+    return JSON.parse(value);
+  } catch (e) {
+    console.error('[VideoStore] Failed to parse persisted state, using fallback.', e);
+    return fallback;
+  }
+};
+
 const useVideoStore = create(
   persist(
     (set, get) => ({
@@ -18,7 +27,6 @@ const useVideoStore = create(
       // Video files state
       videoFiles: [],
       isLoading: true,
-      error: null,
       setVideoFiles: (files) => set({ videoFiles: files }),
       
       // Current video and playlist
@@ -73,6 +81,7 @@ const useVideoStore = create(
               : p
           )
         })),
+      clearVideoPlaylists: () => set({ videoPlaylists: [] }),
 
       // Mini Player State
       isMiniPlayerVisible: false,
@@ -83,41 +92,82 @@ const useVideoStore = create(
       // Sorting function
       sortOrder: { key: 'filename', direction: 'asc' }, // default sort
 
-      // Load video files from device with optimization (with extra debug logs)
+      // Load video files progressively in batches (like audio)
       loadVideoFiles: async () => {
-        console.log('[Video] loadVideoFiles called');
-        set({ isLoading: true, error: null });
         try {
-          console.log('[Video] Requesting media library permissions...');
+          console.log('[VideoStore] Starting video files load...');
+          set({ isLoading: true, videoFiles: [] });
+
           const { status } = await MediaLibrary.requestPermissionsAsync();
-          console.log('[Video] Permission status:', status);
-          if (status !== 'granted') {
-            set({
-              error: 'Permission to access media library is required!',
-              isLoading: false,
-            });
-            console.log('[Video] Permission not granted, aborting.');
+          if (status !== "granted") {
+            console.log("[VideoStore] Media library permission not granted");
+            set({ isLoading: false, videoFiles: [] });
             return;
           }
 
-          console.log('[Video] Fetching video assets...');
-          const media = await MediaLibrary.getAssetsAsync({
-            mediaType: MediaLibrary.MediaType.video,
-            first: 1000,
-          });
-          console.log('[Video] Assets fetched:', media.assets.length);
-          if (media.assets.length > 0) {
-            console.log('[Video] First asset:', media.assets[0]);
-          } else {
-            console.log('[Video] No video assets found.');
+          let allFiles = [];
+          let hasNextPage = true;
+          let page = 0;
+          const batchSize = 50; // Increased batch size for better performance
+
+          console.log('[VideoStore] Loading videos in batches...');
+
+          while (hasNextPage) {
+            try {
+              const media = await MediaLibrary.getAssetsAsync({
+                mediaType: MediaLibrary.MediaType.video,
+                first: batchSize,
+                sortBy: [MediaLibrary.SortBy.creationTime],
+              });
+
+              if (!media.assets || media.assets.length === 0) {
+                console.log('[VideoStore] No more videos found');
+                break;
+              }
+
+              const basicFiles = media.assets.map((asset) => ({
+                id: asset.id,
+                uri: asset.uri,
+                filename: asset.filename || 'Unknown Video',
+                duration: asset.duration || 0,
+                width: asset.width || 0,
+                height: asset.height || 0,
+                creationTime: asset.creationTime || Date.now(),
+                modificationTime: asset.modificationTime || Date.now(),
+                size: asset.fileSize || 0,
+              }));
+
+              allFiles = allFiles.concat(basicFiles);
+              
+              // Update UI after each batch for progressive loading
+              set({ videoFiles: [...allFiles] });
+              
+              console.log(`[VideoStore] Loaded batch ${page + 1}: ${basicFiles.length} videos (Total: ${allFiles.length})`);
+              
+              hasNextPage = media.hasNextPage;
+              page++;
+              
+              // Safety check to prevent infinite loops
+              if (page > 100) {
+                console.warn('[VideoStore] Safety limit reached, stopping batch loading');
+                break;
+              }
+            } catch (batchError) {
+              console.error(`[VideoStore] Error loading batch ${page}:`, batchError);
+              // Continue with next batch instead of failing completely
+              hasNextPage = false;
+            }
           }
 
-          const sortedVideos = media.assets.sort((a, b) => b.creationTime - a.creationTime);
-          set({ videoFiles: sortedVideos, isLoading: false });
-          console.log('[Video] videoFiles state set. Loading complete.');
-        } catch (e) {
-          console.error('[Video] Failed to load videos', e);
-          set({ error: 'Failed to load videos.', isLoading: false });
+          // Final sort by creation time (newest first)
+          const sortedFiles = [...allFiles].sort((a, b) => b.creationTime - a.creationTime);
+          
+          console.log(`[VideoStore] Video loading complete: ${sortedFiles.length} videos loaded`);
+          set({ videoFiles: sortedFiles, isLoading: false });
+          
+        } catch (error) {
+          console.error("[VideoStore] Error loading video files:", error);
+          set({ isLoading: false, videoFiles: [] });
         }
       },
 
@@ -294,22 +344,15 @@ const useVideoStore = create(
           if (status !== 'granted') {
             throw new Error('Permission to access media library is required to rename this video.');
           }
-          // Try MediaLibrary rename first
-          try {
-            await MediaLibrary.updateAssetAsync(videoId, { filename: newFileName });
+          // Only use FileSystem.moveAsync for renaming
+          if (video.uri && video.uri.startsWith('file://')) {
+            const parentDir = video.uri.substring(0, video.uri.lastIndexOf('/') + 1);
+            const newUri = parentDir + newFileName;
+            await FileSystem.moveAsync({ from: video.uri, to: newUri });
             await get().loadVideoFiles();
             return;
-          } catch (mediaLibErr) {
-            // Fallback: Try FileSystem move if MediaLibrary fails
-            if (video.uri && video.uri.startsWith('file://')) {
-              const parentDir = video.uri.substring(0, video.uri.lastIndexOf('/') + 1);
-              const newUri = parentDir + newFileName;
-              await FileSystem.moveAsync({ from: video.uri, to: newUri });
-              await get().loadVideoFiles();
-              return;
-            } else {
-              throw new Error('Cannot rename this video. It may not be in a supported location.');
-            }
+          } else {
+            throw new Error('Cannot rename this video. It may not be in a supported location.');
           }
         } catch (error) {
           console.error('Failed to rename video:', error);
@@ -320,7 +363,7 @@ const useVideoStore = create(
 
     {
       name: "Video-storage",
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => AsyncStorage, safeParse),
       partialize: (state) => ({
         activeTab: state.activeTab,
         videoFiles: state.videoFiles,
@@ -328,6 +371,14 @@ const useVideoStore = create(
         videoHistory: state.videoHistory,
         videoPlaylists: state.videoPlaylists,
       }),
+      // Defensive: fallback to empty state if persisted state is invalid
+      merge: (persistedState, currentState) => {
+        if (!persistedState || typeof persistedState !== 'object') {
+          console.warn('[VideoStore] Invalid persisted state, using default.');
+          return currentState;
+        }
+        return { ...currentState, ...persistedState };
+      },
     }
   )
 );

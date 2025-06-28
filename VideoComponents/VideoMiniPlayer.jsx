@@ -92,7 +92,7 @@ const VideoMiniPlayer = () => {
 
   const handleOpenFullScreen = () => {
     if (miniPlayerVideo) {
-      router.push('/(tabs)/(video)/player');
+      router.push('/player/video');
     }
   };
 

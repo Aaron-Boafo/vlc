@@ -9,17 +9,16 @@ const Header = ({ onMorePress, showMoreOptions = true }) => {
 
   return (
     <View 
-      className="flex-row items-center justify-between px-4 py-3"
-      style={{ backgroundColor: themeColors.background }}
+      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, height: 110, backgroundColor: themeColors.background }}
     >
-      <View className="flex-row items-center">
-        <AppLogo size={28} />
-        <Text className="text-xl font-semibold ml-2" style={{ color: themeColors.text }} weight="Bold">Visura</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <AppLogo size={100} />
+        <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 22, marginLeft: 12, alignSelf: 'center' }}>Visura</Text>
       </View>
 
       {showMoreOptions && (
-        <TouchableOpacity onPress={onMorePress}>
-          <Icons.MoreVertical size={24} color={themeColors.text} />
+        <TouchableOpacity onPress={onMorePress} style={{ alignSelf: 'center' }}>
+          <Icons.MoreVertical size={28} color={themeColors.text} />
         </TouchableOpacity>
       )}
     </View>

@@ -40,10 +40,7 @@ const VideoHistoryScreen = ({ showSearch, setShowSearch, searchQuery, setSearchQ
 
   const handleVideoPress = (video) => {
     setCurrentVideo(video);
-    router.push({
-      pathname: '/(tabs)/(video)/player',
-      params: { uri: video.uri }
-    });
+    router.push('/player/video');
   };
 
   // Filter videoHistory by searchQuery

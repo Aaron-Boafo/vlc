@@ -25,7 +25,7 @@ const HistoryScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch 
 
   const handlePlaySong = async (item) => {
     await audioControl.setAndPlayPlaylist([item]);
-    router.push('/(tabs)/(audio)/player');
+    router.push('/player/audio');
   };
 
   const renderItem = ({ item }) => (

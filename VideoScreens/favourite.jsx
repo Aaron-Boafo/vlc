@@ -30,10 +30,7 @@ const VideoFavouriteScreen = ({ showSearch, setShowSearch, searchQuery, setSearc
 
   const handleVideoPress = (video) => {
     setCurrentVideo(video);
-    router.push({
-      pathname: '/(tabs)/(video)/player',
-      params: { uri: video.uri }
-    });
+    router.push('/player/video');
   };
 
   const handleRemoveFromFavourites = (videoId) => {

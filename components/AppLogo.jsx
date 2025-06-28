@@ -21,4 +21,8 @@ const AppLogo = ({ size = 24 }) => {
   );
 };
 
+AppLogo.defaultProps = {
+  size: 24,
+};
+
 export default AppLogo; 

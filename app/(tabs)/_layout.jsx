@@ -24,6 +24,13 @@ export default function TabLayouts() {
             borderTopColor: themeColors.card,
             borderTopWidth: 1,
           },
+          animation: 'none',
+          animationDuration: 0,
+          animationTypeForReplace: 'push',
+          lazy: true,
+          lazyPlaceholder: () => null,
+          gestureEnabled: false,
+          detachInactiveScreens: true,
         }}
       >
         <Tabs.Screen

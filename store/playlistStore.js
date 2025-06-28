@@ -39,6 +39,7 @@ const usePlaylistStore = create(persist((set, get) => ({
         : p
     )
   })),
+  clearPlaylists: () => set({ playlists: [] }),
 })), {
   name: 'playlist-storage',
 });

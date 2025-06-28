@@ -10,7 +10,7 @@ import {
   Image,
   Alert,
   SafeAreaView,
-  Modal,
+  Modal as RNModal,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import useThemeStore from '../../../store/theme';
@@ -37,6 +37,7 @@ const BrowseTab = () => {
     { id: 'internal', name: 'Internal Storage', icon: 'folder', root: FileSystem.documentDirectory }
   ]);
   const [storageInfo, setStorageInfo] = useState({ used: 0, total: 1, percent: 0 });
+  const [organizeModalVisible, setOrganizeModalVisible] = useState(false);
 
   const categories = [
     { id: 'all', name: 'All Files', icon: 'folder-multiple', color: '#4CAF50' },
@@ -49,8 +50,8 @@ const BrowseTab = () => {
   const quickActions = [
     { id: 'scan', name: 'Scan Files', icon: 'folder-search', action: () => scanFiles() },
     { id: 'import', name: 'Import Media', icon: 'import', action: () => importMedia() },
-    { id: 'organize', name: 'Organize', icon: 'folder-multiple-outline', action: () => organizeFiles() },
-    { id: 'cleanup', name: 'Clean Up', icon: 'delete-sweep', action: () => cleanupFiles() },
+    { id: 'organize', name: 'Organize', icon: 'folder-multiple-outline', action: () => setOrganizeModalVisible(true) },
+    { id: 'cloud', name: 'Cloud Services', icon: 'cloud-outline', action: () => cloudServices() },
   ];
 
   useEffect(() => {
@@ -151,12 +152,26 @@ const BrowseTab = () => {
     }
   };
 
-  const organizeFiles = () => {
-    Alert.alert('Organize Files', 'File organization functionality coming soon!');
+  const handleSortByName = () => {
+    setOrganizeModalVisible(false);
+    Alert.alert('Sort', 'Sorting by name (A-Z)...');
+    // Implement actual sort logic here
   };
 
-  const cleanupFiles = () => {
-    Alert.alert('Clean Up', 'File cleanup functionality coming soon!');
+  const handleSortByDate = () => {
+    setOrganizeModalVisible(false);
+    Alert.alert('Sort', 'Sorting by date (newest first)...');
+    // Implement actual sort logic here
+  };
+
+  const handleCreateFolder = () => {
+    setOrganizeModalVisible(false);
+    Alert.alert('Create Folder', 'Folder creation coming soon!');
+    // Implement actual create folder logic here
+  };
+
+  const cloudServices = () => {
+    Alert.alert('Cloud Services', 'Cloud services integration coming soon!');
   };
 
   const handleFilePress = (file) => {
@@ -392,11 +407,11 @@ const BrowseTab = () => {
             ))}
           </View>
         </View>
-        <Modal
+        <RNModal
           visible={showStorageSheet}
+          transparent
           animationType="slide"
           onRequestClose={() => setShowStorageSheet(false)}
-          transparent={false}
         >
           <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderColor: themeColors.card }}>
@@ -409,7 +424,33 @@ const BrowseTab = () => {
               <FileBrowser rootPath={storageRoot} filterTypes={['audio', 'video']} hideHeader={true} />
             )}
           </SafeAreaView>
-        </Modal>
+        </RNModal>
+
+        {/* Organize Modal */}
+        <RNModal
+          visible={organizeModalVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setOrganizeModalVisible(false)}
+        >
+          <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.3)' }}>
+            <View style={{ backgroundColor: themeColors.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 }}>
+              <Text style={{ fontSize: 20, fontWeight: 'bold', color: themeColors.text, marginBottom: 20, textAlign: 'center' }}>Organize</Text>
+              <TouchableOpacity onPress={handleSortByName} style={{ paddingVertical: 16 }}>
+                <Text style={{ fontSize: 16, color: themeColors.text }}>Sort by Name (A-Z)</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleSortByDate} style={{ paddingVertical: 16 }}>
+                <Text style={{ fontSize: 16, color: themeColors.text }}>Sort by Date (Newest First)</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleCreateFolder} style={{ paddingVertical: 16 }}>
+                <Text style={{ fontSize: 16, color: themeColors.text }}>Create Folder</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setOrganizeModalVisible(false)} style={{ paddingVertical: 16 }}>
+                <Text style={{ fontSize: 16, color: themeColors.primary, textAlign: 'center' }}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </RNModal>
       </ScrollView>
     </SafeAreaViewRN>
   );
