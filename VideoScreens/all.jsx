@@ -26,7 +26,7 @@ import * as FileSystem from 'expo-file-system';
 import CustomAlert from '../components/CustomAlert';
 
 const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
-  const { videoFiles, isLoading, loadVideoFiles, setAndPlayVideo, removeVideo, renameVideo, toggleFavouriteVideo } = useVideoStore();
+  const { videoFiles, isLoading, loadVideoFiles, setAndPlayVideo, removeVideo, renameVideo, toggleFavouriteVideo, forceReloadVideos } = useVideoStore();
   const { themeColors } = useThemeStore();
   const favouriteStore = useFavouriteStore();
   const historyStore = useHistoryStore();
@@ -36,6 +36,7 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
   const [showMoreModal, setShowMoreModal] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [newFileName, setNewFileName] = useState('');
+  const [loadingError, setLoadingError] = useState(null);
   const [customAlert, setCustomAlert] = useState({
     visible: false,
     title: '',
@@ -46,14 +47,34 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
 
   useEffect(() => {
     if (!videoFiles || videoFiles.length === 0) {
-      loadVideoFiles();
+      loadVideoFiles().catch(error => {
+        console.error('Error loading videos:', error);
+        setLoadingError(error.message);
+      });
     }
-  }, []);
+  }, [loadVideoFiles]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadVideoFiles();
-    setRefreshing(false);
+    setLoadingError(null);
+    try {
+      await forceReloadVideos();
+    } catch (error) {
+      console.error('Error refreshing videos:', error);
+      setLoadingError(error.message);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleRetryLoad = async () => {
+    setLoadingError(null);
+    try {
+      await forceReloadVideos();
+    } catch (error) {
+      console.error('Error retrying video load:', error);
+      setLoadingError(error.message);
+    }
   };
   
   const filteredVideos = useMemo(() => {
@@ -228,6 +249,21 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
         <Text style={[styles.loadingText, { color: themeColors.text }]}> 
           Loading your video library...
         </Text>
+        {loadingError && (
+          <View style={styles.errorContainer}>
+            <Text style={[styles.errorText, { color: themeColors.error || '#ff6b6b' }]}>
+              {loadingError}
+            </Text>
+            <TouchableOpacity 
+              style={[styles.retryButton, { backgroundColor: themeColors.primary }]}
+              onPress={handleRetryLoad}
+            >
+              <Text style={[styles.retryButtonText, { color: 'white' }]}>
+                Retry
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     );
   }
@@ -611,6 +647,23 @@ const styles = StyleSheet.create({
     // backgroundColor is set dynamically
   },
   renameButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  errorText: {
+    flex: 1,
+    marginRight: 16,
+  },
+  retryButton: {
+    padding: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
     fontSize: 16,
     fontWeight: '600',
   },
