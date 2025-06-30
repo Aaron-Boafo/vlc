@@ -6,6 +6,8 @@ import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import CustomAlert from "../../../components/CustomAlert";
 import { Text } from 'react-native';
+import AppLogo from "../../../components/AppLogo";
+import * as Linking from 'expo-linking';
 
 const AboutScreen = () => {
   const { themeColors, activeTheme } = useThemeStore();
@@ -68,6 +70,11 @@ const AboutScreen = () => {
         className="flex-1"
         style={{ backgroundColor: themeColors.background }}
       >
+        <View style={{ alignItems: 'center', marginTop: 32, marginBottom: 16 }}>
+          <AppLogo size={270} />
+          <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 28, marginTop: 4, textAlign: 'center' }}>Visura</Text>
+        </View>
+
         <View className="mt-4">
           <InfoSection title="APPLICATION">
             <InfoItem
@@ -80,6 +87,13 @@ const AboutScreen = () => {
               title="Build Version"
               description="Latest Stable Release"
             />
+            <TouchableOpacity onPress={() => Linking.openURL('https://www.youware.com/project/visura-ct9esryamu')}>
+              <InfoItem
+                icon={<Icons.Globe size={24} color={themeColors.primary} />}
+                title="Official Website"
+                description="youware.com/project/visura-ct9esryamu"
+              />
+            </TouchableOpacity>
           </InfoSection>
 
           <InfoSection title="LEGAL">
@@ -88,13 +102,13 @@ const AboutScreen = () => {
               title="License"
               description="GNU General Public License"
             />
-            <TouchableOpacity onPress={showComingSoonAlert}>
+            <TouchableOpacity onPress={() => Linking.openURL('https://www.youware.com/project/visura-ct9esryamu')}>
               <InfoItem
                 icon={<Icons.FileText size={24} color={themeColors.primary} />}
                 title="Privacy Policy"
               />
             </TouchableOpacity>
-            <TouchableOpacity onPress={showComingSoonAlert}>
+            <TouchableOpacity onPress={() => Linking.openURL('https://www.youware.com/project/visura-ct9esryamu')}>
               <InfoItem
                 icon={<Icons.FileTerminal size={24} color={themeColors.primary} />}
                 title="Terms of Service"
@@ -109,7 +123,7 @@ const AboutScreen = () => {
                 title="Help Center"
               />
             </TouchableOpacity>
-            <TouchableOpacity onPress={showComingSoonAlert}>
+            <TouchableOpacity onPress={() => Linking.openURL('https://www.youware.com/project/visura-ct9esryamu')}>
               <InfoItem
                 icon={<Icons.MessageCircle size={24} color={themeColors.primary} />}
                 title="Feedback"
