@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import * as Icons from "lucide-react-native";
 import useThemeStore from "../store/theme";
 import AppLogo from "../components/AppLogo";

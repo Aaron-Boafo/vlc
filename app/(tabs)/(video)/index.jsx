@@ -1,5 +1,5 @@
 import useThemeStore from "../../../store/theme";
-import { View, Text, StyleSheet, Platform } from "react-native";
+import { View, Text, StyleSheet, Platform, TouchableOpacity } from "react-native";
 import AudioHeader from "../../../AudioComponents/title";
 import VideoToggleBar from "../../../VideoComponents/toggleButton";
 import useVideoStore from "../../../store/VideoHeadStore";
@@ -8,7 +8,7 @@ import VideoPlaylistScreen from "../../../VideoScreens/playlist";
 import VideoFavouriteScreen from "../../../VideoScreens/favourite";
 import VideoHistoryScreen from "../../../VideoScreens/history";
 // import MiniPlayer from '../../../components/MiniPlayer';
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Constants from "expo-constants";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from 'expo-router';
@@ -55,6 +55,11 @@ export default function VideoTabScreen() {
     }
   };
 
+  // Also load on mount (for safety)
+  useEffect(() => {
+    loadVideoFiles();
+  }, [loadVideoFiles]);
+
   return (
     <SafeAreaView 
       style={[styles.screen, { backgroundColor: themeColors.background }]}
@@ -65,6 +70,7 @@ export default function VideoTabScreen() {
         onSearch={() => setShowSearch(s => !s)}
         onFilter={() => setShowSort(true)}
         onMore={() => setShowMore(true)}
+        onRefresh={loadVideoFiles}
       />
       
       <VideoToggleBar />

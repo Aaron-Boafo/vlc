@@ -220,14 +220,55 @@ const useAudioControl = create((set, get) => ({
     get().clearSleepTimer();
   },
 
+  // Shuffle Controls
+  toggleShuffle: () => {
+    const { isShuffleOn, playQueue, currentIndex, originalQueue } = get();
+    if (!isShuffleOn) {
+      // Enable shuffle: shuffle the queue except the current track
+      const currentTrack = playQueue[currentIndex];
+      const rest = playQueue.filter((_, i) => i !== currentIndex);
+      // Fisher-Yates shuffle
+      for (let i = rest.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [rest[i], rest[j]] = [rest[j], rest[i]];
+      }
+      const shuffledQueue = [currentTrack, ...rest];
+      set({
+        isShuffleOn: true,
+        playQueue: shuffledQueue,
+        currentIndex: 0,
+      });
+    } else {
+      // Disable shuffle: restore original order and current index
+      const currentTrack = playQueue[get().currentIndex];
+      const originalIdx = originalQueue.findIndex(t => t.id === currentTrack.id);
+      set({
+        isShuffleOn: false,
+        playQueue: originalQueue,
+        currentIndex: originalIdx === -1 ? 0 : originalIdx,
+      });
+    }
+  },
+
   // Next track
   next: async () => {
-    const { playQueue, currentIndex } = get();
+    const { playQueue, currentIndex, isShuffleOn } = get();
     if (playQueue.length === 0) return;
 
-    const nextIndex = (currentIndex + 1) % playQueue.length;
+    let nextIndex;
+    if (isShuffleOn) {
+      // Pick a random index that's not the current one
+      if (playQueue.length === 1) {
+        nextIndex = 0;
+      } else {
+        do {
+          nextIndex = Math.floor(Math.random() * playQueue.length);
+        } while (nextIndex === currentIndex);
+      }
+    } else {
+      nextIndex = (currentIndex + 1) % playQueue.length;
+    }
     const nextTrack = playQueue[nextIndex];
-
     set({ currentIndex: nextIndex });
     get()._loadAndPlayTrack(nextTrack);
   },

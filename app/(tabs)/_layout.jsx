@@ -21,8 +21,8 @@ export default function TabLayouts() {
           tabBarInactiveTintColor: themeColors.textSecondary,
           tabBarStyle: {
             backgroundColor: themeColors.background,
-            borderTopColor: themeColors.card,
-            borderTopWidth: 1,
+            borderTopColor: themeColors.card + '60',
+            borderTopWidth: 0.5,
           },
           animation: 'none',
           animationDuration: 0,

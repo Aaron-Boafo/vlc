@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, View, TouchableOpacity, StyleSheet, ActivityIndicator, Text } from 'react-native';
+import { Modal, View, StyleSheet, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
 import useThemeStore from '../store/theme';
 
 const CustomAlert = ({

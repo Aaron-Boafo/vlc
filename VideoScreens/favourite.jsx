@@ -3,10 +3,11 @@ import {
   View,
   Text,
   FlatList,
-  TouchableOpacity,
   StyleSheet,
   Dimensions,
   Image,
+  TouchableOpacity,
+  TextInput,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import useVideoStore from '../store/VideoHeadStore';

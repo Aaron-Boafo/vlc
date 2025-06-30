@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
+  Text,
   FlatList,
   StyleSheet,
   ActivityIndicator,

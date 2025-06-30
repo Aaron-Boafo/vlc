@@ -4,6 +4,8 @@ import { Play, Pause, X } from 'lucide-react-native';
 import useThemeStore from '../store/theme';
 import useAudioControl from '../store/useAudioControl';
 import { useRouter, useSegments } from 'expo-router';
+import { MaterialIcons } from '@expo/vector-icons';
+import Svg, { Circle, G } from 'react-native-svg';
 
 const MiniPlayer = () => {
   const { themeColors } = useThemeStore();
@@ -15,7 +17,9 @@ const MiniPlayer = () => {
     pause, 
     play,
     stop,
-    sound
+    sound,
+    position,
+    duration
   } = useAudioControl();
   const router = useRouter();
   const segments = useSegments();
@@ -42,6 +46,15 @@ const MiniPlayer = () => {
     router.push('/player/audio');
   };
 
+  // Progress for circular indicator
+  const buttonSize = 40; // Size of the play/pause button
+  const arcThickness = 3; // Thickness of the progress arc (reduced from 7)
+  const svgSize = buttonSize + arcThickness * 2; // SVG wraps the button with padding for the arc
+  const radius = (svgSize - arcThickness) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const progress = duration > 0 ? position / duration : 0;
+  const strokeDashoffset = circumference * (1 - progress);
+
   return (
     <TouchableOpacity
       style={[styles.container, { backgroundColor: themeColors.background, borderColor: themeColors.primary }]}
@@ -61,19 +74,49 @@ const MiniPlayer = () => {
           {currentTrack.artist || 'Unknown Artist'}
         </Text>
       </View>
-      <TouchableOpacity
-        style={styles.playPauseButton}
-        onPress={e => {
-          e.stopPropagation();
-          isPlaying ? pause() : play();
-        }}
-      >
-        {isPlaying ? (
-          <Pause size={24} color={themeColors.primary} />
-        ) : (
-          <Play size={24} color={themeColors.primary} />
-        )}
-      </TouchableOpacity>
+      <View style={{ width: svgSize, height: svgSize, justifyContent: 'center', alignItems: 'center', position: 'relative', marginLeft: 12, marginRight: 12 }}>
+        <Svg width={svgSize} height={svgSize} style={{ position: 'absolute', top: 0, left: 0 }}>
+          <G rotation={-90} origin={`${svgSize / 2}, ${svgSize / 2}`}>
+            <Circle
+              cx={svgSize / 2}
+              cy={svgSize / 2}
+              r={radius}
+              stroke={themeColors.primary}
+              strokeWidth={arcThickness}
+              fill="none"
+              strokeDasharray={circumference}
+              strokeDashoffset={strokeDashoffset}
+              strokeLinecap="round"
+            />
+          </G>
+        </Svg>
+        <TouchableOpacity
+          style={{
+            width: buttonSize,
+            height: buttonSize,
+            borderRadius: buttonSize / 2,
+            backgroundColor: themeColors.background,
+            alignItems: 'center',
+            justifyContent: 'center',
+            elevation: 2,
+            shadowColor: '#000',
+            shadowOpacity: 0.12,
+            shadowRadius: 4,
+            shadowOffset: { width: 0, height: 2 },
+          }}
+          onPress={e => {
+            e.stopPropagation();
+            isPlaying ? pause() : play();
+          }}
+          activeOpacity={0.8}
+        >
+          {isPlaying ? (
+            <MaterialIcons name="pause" size={28} color={themeColors.primary} />
+          ) : (
+            <MaterialIcons name="play-arrow" size={28} color={themeColors.primary} />
+          )}
+        </TouchableOpacity>
+      </View>
       <TouchableOpacity
         style={styles.closeButton}
         onPress={e => {
@@ -123,11 +166,6 @@ const styles = StyleSheet.create({
   artist: {
     fontSize: 13,
     marginTop: 2,
-  },
-  playPauseButton: {
-    marginLeft: 12,
-    padding: 8,
-    borderRadius: 20,
   },
   closeButton: {
     marginLeft: 8,

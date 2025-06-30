@@ -420,9 +420,11 @@ const MoreScreen = () => {
         {/* History Section */}
         <Section title="History" showArrow>
           {history.length > 0 && (
-            <TouchableOpacity onPress={clearHistory} style={{ position: 'absolute', right: 0, top: 0, padding: 8 }}>
-              <Text style={{ color: themeColors.primary, fontWeight: 'bold', fontSize: 14 }}>Clear</Text>
-            </TouchableOpacity>
+            <View style={{ marginBottom: 8, alignItems: 'flex-end' }}>
+              <TouchableOpacity onPress={clearHistory} style={{ paddingVertical: 6, paddingHorizontal: 18, borderRadius: 20, backgroundColor: themeColors.primary + '22' }}>
+                <Text style={{ color: themeColors.primary, fontWeight: 'bold', fontSize: 14 }}>Clear</Text>
+              </TouchableOpacity>
+            </View>
           )}
           {history.length === 0 ? (
             <Text style={{ color: themeColors.textSecondary, marginLeft: 8 }}>No history yet</Text>

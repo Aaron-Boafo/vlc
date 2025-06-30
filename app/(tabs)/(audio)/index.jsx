@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, FlatList, Image, StyleSheet, Platform, ActivityIndicator } from "react-native";
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Platform, ActivityIndicator, ScrollView } from "react-native";
 import React, { useEffect, useState } from "react";
 import useAudioStore from "../../../store/AudioHeadStore";
 import useThemeStore from "../../../store/theme";

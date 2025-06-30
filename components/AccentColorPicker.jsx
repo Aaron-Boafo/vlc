@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Modal, Pressable } from 'react-native';
+import { View, Text, Modal, Pressable, TouchableOpacity } from 'react-native';
 import useThemeStore from '../store/theme';
 import * as Icons from "lucide-react-native";
 import * as Haptics from 'expo-haptics';

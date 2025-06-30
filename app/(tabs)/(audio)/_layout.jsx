@@ -1,4 +1,5 @@
 import {Stack} from "expo-router";
+import { TouchableOpacity } from 'react-native';
 
 const AudioLayout = () => {
   return (

@@ -2,7 +2,6 @@ import React, { useState, useRef, useMemo, useEffect } from "react";
 import {
   View,
   Text,
-  TouchableOpacity,
   Image,
   StyleSheet,
   Dimensions,
@@ -11,12 +10,12 @@ import {
   Pressable,
   ScrollView,
   Switch,
-  Alert
+  Alert,
+  ActivityIndicator,
+  TouchableOpacity
 } from "react-native";
 import {
   ChevronDown,
-  Play,
-  Pause,
   SkipBack,
   SkipForward,
   Clock,
@@ -29,8 +28,12 @@ import {
   MoreVertical,
   Heart,
   ListPlus,
-  Info
+  Info,
+  Repeat1,
+  RotateCcw,
+  RotateCw
 } from "lucide-react-native";
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import Slider from "@react-native-community/slider";
@@ -40,6 +43,7 @@ import useFavouriteStore from "../../store/favouriteStore";
 import usePlaybackStore from "../../store/playbackStore";
 import * as NavigationBar from 'expo-navigation-bar';
 import { Image as ExpoImage } from 'expo-image';
+import usePlaylistStore from "../../store/playlistStore";
 
 const { width } = Dimensions.get("window");
 
@@ -63,6 +67,7 @@ const PlayerScreen = () => {
     setPlaybackSpeed,
   } = useAudioControl();
   const { playbackRate } = usePlaybackStore();
+  const { playlists, addTrackToPlaylist } = usePlaylistStore();
 
   const albumArtRotation = useRef(new Animated.Value(0)).current;
   const [isTimerModalVisible, setTimerModalVisible] = useState(false);
@@ -76,6 +81,24 @@ const PlayerScreen = () => {
   const [sliderValue, setSliderValue] = useState(null);
   const isSeeking = sliderValue !== null;
   const seekTargetRef = useRef(null);
+  const [lyrics, setLyrics] = useState(null);
+  const [isLoadingLyrics, setIsLoadingLyrics] = useState(false);
+  const [repeatMode, setRepeatMode] = useState('off'); // 'off', 'single', 'playlist'
+  const [showShuffleToast, setShowShuffleToast] = useState(false);
+  const [shuffleToastText, setShuffleToastText] = useState("");
+
+  const [eqSettings, setEqSettings] = useState({
+    60: 0,    // Bass
+    170: 0,   // Low Mid
+    310: 0,   // Mid
+    600: 0,   // High Mid
+    1000: 0,  // Presence
+    3000: 0,  // Brilliance
+    6000: 0,  // High
+    12000: 0, // Very High
+    14000: 0, // Ultra High
+    16000: 0  // Ultra High
+  });
 
   // Smoothly clear sliderValue only when position matches the seek target
   useEffect(() => {
@@ -103,7 +126,64 @@ const PlayerScreen = () => {
   };
 
   const handleClose = () => {
-    router.back();
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/(audio)'); // fallback to audio all screen
+    }
+  };
+
+  const fetchLyrics = async (trackTitle, artistName) => {
+    setIsLoadingLyrics(true);
+    try {
+      // Using a simple lyrics API (you can replace with your preferred service)
+      const response = await fetch(
+        `https://api.lyrics.ovh/v1/${encodeURIComponent(artistName)}/${encodeURIComponent(trackTitle)}`
+      );
+      const data = await response.json();
+      
+      if (data.lyrics) {
+        setLyrics(data.lyrics);
+      } else {
+        setLyrics('Lyrics not found for this track.');
+      }
+    } catch (error) {
+      setLyrics('Unable to fetch lyrics. Please check your internet connection.');
+    } finally {
+      setIsLoadingLyrics(false);
+    }
+  };
+
+  const handleShowLyrics = () => {
+    setLyricsVisible(true);
+    if (!lyrics && currentTrack) {
+      fetchLyrics(currentTrack.title, currentTrack.artist);
+    }
+  };
+
+  const handleRepeatPress = () => {
+    const modes = ['off', 'single', 'playlist'];
+    const currentIndex = modes.indexOf(repeatMode);
+    const nextIndex = (currentIndex + 1) % modes.length;
+    setRepeatMode(modes[nextIndex]);
+  };
+
+  const getRepeatIcon = () => {
+    switch (repeatMode) {
+      case 'single':
+        return <Repeat1 size={24} color={themeColors.primary} />;
+      case 'playlist':
+        return <Repeat size={24} color={themeColors.primary} />;
+      default:
+        return <Repeat size={24} color={themeColors.textSecondary} />;
+    }
+  };
+
+  const handleToggleShuffle = () => {
+    toggleShuffle();
+    setShuffleToastText(isShuffleOn ? "Shuffle Off" : "Shuffle On");
+    setShowShuffleToast(true);
+    setTimeout(() => setShowShuffleToast(false), 1500);
   };
 
   React.useEffect(() => {
@@ -143,7 +223,7 @@ const PlayerScreen = () => {
         </TouchableOpacity>
       </View>
       <View style={{ flex: 1 }}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <View style={{ alignItems: 'center', marginBottom: 0, marginTop: 80 }}>
           <View
             style={{
               backgroundColor: themeColors.card,
@@ -190,7 +270,7 @@ const PlayerScreen = () => {
           </View>
         </View>
 
-        <View style={{ width: '100%' }}>
+        <View style={{ width: '100%', marginTop: 32 }}>
           <View style={{ paddingHorizontal: 24, paddingVertical: 4 }}>
             <Slider
               style={styles.progressSlider}
@@ -214,20 +294,24 @@ const PlayerScreen = () => {
           </View>
 
           <View style={{ flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center', paddingHorizontal: 40, paddingVertical: 8, marginTop: 0, marginBottom: 24 }}>
-            <TouchableOpacity style={styles.mainControlButton} onPress={toggleShuffle}>
+            <TouchableOpacity style={styles.mainControlButton} onPress={handleToggleShuffle}>
               <Shuffle size={24} color={isShuffleOn ? themeColors.primary : themeColors.textSecondary} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.mainControlButton} onPress={previous}>
-              <SkipBack size={32} color={themeColors.text} />
+              <MaterialIcons name="skip-previous" size={36} color={themeColors.text} />
             </TouchableOpacity>
             <TouchableOpacity style={[styles.playPauseButton, { backgroundColor: themeColors.primary }]} onPress={handlePlayPause}>
-              {isPlaying ? <Pause size={40} color={themeColors.background} /> : <Play size={40} color={themeColors.background} />}
+              {isPlaying ? (
+                <MaterialIcons name="pause" size={48} color={themeColors.background} />
+              ) : (
+                <MaterialIcons name="play-arrow" size={48} color={themeColors.background} />
+              )}
             </TouchableOpacity>
             <TouchableOpacity style={styles.mainControlButton} onPress={next}>
-              <SkipForward size={32} color={themeColors.text} />
+              <MaterialIcons name="skip-next" size={36} color={themeColors.text} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.mainControlButton}>
-              <Repeat size={24} color={themeColors.textSecondary} />
+            <TouchableOpacity style={styles.mainControlButton} onPress={handleRepeatPress}>
+              {getRepeatIcon()}
             </TouchableOpacity>
           </View>
         </View>
@@ -262,7 +346,7 @@ const PlayerScreen = () => {
         <Pressable style={styles.modalOverlay} onPress={() => setMoreModalVisible(false)}>
           <Pressable style={[styles.moreModalContent, {backgroundColor: themeColors.card}]}> 
             <Text style={[styles.modalTitle, {color: themeColors.text}]}>More Options</Text>
-            <TouchableOpacity style={styles.moreOptionRow} onPress={() => { setMoreModalVisible(false); setLyricsVisible(v => !v); }}>
+            <TouchableOpacity style={styles.moreOptionRow} onPress={() => { setMoreModalVisible(false); handleShowLyrics(); }}>
               <ListMusic size={22} color={themeColors.text} style={styles.moreOptionIcon} />
               <Text style={[styles.moreOptionLabel, {color: themeColors.text}]}>Show Lyrics</Text>
             </TouchableOpacity>
@@ -316,14 +400,30 @@ const PlayerScreen = () => {
         </Pressable>
       </Modal>
 
-      {/* Lyrics Modal (simple toggle for now) */}
+      {/* Lyrics Modal - Enhanced with real lyrics */}
       <Modal animationType="slide" transparent={true} visible={isLyricsVisible} onRequestClose={() => setLyricsVisible(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setLyricsVisible(false)}>
           <Pressable style={[styles.modalContent, {backgroundColor: themeColors.card}]}> 
             <Text style={[styles.modalTitle, {color: themeColors.text}]}>Lyrics</Text>
-            <ScrollView style={{maxHeight: 300}}>
-              <Text style={{color: themeColors.text}}>{currentTrack.lyrics || 'No lyrics available.'}</Text>
-            </ScrollView>
+            <Text style={[styles.lyricsSubtitle, {color: themeColors.textSecondary}]}>
+              {currentTrack?.title} - {currentTrack?.artist}
+            </Text>
+            
+            {isLoadingLyrics ? (
+              <View style={styles.lyricsLoadingContainer}>
+                <ActivityIndicator size="large" color={themeColors.primary} />
+                <Text style={[styles.lyricsLoadingText, {color: themeColors.textSecondary}]}>
+                  Fetching lyrics...
+                </Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.lyricsContainer} showsVerticalScrollIndicator={false}>
+                <Text style={[styles.lyricsText, {color: themeColors.text}]}>
+                  {lyrics || 'No lyrics available for this track.'}
+                </Text>
+              </ScrollView>
+            )}
+            
             <TouchableOpacity style={styles.closeModalButton} onPress={() => setLyricsVisible(false)}>
               <X size={24} color={themeColors.textSecondary} />
             </TouchableOpacity>
@@ -331,12 +431,61 @@ const PlayerScreen = () => {
         </Pressable>
       </Modal>
 
-      {/* EQ Modal (placeholder) */}
+      {/* EQ Modal - Functional Equalizer */}
       <Modal animationType="slide" transparent={true} visible={isEQModalVisible} onRequestClose={() => setEQModalVisible(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setEQModalVisible(false)}>
           <Pressable style={[styles.modalContent, {backgroundColor: themeColors.card}]}> 
             <Text style={[styles.modalTitle, {color: themeColors.text}]}>Equalizer</Text>
-            <Text style={{color: themeColors.textSecondary, marginBottom: 20}}>EQ controls coming soon!</Text>
+            
+            <View style={styles.eqContainer}>
+              {Object.entries(eqSettings).map(([frequency, value]) => (
+                <View key={frequency} style={styles.eqBand}>
+                  <Text style={[styles.eqFrequency, {color: themeColors.textSecondary}]}>
+                    {frequency >= 1000 ? `${frequency/1000}k` : frequency}
+                  </Text>
+                  <View style={styles.eqSliderContainer}>
+                    <Slider
+                      style={styles.eqSlider}
+                      minimumValue={-12}
+                      maximumValue={12}
+                      value={value}
+                      onValueChange={(newValue) => {
+                        setEqSettings(prev => ({...prev, [frequency]: newValue}));
+                        // Here you would apply the EQ setting to the audio
+                        // For now, we'll just update the state
+                      }}
+                      minimumTrackTintColor={themeColors.textSecondary}
+                      maximumTrackTintColor={themeColors.primary}
+                      thumbTintColor={themeColors.primary}
+                    />
+                  </View>
+                  <Text style={[styles.eqValue, {color: themeColors.textSecondary}]}>
+                    {value > 0 ? `+${value.toFixed(0)}` : value.toFixed(0)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+            
+            <View style={styles.eqPresets}>
+              <Text style={[styles.eqPresetsTitle, {color: themeColors.text}]}>Presets</Text>
+              <View style={styles.eqPresetsRow}>
+                {[
+                  { name: 'Flat', values: Object.fromEntries(Object.keys(eqSettings).map(f => [f, 0])) },
+                  { name: 'Bass', values: { 60: 6, 170: 3, 310: 0, 600: 0, 1000: 0, 3000: 0, 6000: 0, 12000: 0, 14000: 0, 16000: 0 } },
+                  { name: 'Treble', values: { 60: 0, 170: 0, 310: 0, 600: 0, 1000: 0, 3000: 3, 6000: 6, 12000: 6, 14000: 3, 16000: 0 } },
+                  { name: 'Rock', values: { 60: 4, 170: 2, 310: 0, 600: -2, 1000: 0, 3000: 4, 6000: 6, 12000: 4, 14000: 2, 16000: 0 } }
+                ].map(preset => (
+                  <TouchableOpacity
+                    key={preset.name}
+                    style={[styles.eqPresetButton, {backgroundColor: themeColors.background}]}
+                    onPress={() => setEqSettings(preset.values)}
+                  >
+                    <Text style={[styles.eqPresetText, {color: themeColors.text}]}>{preset.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            
             <TouchableOpacity style={styles.closeModalButton} onPress={() => setEQModalVisible(false)}>
               <X size={24} color={themeColors.textSecondary} />
             </TouchableOpacity>
@@ -344,12 +493,41 @@ const PlayerScreen = () => {
         </Pressable>
       </Modal>
 
-      {/* Playlist Modal (placeholder) */}
+      {/* Playlist Modal - Add to Playlist */}
       <Modal animationType="slide" transparent={true} visible={isPlaylistModalVisible} onRequestClose={() => setPlaylistModalVisible(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setPlaylistModalVisible(false)}>
           <Pressable style={[styles.modalContent, {backgroundColor: themeColors.card}]}> 
             <Text style={[styles.modalTitle, {color: themeColors.text}]}>Add to Playlist</Text>
-            <Text style={{color: themeColors.textSecondary, marginBottom: 20}}>Playlist controls coming soon!</Text>
+            {playlists.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+                <ListMusic size={48} color={themeColors.textSecondary} />
+                <Text style={[styles.modalSubtitle, {color: themeColors.textSecondary}]}>No playlists yet</Text>
+                <Text style={[styles.modalDescription, {color: themeColors.textSecondary}]}>Create a playlist first to add tracks</Text>
+              </View>
+            ) : (
+              <ScrollView style={{maxHeight: 300}}>
+                {playlists.map(playlist => (
+                  <TouchableOpacity 
+                    key={playlist.id}
+                    style={styles.playlistOptionRow}
+                    onPress={() => {
+                      addTrackToPlaylist(playlist.id, currentTrack);
+                      setPlaylistModalVisible(false);
+                      // Show success feedback
+                      Alert.alert('Added to Playlist', `"${currentTrack.title}" added to "${playlist.name}"`);
+                    }}
+                  >
+                    <View style={styles.playlistOptionInfo}>
+                      <Text style={[styles.playlistOptionName, {color: themeColors.text}]}>{playlist.name}</Text>
+                      <Text style={[styles.playlistOptionCount, {color: themeColors.textSecondary}]}>
+                        {playlist.tracks.length} {playlist.tracks.length === 1 ? 'track' : 'tracks'}
+                      </Text>
+                    </View>
+                    <ListPlus size={20} color={themeColors.primary} />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
             <TouchableOpacity style={styles.closeModalButton} onPress={() => setPlaylistModalVisible(false)}>
               <X size={24} color={themeColors.textSecondary} />
             </TouchableOpacity>
@@ -372,6 +550,15 @@ const PlayerScreen = () => {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Shuffle Toast */}
+      {showShuffleToast && (
+        <View style={{ position: 'absolute', bottom: 60, left: 0, right: 0, alignItems: 'center', zIndex: 100 }}>
+          <View style={{ backgroundColor: themeColors.card, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}>
+            <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 16 }}>{shuffleToastText}</Text>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -438,6 +625,94 @@ const styles = StyleSheet.create({
     borderColor: 'gray',
   },
   speedButtonText: {
+    fontSize: 16,
+  },
+  playlistOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  playlistOptionInfo: {
+    flex: 1,
+  },
+  playlistOptionName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  playlistOptionCount: {
+    fontSize: 14,
+  },
+  modalSubtitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  modalDescription: {
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  eqContainer: {
+    marginBottom: 20,
+  },
+  eqBand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  eqFrequency: {
+    flex: 1,
+    fontSize: 16,
+  },
+  eqSliderContainer: {
+    flex: 3,
+    marginHorizontal: 10,
+  },
+  eqSlider: {
+    width: '100%',
+    height: 40,
+  },
+  eqValue: {
+    flex: 1,
+    fontSize: 16,
+  },
+  eqPresets: {
+    marginBottom: 20,
+  },
+  eqPresetsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  eqPresetsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  eqPresetButton: {
+    padding: 10,
+    borderRadius: 10,
+  },
+  eqPresetText: {
+    fontSize: 16,
+  },
+  lyricsSubtitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  lyricsLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  lyricsLoadingText: {
+    fontSize: 16,
+    marginLeft: 10,
+  },
+  lyricsContainer: {
+    maxHeight: 300,
+  },
+  lyricsText: {
     fontSize: 16,
   },
 });

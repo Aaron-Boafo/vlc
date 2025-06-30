@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Dimensions, Modal, TextInput, FlatList, Alert, BackHandler, useWindowDimensions, TouchableWithoutFeedback, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Dimensions, Modal, TextInput, FlatList, Alert, BackHandler, useWindowDimensions, TouchableOpacity, Animated, Easing } from 'react-native';
 import { Video } from 'expo-av';
 import { useLocalSearchParams, router } from 'expo-router';
 import Slider from '@react-native-community/slider';
@@ -16,6 +16,7 @@ import ytdl from 'react-native-ytdl';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from 'expo-router';
 import * as NavigationBar from 'expo-navigation-bar';
+import { MaterialIcons } from '@expo/vector-icons';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -317,6 +318,7 @@ const VideoPlayerScreen = () => {
   }, [currentVideo.uri]);
 
   const handlePlaybackStatusUpdate = (newStatus) => {
+    console.log('Playback status update:', newStatus);
     setStatus(newStatus);
     
     // Handle buffering timeout
@@ -343,10 +345,15 @@ const VideoPlayerScreen = () => {
     }
   };
   
-  const handlePlayPause = useCallback(() => {
-    'worklet';
-    runOnJS(async () => videoRef.current?.setStatusAsync({ shouldPlay: !status.isPlaying }))();
-  }, [status.isPlaying]);
+  const handlePlayPause = async () => {
+    if (videoRef.current) {
+      const currentStatus = await videoRef.current.getStatusAsync();
+      console.log('Current video status before toggle:', currentStatus);
+      await videoRef.current.setStatusAsync({ shouldPlay: !currentStatus.isPlaying });
+      const afterStatus = await videoRef.current.getStatusAsync();
+      console.log('Current video status after toggle:', afterStatus);
+    }
+  };
 
   const handleSeek = useCallback((value) => {
     'worklet';
@@ -761,7 +768,11 @@ const VideoPlayerScreen = () => {
                     <Text style={styles.skipButtonText}>10</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={handlePlayPause} style={styles.playPauseButton}>
-                    {status.isPlaying ? <Pause size={38} color="#FFF" /> : <Play size={38} color="#FFF" />}
+                    {status.isPlaying ? (
+                      <MaterialIcons name="pause" size={48} color="#FFF" />
+                    ) : (
+                      <MaterialIcons name="play-arrow" size={48} color="#FFF" />
+                    )}
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => handleSkip(10)} style={styles.skipButton}>
                     <RotateCw size={28} color="#FFF" />
@@ -793,7 +804,7 @@ const VideoPlayerScreen = () => {
                       maximumTrackTintColor="rgba(255, 255, 255, 0.5)"
                       thumbTintColor={themeColors.primary}
                     />
-                    <TouchableWithoutFeedback
+                    <TouchableOpacity
                       onPress={e => {
                         if (!sliderWidth || !status.durationMillis) return;
                         const { locationX } = e.nativeEvent;
@@ -803,7 +814,7 @@ const VideoPlayerScreen = () => {
                       }}
                     >
                       <View style={{ ...StyleSheet.absoluteFillObject, height: 40, zIndex: 1 }} />
-                    </TouchableWithoutFeedback>
+                    </TouchableOpacity>
                   </View>
                 </View>
                 <View style={styles.footerActionsBottom}>
@@ -1137,7 +1148,6 @@ const styles = StyleSheet.create({
   },
   playPauseButton: {
     padding: 15,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     borderRadius: 40,
     marginHorizontal: 20,
   },
