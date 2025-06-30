@@ -12,7 +12,7 @@ const Header = ({ onMorePress, showMoreOptions = true }) => {
       style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, height: 110, backgroundColor: themeColors.background }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <AppLogo size={100} />
+        <AppLogo size={60} />
         <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 22, marginLeft: 12, alignSelf: 'center' }}>Visura</Text>
       </View>
 

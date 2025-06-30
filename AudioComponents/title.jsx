@@ -9,7 +9,7 @@ const AudioHeader = ({ onSearch, onFilter, onMore }) => {
   return (
     <View style={styles.headerContainer}>
       <View style={styles.headerLeft}>
-        <AppLogo width={30} height={30} />
+        <AppLogo width={60} height={60} />
         <Text style={[styles.headerTitle, { color: themeColors.text }]}>Visura</Text>
       </View>
       <View style={styles.headerRight}>

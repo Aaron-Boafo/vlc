@@ -22,6 +22,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import useAudioStore from '../../../store/AudioHeadStore';
 import * as FileSystem from 'expo-file-system';
 import CustomAlert from '../../../components/CustomAlert';
+import AppLogo from '../../../components/AppLogo';
 
 // Try to import ytdl, but don't fail if it's not available
 let ytdl = null;
@@ -330,17 +331,10 @@ const MoreScreen = () => {
       <View className="px-4 py-2.5 flex-row items-center justify-between border-b" 
         style={{ borderColor: "rgba(147, 51, 234, 0.1)" }}>
         <View className="flex-row items-center">
-          <View 
-            className="w-10 h-10 rounded-xl items-center justify-center mr-3"
-            style={{ 
-              backgroundColor: themeColors.sectionBackground,
-              borderWidth: activeTheme === "dark" ? 1 : 0,
-              borderColor: "rgba(255, 255, 255, 0.1)"
-            }}
-          >
-            <Icons.Play size={20} color={themeColors.primary} />
+          <View className="mr-3">
+            <AppLogo width={60} height={60} />
           </View>
-          <Text className="text-lg font-bold" style={{ color: themeColors.text }}>
+          <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 22 }}>
             Visura
           </Text>
         </View>
