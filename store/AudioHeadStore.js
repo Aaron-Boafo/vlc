@@ -22,7 +22,6 @@ const useAudioStore = create(
       
       // Sorting function
       sortAudioFiles: (key, direction) => {
-        console.log(`[Sort] Sorting by: ${key}, Direction: ${direction}`);
         const sortedFiles = [...get().audioFiles].sort((a, b) => {
           const valA = a[key] || '';
           const valB = b[key] || '';
@@ -35,7 +34,6 @@ const useAudioStore = create(
           // For numeric values like duration or date
           return direction === 'asc' ? valA - valB : valB - valA;
         });
-        console.log('[Sort] First item after sort:', sortedFiles[0]?.title);
         set({ audioFiles: sortedFiles, sortOrder: { key, direction } });
       },
       
@@ -78,7 +76,9 @@ const useAudioStore = create(
               artwork: null,
               metadataLoaded: false,
             }));
-            allFiles = allFiles.concat(basicFiles);
+            allFiles = [...allFiles, ...basicFiles].filter(
+              (file, index, self) => index === self.findIndex(f => f.id === file.id)
+            );
             // Sort by title (default)
             const sortedFiles = [...allFiles].sort((a, b) => a.title.localeCompare(b.title));
             set({ audioFiles: sortedFiles }); // Update UI after each batch

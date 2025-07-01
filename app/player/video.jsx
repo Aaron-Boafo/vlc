@@ -318,7 +318,6 @@ const VideoPlayerScreen = () => {
   }, [currentVideo.uri]);
 
   const handlePlaybackStatusUpdate = (newStatus) => {
-    console.log('Playback status update:', newStatus);
     setStatus(newStatus);
     
     // Handle buffering timeout
@@ -345,13 +344,17 @@ const VideoPlayerScreen = () => {
     }
   };
   
+  const resetControlsAutoHide = () => {
+    setControlsVisible(true);
+    if (controlsTimeout.current) clearTimeout(controlsTimeout.current);
+    controlsTimeout.current = setTimeout(() => setControlsVisible(false), 3000);
+  };
+
   const handlePlayPause = async () => {
+    resetControlsAutoHide();
     if (videoRef.current) {
       const currentStatus = await videoRef.current.getStatusAsync();
-      console.log('Current video status before toggle:', currentStatus);
       await videoRef.current.setStatusAsync({ shouldPlay: !currentStatus.isPlaying });
-      const afterStatus = await videoRef.current.getStatusAsync();
-      console.log('Current video status after toggle:', afterStatus);
     }
   };
 
@@ -367,12 +370,18 @@ const VideoPlayerScreen = () => {
 
   const handleSkip = useCallback((seconds) => {
     'worklet';
-    runOnJS(async () => videoRef.current?.setPositionAsync((status.positionMillis || 0) + (seconds * 1000)))();
+    runOnJS(() => {
+      resetControlsAutoHide();
+      videoRef.current?.setPositionAsync((status.positionMillis || 0) + (seconds * 1000));
+    })();
   }, [status.positionMillis]);
 
   const toggleLock = useCallback(() => {
     'worklet';
-    runOnJS(setLocked)(lock => !lock);
+    runOnJS(() => {
+      resetControlsAutoHide();
+      setLocked(lock => !lock);
+    })();
   }, []);
 
   const cyclePlaybackRate = useCallback(() => {

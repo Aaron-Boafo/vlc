@@ -94,7 +94,6 @@ const useAudioControl = create((set, get) => ({
 
   _loadAndPlayTrack: async (track) => {
     if (get().isLoading) {
-      console.log('[AUDIO] Play request ignored: already loading');
       return;
     }
     set({ isLoading: true });
@@ -103,7 +102,6 @@ const useAudioControl = create((set, get) => ({
       if (existingSound) {
         const status = await existingSound.getStatusAsync();
         if (status.isLoaded) {
-          console.log('[AUDIO] Unloading sound for:', existingSound._key || 'unknown', 'Track:', get().currentTrack?.title);
           await existingSound.stopAsync();
           await existingSound.unloadAsync();
         }
@@ -121,7 +119,6 @@ const useAudioControl = create((set, get) => ({
     set({ isLoading: true, sound: null, isPlaying: false, position: 0 });
 
     try {
-      console.log('[AUDIO] Creating new sound for:', track.title, track.uri);
       const { playbackRate } = usePlaybackStore.getState();
       const initialStatus = {
         shouldPlay: true,
@@ -147,12 +144,6 @@ const useAudioControl = create((set, get) => ({
           isLoading: false,
           currentTrack: track,
       });
-      console.log('[AUDIO] Now playing:', track.title);
-      try {
-        if (useHistoryStore.getState().saveHistory) {
-          useHistoryStore.getState().addToHistory(track);
-        }
-      } catch (e) {}
       get().fetchLyrics(track);
     } catch (error) {
       console.error("Error in _loadAndPlayTrack:", error);
@@ -167,7 +158,6 @@ const useAudioControl = create((set, get) => ({
     
     if (sound) {
       set({ isPlaying: true });
-      console.log('[AUDIO] Resuming sound for:', currentTrack?.title);
       await sound.playAsync();
     } else if (currentTrack) {
       get()._loadAndPlayTrack(currentTrack);
@@ -186,7 +176,6 @@ const useAudioControl = create((set, get) => ({
           await sound.pauseAsync();
           set({ isLoading: false});
         } catch (error) {
-          console.error("Error pausing audio:", error);
           set({isLoading: false, isPlaying: true }); // Revert playing state on error
         }
       }

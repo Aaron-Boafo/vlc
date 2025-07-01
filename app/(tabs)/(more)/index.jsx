@@ -332,7 +332,7 @@ const MoreScreen = () => {
         style={{ borderColor: "rgba(147, 51, 234, 0.1)" }}>
         <View className="flex-row items-center">
           <View className="mr-3">
-            <AppLogo width={60} height={60} />
+            <AppLogo width={40} height={40} />
           </View>
           <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 22 }}>
             Visura

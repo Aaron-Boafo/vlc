@@ -151,8 +151,6 @@ const useVideoStore = create(
                 // Update UI after each batch for progressive loading
                 set({ videoFiles: [...allFiles] });
                 
-                console.log(`[VideoStore] Loaded batch ${page + 1}: ${basicFiles.length} videos (Total: ${allFiles.length})`);
-                
                 hasNextPage = media.hasNextPage;
                 page++;
                 
@@ -176,7 +174,6 @@ const useVideoStore = create(
             // Final sort by creation time (newest first)
             const sortedFiles = [...allFiles].sort((a, b) => b.creationTime - a.creationTime);
             
-            console.log(`[VideoStore] Video loading complete: ${sortedFiles.length} videos loaded`);
             set({ videoFiles: sortedFiles, isLoading: false });
           })();
 
