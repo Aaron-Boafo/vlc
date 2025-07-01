@@ -1,0 +1,45 @@
+# Node modules and lock files
+node_modules
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build outputs
+android/app/build
+android/build
+ios/build
+web-build
+dist
+build
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# IDE/editor settings
+.vscode
+.idea
+
+# Test files and coverage
+__tests__
+coverage
+*.log
+
+# Misc
+*.bak
+*.tmp
+*.swp
+
+# Expo Go cache
+.expo
+.expo-shared
+
+# Mac system files
+*.DS_Store
+
+# Unused assets (customize as needed)
+assets/images/unused/ 
