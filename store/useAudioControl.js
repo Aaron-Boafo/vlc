@@ -367,6 +367,7 @@ const useAudioControl = create((set, get) => ({
 }));
 
 const onPlaybackStatusUpdate = (status, set, get) => {
+  console.log('Playback status:', status.positionMillis, status.durationMillis, status.isPlaying);
   if (!status.isLoaded) {
     if (status.error) {
       console.error(`Playback Error: ${status.error}`);
