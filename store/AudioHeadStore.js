@@ -3,6 +3,9 @@ import {create} from "zustand";
 import {persist, createJSONStorage} from "zustand/middleware";
 import * as MediaLibrary from "expo-media-library";
 import {getAudioMetadata} from "@missingcore/audio-metadata";
+import * as FileSystem from 'expo-file-system';
+
+const AUDIO_LIST_PATH = FileSystem.documentDirectory + 'audio_list.json';
 
 const useAudioStore = create(
   persist(
@@ -47,18 +50,39 @@ const useAudioStore = create(
       loadAudioFiles: async () => {
         try {
           set({ isLoading: true, audioFiles: [] });
+          const fileInfo = await FileSystem.getInfoAsync(AUDIO_LIST_PATH);
+          if (fileInfo.exists) {
+            // Load from cache
+            const content = await FileSystem.readAsStringAsync(AUDIO_LIST_PATH);
+            const audioFiles = JSON.parse(content);
+            set({ audioFiles, isLoading: false });
+            // Optionally, update metadata in background
+            setTimeout(() => {
+              loadMetadataInBackground(audioFiles);
+            }, 100);
+            return;
+          }
+          // If not cached, scan and cache
+          await get().refreshAudioFiles();
+        } catch (error) {
+          console.error("Error loading audio files:", error);
+          set({ isLoading: false });
+        }
+      },
 
+      // Force rescan and update cache
+      refreshAudioFiles: async () => {
+        try {
+          set({ isLoading: true, audioFiles: [] });
           const { status } = await MediaLibrary.requestPermissionsAsync();
           if (status !== "granted") {
             console.log("Media library permission not granted");
             set({ isLoading: false });
             return;
           }
-
           let allFiles = [];
           let hasNextPage = true;
-          const batchSize = 32;
-
+          const batchSize = 100;
           while (hasNextPage) {
             const media = await MediaLibrary.getAssetsAsync({
               mediaType: MediaLibrary.MediaType.audio,
@@ -84,13 +108,15 @@ const useAudioStore = create(
             set({ audioFiles: sortedFiles }); // Update UI after each batch
             hasNextPage = media.hasNextPage;
           }
-
+          // Save to cache
+          await FileSystem.writeAsStringAsync(AUDIO_LIST_PATH, JSON.stringify(allFiles));
           set({ isLoading: false });
+          // Optimized metadata fetching
           setTimeout(() => {
-            loadMetadataInBackground(allFiles);
+            loadMetadataOptimized(allFiles);
           }, 100);
         } catch (error) {
-          console.error("Error loading audio files:", error);
+          console.error("Error refreshing audio files:", error);
           set({ isLoading: false });
         }
       },
@@ -260,5 +286,60 @@ const loadMetadataInBackground = async (files) => {
     await new Promise(resolve => setTimeout(resolve, 50));
   }
 };
+
+// Add the optimized metadata loader
+const loadMetadataOptimized = async (files) => {
+  const concurrencyLimit = 5;
+  const initialCount = 20;
+  // Fetch metadata for the first 20 items immediately
+  const firstBatch = files.slice(0, initialCount);
+  await Promise.all(firstBatch.map(file => getAudioMetadataForStore(file)));
+  // Fetch the rest in the background with concurrency limit
+  const rest = files.slice(initialCount);
+  let index = 0;
+  async function next() {
+    if (index >= rest.length) return;
+    const batch = rest.slice(index, index + concurrencyLimit);
+    await Promise.all(batch.map(file => getAudioMetadataForStore(file)));
+    index += concurrencyLimit;
+    setTimeout(next, 0); // Yield to UI thread
+  }
+  next();
+};
+
+async function getAudioMetadataForStore(file) {
+  try {
+    const data = await getAudioMetadata(file.uri, ["album", "artist", "name", "year", "artwork"]);
+    let artworkUri = null;
+    const metadata = data.metadata || {};
+    if (metadata.artwork) {
+      if (metadata.artwork.startsWith('data:image')) {
+        artworkUri = metadata.artwork;
+      } else if (/^[A-Za-z0-9+/=]+$/.test(metadata.artwork)) {
+        artworkUri = `data:image/png;base64,${metadata.artwork}`;
+      } else {
+        artworkUri = metadata.artwork;
+      }
+    }
+    // Update Zustand store with metadata
+    useAudioStore.setState(state => {
+      const idx = state.audioFiles.findIndex(f => f.id === file.id);
+      if (idx === -1) return {};
+      const updatedFiles = [...state.audioFiles];
+      updatedFiles[idx] = {
+        ...updatedFiles[idx],
+        album: metadata.album || "Unknown Album",
+        artist: metadata.artist || "Unknown Artist",
+        title: metadata.name || file.title,
+        year: metadata.year || null,
+        artwork: artworkUri,
+        metadataLoaded: true,
+      };
+      return { audioFiles: updatedFiles };
+    });
+  } catch (e) {
+    // Ignore errors for individual files
+  }
+}
 
 export default useAudioStore;

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { Audio } from "expo-av";
 import useHistoryStore from './historyStore';
 import usePlaybackStore from "./playbackStore";
+import * as FileSystem from 'expo-file-system';
 
 const useAudioControl = create((set, get) => ({
   // Audio state
@@ -133,8 +134,33 @@ const useAudioControl = create((set, get) => ({
         },
       };
 
+      // --- FileSystem caching logic start ---
+      let audioUri = track.uri;
+      const isRemote = /^https?:\/\//.test(track.uri);
+      if (isRemote) {
+        const audiosDir = FileSystem.documentDirectory + 'audios/';
+        const filename = encodeURIComponent(track.title || track.uri.split('/').pop());
+        const localUri = audiosDir + filename;
+        // Ensure audios directory exists
+        await FileSystem.makeDirectoryAsync(audiosDir, { intermediates: true }).catch(() => {});
+        const fileInfo = await FileSystem.getInfoAsync(localUri);
+        if (!fileInfo.exists) {
+          try {
+            await FileSystem.downloadAsync(track.uri, localUri);
+          } catch (e) {
+            console.warn('Failed to cache audio, falling back to remote URI', e);
+          }
+        }
+        // Use local file if it exists
+        const cachedFileInfo = await FileSystem.getInfoAsync(localUri);
+        if (cachedFileInfo.exists) {
+          audioUri = localUri;
+        }
+      }
+      // --- FileSystem caching logic end ---
+
       const { sound: newSound } = await Audio.Sound.createAsync(
-          { uri: track.uri },
+          { uri: audioUri },
           initialStatus,
           (status) => onPlaybackStatusUpdate(status, set, get)
       );

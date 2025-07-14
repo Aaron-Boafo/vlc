@@ -128,7 +128,7 @@ const VideoCard = ({ video, onPress, onMoreOptions, onThumbnailReady }) => {
             <Image 
               source={{ uri: thumbnailUri }} 
               style={styles.thumbnailImage}
-              resizeMode="cover"
+              contentFit="cover"
             />
           )}
           {isLoadingThumbnail && (

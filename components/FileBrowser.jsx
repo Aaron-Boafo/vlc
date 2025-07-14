@@ -9,6 +9,7 @@ import {
   Alert,
   Modal,
   Dimensions,
+  Image,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system';
@@ -26,6 +27,8 @@ const FileBrowser = ({ onFileSelect, onBack, hideHeader }) => {
   const [sortBy, setSortBy] = useState('name');
   const [sortOrder, setSortOrder] = useState('asc');
   const [showSortModal, setShowSortModal] = useState(false);
+  // Preview caching logic for images and documents
+  const [previewUri, setPreviewUri] = useState(null);
 
   useEffect(() => {
     loadDirectoryContents();
@@ -156,6 +159,35 @@ const FileBrowser = ({ onFileSelect, onBack, hideHeader }) => {
     );
   };
 
+  // Preview caching logic for images and documents
+  const handlePreviewFile = async (file) => {
+    if (file.isDirectory) return;
+    if (file.type === 'image' || file.type === 'document') {
+      let uri = file.path;
+      const isRemote = /^https?:\/\//.test(file.path);
+      if (isRemote) {
+        const previewsDir = FileSystem.cacheDirectory + 'previews/';
+        const filename = encodeURIComponent(file.name);
+        const localUri = previewsDir + filename;
+        await FileSystem.makeDirectoryAsync(previewsDir, { intermediates: true }).catch(() => {});
+        const fileInfo = await FileSystem.getInfoAsync(localUri);
+        if (!fileInfo.exists) {
+          try {
+            await FileSystem.downloadAsync(file.path, localUri);
+          } catch (e) {
+            console.warn('Failed to cache preview, falling back to remote URI', e);
+          }
+        }
+        const cachedFileInfo = await FileSystem.getInfoAsync(localUri);
+        if (cachedFileInfo.exists) {
+          uri = localUri;
+        }
+      }
+      setPreviewUri(uri);
+      // Show preview modal or component as needed
+    }
+  };
+
   const renderFileItem = ({ item }) => {
     const isSelected = selectedFiles.find(f => f.path === item.path);
 
@@ -166,7 +198,15 @@ const FileBrowser = ({ onFileSelect, onBack, hideHeader }) => {
           { backgroundColor: themeColors.card },
           isSelected && { borderColor: themeColors.primary, borderWidth: 2 }
         ]}
-        onPress={() => isSelectionMode ? toggleFileSelection(item) : handleFilePress(item)}
+        onPress={() => {
+          if (isSelectionMode) {
+            toggleFileSelection(item);
+          } else if (item.type === 'image' || item.type === 'document') {
+            handlePreviewFile(item);
+          } else {
+            handleFilePress(item);
+          }
+        }}
         onLongPress={() => handleFileLongPress(item)}
       >
         <View style={styles.fileInfo}>
@@ -367,6 +407,20 @@ const FileBrowser = ({ onFileSelect, onBack, hideHeader }) => {
               <Text style={styles.modalButtonText}>Close</Text>
             </TouchableOpacity>
           </View>
+        </View>
+      </Modal>
+
+      {/* Add a simple preview modal for demonstration */}
+      <Modal visible={!!previewUri} transparent={true} onRequestClose={() => setPreviewUri(null)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center' }}>
+          {previewUri && previewUri.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i) ? (
+            <Image source={{ uri: previewUri }} style={{ width: width * 0.8, height: width * 0.8, resizeMode: 'contain' }} />
+          ) : previewUri ? (
+            <Text style={{ color: 'white', fontSize: 18 }}>Document preview not implemented</Text>
+          ) : null}
+          <TouchableOpacity onPress={() => setPreviewUri(null)} style={{ marginTop: 20 }}>
+            <Text style={{ color: 'white', fontSize: 16 }}>Close Preview</Text>
+          </TouchableOpacity>
         </View>
       </Modal>
     </View>

@@ -45,7 +45,7 @@ const TrackItem = React.memo(({ item, isPlaying, themeColors, favouriteStore, ha
           <Image 
             source={{ uri: meta.artwork }} 
             style={styles.artwork}
-            resizeMode="cover"
+            contentFit="cover"
             cachePolicy="disk"
           />
         ) : (
@@ -161,8 +161,10 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
   };
 
   useEffect(() => {
-    fetchTracks(true);
-  }, []);
+    if (tracks.length === 0) {
+      fetchTracks(true);
+    }
+  }, [tracks.length]);
 
   const onRefresh = async () => {
     setRefreshing(true);

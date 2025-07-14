@@ -30,7 +30,7 @@ export default function TabLayouts() {
           lazy: true,
           lazyPlaceholder: () => null,
           gestureEnabled: false,
-          detachInactiveScreens: true,
+          // detachInactiveScreens: true, // Remove from global, set per tab
         }}
       >
         <Tabs.Screen
@@ -39,6 +39,7 @@ export default function TabLayouts() {
             title: "Video",
             headerShown: false,
             tabBarIcon: ({ color }) => <Icons.FileVideo color={color} />,
+            detachInactiveScreens: true,
           }}
         />
         <Tabs.Screen
@@ -47,11 +48,12 @@ export default function TabLayouts() {
             title: "Audio",
             headerShown: false,
             tabBarIcon: ({ color }) => <Icons.FileAudio color={color} />,
+            detachInactiveScreens: false, // Preserve state
           }}
         />
-        <Tabs.Screen name="(browse)" options={{ title: "Browse", tabBarIcon: ({ focused, size, color }) => focused ? <Icons.FolderOpen size={size} color={color} /> : <Icons.FolderClosed size={size} color={color} /> }} />
-        <Tabs.Screen name="(playlist)" options={{ title: "Playlist", tabBarIcon: ({ color, size }) => <Icons.ListMusic color={color} size={size} /> }} />
-        <Tabs.Screen name="(more)" options={{ title: "More", tabBarIcon: ({ color, size }) => <Icons.Component color={color} size={size} /> }} />
+        <Tabs.Screen name="(browse)" options={{ title: "Browse", tabBarIcon: ({ focused, size, color }) => focused ? <Icons.FolderOpen size={size} color={color} /> : <Icons.FolderClosed size={size} color={color} />, detachInactiveScreens: true }} />
+        <Tabs.Screen name="(playlist)" options={{ title: "Playlist", tabBarIcon: ({ color, size }) => <Icons.ListMusic color={color} size={size} />, detachInactiveScreens: false }} />
+        <Tabs.Screen name="(more)" options={{ title: "More", tabBarIcon: ({ color, size }) => <Icons.Component color={color} size={size} />, detachInactiveScreens: true }} />
       </Tabs>
       <MiniPlayer />
       <VideoMiniPlayer />

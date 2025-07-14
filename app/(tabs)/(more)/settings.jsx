@@ -9,11 +9,15 @@ import AccentColorPicker from "../../../components/AccentColorPicker";
 import usePlaybackStore from "../../../store/playbackStore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import CustomAlert from "../../../components/CustomAlert";
+import * as FileSystem from 'expo-file-system';
+import * as DocumentPicker from 'expo-document-picker';
+import usePlaylistStore from '../../../store/playlistStore';
 
 const SettingsScreen = () => {
   const { themeColors, toggleTheme, activeTheme, accentColor, selectedBackground, setBackground, fontFamily, setFontFamily } = useThemeStore();
   const { saveHistory, setSaveHistory, clearHistory } = useHistoryStore();
   const { autoplay, setAutoplay, backgroundPlay, setBackgroundPlay } = usePlaybackStore();
+  const { playlists } = usePlaylistStore();
   const router = useRouter();
   const [highQuality, setHighQuality] = useState(true);
   const [autoScan, setAutoScan] = useState(false);
@@ -80,6 +84,51 @@ const SettingsScreen = () => {
         }
       ]
     });
+  };
+
+  // App data backup
+  const handleBackupAppData = async () => {
+    try {
+      const backup = {
+        settings: {
+          theme: activeTheme,
+          accentColor,
+          selectedBackground,
+          fontFamily,
+        },
+        playlists,
+        history: useHistoryStore.getState().history,
+        playback: usePlaybackStore.getState(),
+      };
+      const backupUri = FileSystem.documentDirectory + 'app_data_backup.json';
+      await FileSystem.writeAsStringAsync(backupUri, JSON.stringify(backup));
+      Alert.alert('Success', 'App data backed up to app storage.');
+    } catch (e) {
+      Alert.alert('Error', 'Failed to backup app data.');
+    }
+  };
+
+  // App data restore
+  const handleRestoreAppData = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: 'application/json' });
+      if (result.canceled || !result.assets || !result.assets[0]) return;
+      const fileUri = result.assets[0].uri;
+      const content = await FileSystem.readAsStringAsync(fileUri);
+      const restored = JSON.parse(content);
+      if (restored.settings) {
+        if (restored.settings.theme) useThemeStore.setState({ activeTheme: restored.settings.theme });
+        if (restored.settings.accentColor) useThemeStore.setState({ accentColor: restored.settings.accentColor });
+        if (restored.settings.selectedBackground) useThemeStore.setState({ selectedBackground: restored.settings.selectedBackground });
+        if (restored.settings.fontFamily) useThemeStore.setState({ fontFamily: restored.settings.fontFamily });
+      }
+      if (restored.playlists) usePlaylistStore.setState({ playlists: restored.playlists });
+      if (restored.history) useHistoryStore.setState({ history: restored.history });
+      if (restored.playback) usePlaybackStore.setState(restored.playback);
+      Alert.alert('Success', 'App data restored from backup.');
+    } catch (e) {
+      Alert.alert('Error', 'Failed to restore app data.');
+    }
   };
 
   const SettingItem = ({ icon, title, description, children }) => (

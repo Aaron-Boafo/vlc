@@ -51,13 +51,26 @@ const VideoMiniPlayer = () => {
       translateY.value = ctx.startY + event.translationY;
     },
     onEnd: () => {
-      // Boundaries
-      const minX = -(width - miniPlayerWidth - 16);
-      const maxX = 0;
-      const minY = -(height - miniPlayerHeight - 65);
-      const maxY = 0;
-      translateX.value = Math.max(minX, Math.min(translateX.value, maxX));
-      translateY.value = Math.max(minY, Math.min(translateY.value, maxY));
+      // Snap to nearest corner
+      const corners = [
+        { x: 0, y: 0 }, // top-right
+        { x: 0, y: -(height - miniPlayerHeight - 65) }, // bottom-right
+        { x: -(width - miniPlayerWidth - 16), y: 0 }, // top-left
+        { x: -(width - miniPlayerWidth - 16), y: -(height - miniPlayerHeight - 65) }, // bottom-left
+      ];
+      const dist = (a, b) => Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
+      const current = { x: translateX.value, y: translateY.value };
+      let minDist = Infinity;
+      let nearest = corners[0];
+      for (let c of corners) {
+        const d = dist(current, c);
+        if (d < minDist) {
+          minDist = d;
+          nearest = c;
+        }
+      }
+      translateX.value = withTiming(nearest.x, { duration: 250 });
+      translateY.value = withTiming(nearest.y, { duration: 250 });
     },
   });
 
@@ -133,7 +146,7 @@ const VideoMiniPlayer = () => {
               ref={videoRef}
               source={{ uri: miniPlayerVideo.uri }}
               style={styles.video}
-              resizeMode="cover"
+              contentFit="cover"
               shouldPlay={isMiniPlayerPlaying}
               positionMillis={miniPlayerPosition}
               isMuted={false}
@@ -198,4 +211,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default VideoMiniPlayer; 
+export default React.memo(VideoMiniPlayer); 

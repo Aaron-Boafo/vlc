@@ -5,6 +5,8 @@ import * as MediaLibrary from "expo-media-library";
 import * as FileSystem from "expo-file-system";
 import { router } from 'expo-router';
 
+const VIDEO_LIST_PATH = FileSystem.documentDirectory + 'video_list.json';
+
 const safeParse = (value, fallback) => {
   try {
     return JSON.parse(value);
@@ -97,12 +99,35 @@ const useVideoStore = create(
         try {
           console.log('[VideoStore] Starting video files load...');
           set({ isLoading: true, videoFiles: [] });
+          if (!VIDEO_LIST_PATH) {
+            set({ isLoading: false, videoFiles: [] });
+            throw new Error('Video list path is not defined');
+          }
+          const fileInfo = await FileSystem.getInfoAsync(VIDEO_LIST_PATH);
+          if (fileInfo.exists) {
+            // Load from cache
+            const content = await FileSystem.readAsStringAsync(VIDEO_LIST_PATH);
+            const videoFiles = JSON.parse(content);
+            set({ videoFiles, isLoading: false });
+            return;
+          }
+          // If not cached, scan and cache
+          await get().refreshVideoFiles();
+        } catch (error) {
+          console.error('[VideoStore] Error loading video files:', error);
+          set({ isLoading: false, videoFiles: [] });
+          throw error;
+        }
+      },
 
+      // Force rescan and update cache
+      refreshVideoFiles: async () => {
+        try {
+          set({ isLoading: true, videoFiles: [] });
           // Add timeout to prevent infinite loading
           const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Video loading timeout - taking too long')), 30000); // 30 seconds timeout
+            setTimeout(() => reject(new Error('Video loading timeout - taking too long')), 30000);
           });
-
           const loadPromise = (async () => {
             const { status } = await MediaLibrary.requestPermissionsAsync();
             if (status !== "granted") {
@@ -110,17 +135,12 @@ const useVideoStore = create(
               set({ isLoading: false, videoFiles: [] });
               return;
             }
-
-            // Clear any existing cache to force fresh load
             set({ videoFiles: [] });
-
             let allFiles = [];
             let hasNextPage = true;
             let page = 0;
-            const batchSize = 100; // Increased batch size for better performance
-
+            const batchSize = 100;
             console.log('[VideoStore] Loading videos in batches...');
-
             while (hasNextPage) {
               try {
                 const media = await MediaLibrary.getAssetsAsync({
@@ -128,12 +148,10 @@ const useVideoStore = create(
                   first: batchSize,
                   sortBy: [MediaLibrary.SortBy.creationTime],
                 });
-
                 if (!media.assets || media.assets.length === 0) {
                   console.log('[VideoStore] No more videos found');
                   break;
                 }
-
                 const basicFiles = media.assets.map((asset) => ({
                   id: asset.id,
                   uri: asset.uri,
@@ -145,45 +163,32 @@ const useVideoStore = create(
                   modificationTime: asset.modificationTime || Date.now(),
                   size: asset.fileSize || 0,
                 }));
-
                 allFiles = allFiles.concat(basicFiles);
-                
-                // Update UI after each batch for progressive loading
                 set({ videoFiles: [...allFiles] });
-                
                 hasNextPage = media.hasNextPage;
                 page++;
-                
-                // Safety check to prevent infinite loops
-                if (page > 50) { // Reduced from 100 to 50 for better performance
+                if (page > 50) {
                   console.warn('[VideoStore] Safety limit reached, stopping batch loading');
                   break;
                 }
-
-                // Add a small delay between batches to prevent UI blocking
                 if (hasNextPage) {
                   await new Promise(resolve => setTimeout(resolve, 10));
                 }
               } catch (batchError) {
                 console.error(`[VideoStore] Error loading batch ${page}:`, batchError);
-                // Continue with next batch instead of failing completely
                 hasNextPage = false;
               }
             }
-
-            // Final sort by creation time (newest first)
             const sortedFiles = [...allFiles].sort((a, b) => b.creationTime - a.creationTime);
-            
             set({ videoFiles: sortedFiles, isLoading: false });
+            // Save to cache
+            await FileSystem.writeAsStringAsync(VIDEO_LIST_PATH, JSON.stringify(sortedFiles));
           })();
-
-          // Race between timeout and loading
           await Promise.race([loadPromise, timeoutPromise]);
-          
         } catch (error) {
-          console.error("[VideoStore] Error loading video files:", error);
+          console.error('[VideoStore] Error refreshing video files:', error);
           set({ isLoading: false, videoFiles: [] });
-          throw error; // Re-throw to allow error handling in components
+          throw error;
         }
       },
 

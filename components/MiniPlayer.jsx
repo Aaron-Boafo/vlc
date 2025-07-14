@@ -6,6 +6,7 @@ import useAudioControl from '../store/useAudioControl';
 import { useRouter, useSegments } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import Svg, { Circle, G } from 'react-native-svg';
+import * as FileSystem from 'expo-file-system';
 
 const MiniPlayer = () => {
   const { themeColors } = useThemeStore();
@@ -24,7 +25,45 @@ const MiniPlayer = () => {
   const router = useRouter();
   const segments = useSegments();
 
-  useEffect(() => {
+  // Defensive state initialization for artworkUri
+  const [artworkUri, setArtworkUri] = React.useState(null);
+  React.useEffect(() => {
+    setArtworkUri(currentTrack?.artwork ?? null);
+  }, [currentTrack?.artwork]);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    const cacheArtwork = async () => {
+      if (!currentTrack?.artwork) return;
+      const isRemote = /^https?:\/\//.test(currentTrack.artwork);
+      if (!isRemote) {
+        setArtworkUri(currentTrack.artwork);
+        return;
+      }
+      const artworkDir = FileSystem.documentDirectory + 'artwork/';
+      const filename = encodeURIComponent(currentTrack.title || currentTrack.artwork.split('/').pop());
+      const localUri = artworkDir + filename;
+      await FileSystem.makeDirectoryAsync(artworkDir, { intermediates: true }).catch(() => {});
+      const fileInfo = await FileSystem.getInfoAsync(localUri);
+      if (!fileInfo.exists) {
+        try {
+          await FileSystem.downloadAsync(currentTrack.artwork, localUri);
+        } catch (e) {
+          console.warn('Failed to cache artwork, falling back to remote URI', e);
+        }
+      }
+      const cachedFileInfo = await FileSystem.getInfoAsync(localUri);
+      if (isMounted && cachedFileInfo.exists) {
+        setArtworkUri(localUri);
+      } else if (isMounted) {
+        setArtworkUri(currentTrack.artwork);
+      }
+    };
+    cacheArtwork();
+    return () => { isMounted = false; };
+  }, [currentTrack?.artwork, currentTrack?.title]);
+
+  React.useEffect(() => {
     if (isMiniPlayerVisible && sound) {
       sound.getStatusAsync().then(status => {
         console.log('[MiniPlayer] Native sound status:', status);
@@ -62,7 +101,7 @@ const MiniPlayer = () => {
       onPress={handleOpenFullPlayer}
     >
       {currentTrack.artwork ? (
-        <Image source={{ uri: currentTrack.artwork }} style={styles.artwork} />
+        <Image source={{ uri: artworkUri }} style={styles.artwork} />
       ) : (
         <View style={[styles.artwork, { backgroundColor: themeColors.primary, justifyContent: 'center', alignItems: 'center' }]}/>
       )}
@@ -174,4 +213,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default MiniPlayer; 
+export default React.memo(MiniPlayer); 

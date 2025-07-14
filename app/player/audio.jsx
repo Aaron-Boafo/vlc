@@ -220,12 +220,12 @@ const PlayerScreen = () => {
                   width: 300,
                   height: 300,
                   borderRadius: 24,
-                  backgroundColor: 'rgba(255,255,255,0.08)',
+                  backgroundColor: themeColors.primaryLight || themeColors.card,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                <Text style={styles.defaultIconText}>♪</Text>
+                <Text style={[styles.defaultIconText, { color: themeColors.primary }]}>♪</Text>
               </View>
             )}
           </View>
