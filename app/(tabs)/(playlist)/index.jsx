@@ -11,6 +11,7 @@ import AudioHeader from '../../../AudioComponents/title';
 import { SafeAreaView as SafeAreaViewSafeAreaContext } from 'react-native-safe-area-context';
 import MoreOptionsMenu from '../../../components/MoreOptionsMenu';
 import SearchBar from '../../../components/SearchBar';
+import { useRef } from "react";
 
 const SegmentedControl = ({ value, onChange }) => {
   const { themeColors } = useThemeStore();
@@ -106,8 +107,13 @@ const PlaylistScreen = () => {
   const [createModal, setCreateModal] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [playlistType, setPlaylistType] = useState('audio');
-  const [allTracks, setAllTracks] = useState([]);
+  const [tracks, setTracks] = useState([]); // Only basic info
+  const [trackMetadata, setTrackMetadata] = useState({}); // id -> metadata
   const [loadingTracks, setLoadingTracks] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMoreTracks, setHasMoreTracks] = useState(true);
+  const tracksOffset = useRef(0);
+  const TRACKS_PAGE_SIZE = 50;
   const [selectedTracks, setSelectedTracks] = useState([]);
   const [optionsVisible, setOptionsVisible] = useState(false);
   const [optionsPlaylist, setOptionsPlaylist] = useState(null);
@@ -119,66 +125,78 @@ const PlaylistScreen = () => {
   const [sortOrder, setSortOrder] = useState('az'); // 'az', 'za', 'tracks'
 
   // Load all tracks from device for create modal
-  useEffect(() => {
-    if (createModal) {
-      loadAllTracks();
+  const fetchTracks = async (reset = false) => {
+    if (loadingTracks || loadingMore) return;
+    if (!reset && !hasMoreTracks) return;
+    if (reset) {
+      setTracks([]);
+      setTrackMetadata({});
+      tracksOffset.current = 0;
+      setHasMoreTracks(true);
     }
-  }, [createModal, playlistType]);
-
-  const loadAllTracks = async () => {
-    setLoadingTracks(true);
+    const setLoading = reset ? setLoadingTracks : setLoadingMore;
+    setLoading(true);
     try {
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== "granted") {
-        setAllTracks([]);
-        setLoadingTracks(false);
+        setTracks([]);
+        setHasMoreTracks(false);
+        setLoading(false);
         return;
       }
       const media = await MediaLibrary.getAssetsAsync({
         mediaType: playlistType === 'audio' ? MediaLibrary.MediaType.audio : MediaLibrary.MediaType.video,
-        first: 1000,
+        first: TRACKS_PAGE_SIZE,
+        sortBy: [MediaLibrary.SortBy.creationTime],
+        after: tracksOffset.current ? tracks[tracks.length - 1]?.id : undefined,
       });
-      const filesWithMetadata = await Promise.all(
-        media.assets.map(async (asset) => {
-          let metadata = {};
-          try {
-            const data = await getAudioMetadata(asset.uri, [
-              "album",
-              "artist",
-              "name",
-              "year",
-              "artwork",
-            ]);
-            metadata = data.metadata || {};
-          } catch (error) {}
-          let artworkUri = null;
-          if (metadata.artwork) {
-            if (metadata.artwork.startsWith('data:image')) {
-              artworkUri = metadata.artwork;
-            } else if (/^[A-Za-z0-9+/=]+$/.test(metadata.artwork)) {
-              artworkUri = `data:image/png;base64,${metadata.artwork}`;
-            } else {
-              artworkUri = metadata.artwork;
-            }
-          }
-          return {
-            id: asset.id,
-            uri: asset.uri,
-            filename: asset.filename,
-            duration: asset.duration,
-            album: metadata.album || "Unknown Album",
-            artist: metadata.artist || "Unknown Artist",
-            title: metadata.name || asset.filename.replace(/\.[^/.]+$/, ""),
-            year: metadata.year || null,
-            artwork: artworkUri,
-          };
-        })
-      );
-      setAllTracks(filesWithMetadata);
+      if (reset) {
+        setTracks(media.assets);
+      } else {
+        setTracks(prev => [...prev, ...media.assets]);
+      }
+      tracksOffset.current += media.assets.length;
+      setHasMoreTracks(media.hasNextPage);
     } catch (e) {
-      setAllTracks([]);
+      setTracks([]);
+      setHasMoreTracks(false);
     }
-    setLoadingTracks(false);
+    setLoading(false);
+    setLoadingMore(false);
+  };
+
+  // Fetch initial tracks or when playlistType changes
+  useEffect(() => {
+    if (createModal) fetchTracks(true);
+  }, [createModal, playlistType]);
+
+  // Lazy metadata fetching for visible tracks
+  const fetchMetadataForTrack = async (track) => {
+    if (trackMetadata[track.id]) return;
+    try {
+      const data = await getAudioMetadata(track.uri, ["album", "artist", "name", "year", "artwork"]);
+      let artworkUri = null;
+      const metadata = data.metadata || {};
+      if (metadata.artwork) {
+        if (metadata.artwork.startsWith('data:image')) {
+          artworkUri = metadata.artwork;
+        } else if (/^[A-Za-z0-9+/=]+$/.test(metadata.artwork)) {
+          artworkUri = `data:image/png;base64,${metadata.artwork}`;
+        } else {
+          artworkUri = metadata.artwork;
+        }
+      }
+      setTrackMetadata(prev => ({
+        ...prev,
+        [track.id]: {
+          album: metadata.album || "Unknown Album",
+          artist: metadata.artist || "Unknown Artist",
+          title: metadata.name || track.filename.replace(/\.[^/.]+$/, ""),
+          year: metadata.year || null,
+          artwork: artworkUri,
+        }
+      }));
+    } catch {}
   };
 
   // Handlers
@@ -457,34 +475,41 @@ const PlaylistScreen = () => {
             </View>
           ) : (
             <FlatList
-              data={allTracks}
+              data={tracks}
               keyExtractor={item => item.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[styles.trackSelectCard, { 
-                    backgroundColor: selectedTracks.some(t => t.id === item.id) 
-                      ? themeColors.primary + '20' 
-                      : themeColors.card 
-                  }]}
-                  onPress={() => toggleTrack(item)}
-                >
-                  <View style={styles.trackSelectInfo}>
-                    <Text style={[styles.trackSelectTitle, { color: themeColors.text }]} numberOfLines={1}>
-                      {item.title}
-                    </Text>
-                    <Text style={[styles.trackSelectArtist, { color: themeColors.textSecondary }]} numberOfLines={1}>
-                      {item.artist}
-                    </Text>
-                  </View>
-                  {selectedTracks.some(t => t.id === item.id) && (
-                    <View style={[styles.checkmark, { backgroundColor: themeColors.primary }]}> 
-                      <Text style={{ color: themeColors.background, fontSize: 12 }}>✓</Text>
+              renderItem={({ item }) => {
+                useEffect(() => { fetchMetadataForTrack(item); }, [item]);
+                const meta = trackMetadata[item.id] || {};
+                return (
+                  <TouchableOpacity
+                    style={[styles.trackSelectCard, {
+                      backgroundColor: selectedTracks.some(t => t.id === item.id)
+                        ? themeColors.primary + '20'
+                        : themeColors.card
+                    }]}
+                    onPress={() => toggleTrack(item)}
+                  >
+                    <View style={styles.trackSelectInfo}>
+                      <Text style={[styles.trackSelectTitle, { color: themeColors.text }]} numberOfLines={1}>
+                        {meta.title || item.filename.replace(/\.[^/.]+$/, "")}
+                      </Text>
+                      <Text style={[styles.trackSelectArtist, { color: themeColors.textSecondary }]} numberOfLines={1}>
+                        {meta.artist || "Unknown Artist"}
+                      </Text>
                     </View>
-                  )}
-                </TouchableOpacity>
-              )}
+                    {selectedTracks.some(t => t.id === item.id) && (
+                      <View style={[styles.checkmark, { backgroundColor: themeColors.primary }]}> 
+                        <Text style={{ color: themeColors.background, fontSize: 12 }}>✓</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              }}
               style={{ flex: 1 }}
               contentContainerStyle={{ padding: 16 }}
+              onEndReached={() => fetchTracks(false)}
+              onEndReachedThreshold={0.5}
+              ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color={themeColors.primary} /> : null}
             />
           )}
 

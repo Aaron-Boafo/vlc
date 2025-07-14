@@ -2,12 +2,34 @@ import { Stack, SplashScreen } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import "../global.css";
-import { View } from 'react-native';
+import { View, Text } from 'react-native';
 import { useFonts } from 'expo-font';
 import { useEffect } from 'react';
 import { Audio } from 'expo-av';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import usePlaybackStore from '../store/playbackStore';
+import React from 'react';
+
+// Simple error boundary component
+class NavigationErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, info) {
+    // You can log error to a service here
+    console.error('Navigation error:', error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}><Text style={{ color: 'red', fontSize: 18 }}>Something went wrong with navigation.</Text></View>;
+    }
+    return this.props.children;
+  }
+}
 
 SplashScreen.preventAutoHideAsync();
 
@@ -44,13 +66,12 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StatusBar hidden />
+        <NavigationErrorBoundary>
         <Stack
           screenOptions={{
-            // Instant transitions for main navigation
-            animation: 'none',
-            animationDuration: 0,
-            // Performance optimizations
-            gestureEnabled: false,
+            animation: 'fade',
+            animationDuration: 200,
+            gestureEnabled: true,
             detachInactiveScreens: true,
           }}
         >
@@ -67,6 +88,7 @@ export default function RootLayout() {
             }}
           />
         </Stack>
+        </NavigationErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

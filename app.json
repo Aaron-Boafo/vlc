@@ -28,9 +28,6 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "foregroundService": {
-        "mediaPlayback": "Required for background audio playback."
-      },
       "permissions": [
         "READ_EXTERNAL_STORAGE",
         "READ_MEDIA_AUDIO",

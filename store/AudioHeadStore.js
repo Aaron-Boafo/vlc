@@ -129,6 +129,27 @@ const useAudioStore = create(
             }
           }
 
+          // In loadMetadataForFile and loadMetadataInBackground, after checking for embedded artwork, if artworkUri is still null, fetch from iTunes API
+          // Add a helper function to fetch artwork from iTunes
+          async function fetchArtworkFromiTunes(title, artist) {
+            try {
+              const query = encodeURIComponent(`${title} ${artist}`);
+              const url = `https://itunes.apple.com/search?term=${query}&entity=song&limit=1`;
+              const response = await fetch(url);
+              const data = await response.json();
+              if (data.results && data.results.length > 0) {
+                return data.results[0].artworkUrl100?.replace('100x100', '300x300') || null;
+              }
+            } catch (e) {
+              // Ignore errors, fallback to default
+            }
+            return null;
+          }
+
+          if (!artworkUri) {
+            artworkUri = await fetchArtworkFromiTunes(metadata.name || file.title, metadata.artist || file.artist);
+          }
+
           // Update specific file with metadata
           const updatedFiles = [...state.audioFiles];
           updatedFiles[fileIndex] = {
@@ -189,6 +210,26 @@ const loadMetadataInBackground = async (files) => {
             } else {
               artworkUri = metadata.artwork;
             }
+          }
+
+          // In loadMetadataForFile, after checking for embedded artwork, if artworkUri is still null, fetch from iTunes API
+          async function fetchArtworkFromiTunes(title, artist) {
+            try {
+              const query = encodeURIComponent(`${title} ${artist}`);
+              const url = `https://itunes.apple.com/search?term=${query}&entity=song&limit=1`;
+              const response = await fetch(url);
+              const data = await response.json();
+              if (data.results && data.results.length > 0) {
+                return data.results[0].artworkUrl100?.replace('100x100', '300x300') || null;
+              }
+            } catch (e) {
+              // Ignore errors, fallback to default
+            }
+            return null;
+          }
+
+          if (!artworkUri) {
+            artworkUri = await fetchArtworkFromiTunes(metadata.name || file.title, metadata.artist || file.artist);
           }
 
           // Update the store

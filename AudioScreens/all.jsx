@@ -22,6 +22,73 @@ import CustomAlert from '../components/CustomAlert';
 import BottomSheet from '../components/BottomSheet';
 import SearchBar from '../components/SearchBar';
 import usePlaylistStore from '../store/playlistStore';
+import { useRef } from "react";
+import * as MediaLibrary from 'expo-media-library';
+import { getAudioMetadata } from '@missingcore/audio-metadata';
+
+// Memoize TrackItem for performance
+const TrackItem = React.memo(({ item, isPlaying, themeColors, favouriteStore, handleTrackPress, currentTrack, fetchMetadataForTrack, trackMetadata, handleMoreOptions, formatDuration }) => {
+  useEffect(() => { fetchMetadataForTrack(item); }, [item]);
+  const meta = trackMetadata[item.id] || {};
+  return (
+    <TouchableOpacity
+      style={[
+        styles.trackItem,
+        { backgroundColor: themeColors.card },
+        isPlaying && {backgroundColor: themeColors.primary + '33'}
+      ]}
+      onPress={() => handleTrackPress(item)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.trackInfo}>
+        {meta.artwork ? (
+          <Image 
+            source={{ uri: meta.artwork }} 
+            style={styles.artwork}
+            resizeMode="cover"
+            cachePolicy="disk"
+          />
+        ) : (
+          <View style={[styles.artworkPlaceholder, { backgroundColor: themeColors.primary }]}> 
+            <Music4 size={24} color="white" />
+          </View>
+        )}
+        <View style={styles.trackDetails}>
+          <Text style={[styles.trackTitle, { color: isPlaying ? themeColors.text : themeColors.text }]} numberOfLines={1}>
+            {meta.title || item.title || item.filename}
+          </Text>
+          <Text style={[styles.trackArtist, { color: themeColors.textSecondary }]} numberOfLines={1}>
+            {meta.artist || item.artist || 'Unknown Artist'} • {formatDuration(item.duration)}
+          </Text>
+        </View>
+        {isPlaying && (
+          <Music4 size={18} color={themeColors.text} style={{ marginLeft: 8 }} />
+        )}
+      </View>
+      <View style={styles.trackActions}>
+        <Text style={[styles.trackDuration, { color: themeColors.textSecondary }]}>
+          {formatDuration(item.duration)}
+        </Text>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => favouriteStore.toggleFavourite(item)}
+        >
+          <Heart
+            size={20}
+            color={favouriteStore.isFavourite(item.id) ? themeColors.primary : themeColors.textSecondary}
+            fill={favouriteStore.isFavourite(item.id) ? themeColors.primary : "none"}
+          />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => handleMoreOptions(item)}
+        >
+          <MoreVertical size={20} color={themeColors.textSecondary} />
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
+  );
+});
 
 const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) => {
   const {themeColors} = useThemeStore();
@@ -37,14 +104,64 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
   const [refreshing, setRefreshing] = useState(false);
   const playlistStore = usePlaylistStore();
   const [customAlert, setCustomAlert] = useState({ visible: false, title: '', message: '', buttons: [] });
+  const [tracks, setTracks] = useState([]); // Only basic info
+  const [trackMetadata, setTrackMetadata] = useState({}); // id -> metadata
+  const [loadingTracks, setLoadingTracks] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMoreTracks, setHasMoreTracks] = useState(true);
+  const tracksOffset = useRef(0);
+  const TRACKS_PAGE_SIZE = 50;
+
+  const fetchTracks = async (reset = false) => {
+    if (loadingTracks || loadingMore) return;
+    if (!reset && !hasMoreTracks) return;
+    if (reset) {
+      setTracks([]);
+      setTrackMetadata({});
+      tracksOffset.current = 0;
+      setHasMoreTracks(true);
+    }
+    const setLoading = reset ? setLoadingTracks : setLoadingMore;
+    setLoading(true);
+    try {
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== "granted") {
+        setTracks([]);
+        setHasMoreTracks(false);
+        setLoading(false);
+        return;
+      }
+      const media = await MediaLibrary.getAssetsAsync({
+        mediaType: MediaLibrary.MediaType.audio,
+        first: TRACKS_PAGE_SIZE,
+        sortBy: [MediaLibrary.SortBy.creationTime],
+        after: tracksOffset.current ? tracks[tracks.length - 1]?.id : undefined,
+      });
+      if (reset) {
+        setTracks(media.assets);
+        // Fetch metadata for all tracks in the first page
+        media.assets.forEach(fetchMetadataForTrack);
+      } else {
+        setTracks(prev => {
+          const existingIds = new Set(prev.map(t => t.id));
+          const newUnique = media.assets.filter(t => !existingIds.has(t.id));
+          // Fetch metadata for all new tracks
+          newUnique.forEach(fetchMetadataForTrack);
+          return [...prev, ...newUnique];
+        });
+      }
+      tracksOffset.current += media.assets.length;
+      setHasMoreTracks(media.hasNextPage);
+    } catch (e) {
+      setTracks([]);
+      setHasMoreTracks(false);
+    }
+    setLoading(false);
+    setLoadingMore(false);
+  };
 
   useEffect(() => {
-    // Initialize audio control
-    audioControl.initialize();
-    // Only load if not already loaded
-    if (!audioFiles || audioFiles.length === 0) {
-      loadAudioFiles();
-    }
+    fetchTracks(true);
   }, []);
 
   const onRefresh = async () => {
@@ -53,12 +170,13 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
     setRefreshing(false);
   };
 
-  const formatDuration = (seconds) => {
+  // Memoize formatDuration
+  const formatDuration = useCallback((seconds) => {
     if (!seconds || isNaN(seconds)) return "0:00";
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
+  }, []);
 
   const handleTrackPress = useCallback(async (item) => {
     try {
@@ -158,6 +276,7 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
     setDeleteConfirmVisible(false);
   };
 
+  // Memoize sortedAndFilteredAudio
   const sortedAndFilteredAudio = useMemo(() => {
     let sorted = [...audioFiles];
     if (sortOrder.key) {
@@ -175,67 +294,55 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
     );
   }, [audioFiles, searchQuery, sortOrder]);
 
+  const fetchMetadataForTrack = async (track) => {
+    if (trackMetadata[track.id]) return;
+    try {
+      const data = await getAudioMetadata(track.uri, ["album", "artist", "name", "year", "artwork"]);
+      let artworkUri = null;
+      const metadata = data.metadata || {};
+      if (metadata.artwork) {
+        if (metadata.artwork.startsWith('data:image')) {
+          artworkUri = metadata.artwork;
+        } else if (/^[A-Za-z0-9+/=]+$/.test(metadata.artwork)) {
+          artworkUri = `data:image/png;base64,${metadata.artwork}`;
+        } else {
+          artworkUri = metadata.artwork;
+        }
+      }
+      console.log('Fetched metadata for', track.filename, metadata);
+      setTrackMetadata(prev => ({
+        ...prev,
+        [track.id]: {
+          album: metadata.album || "Unknown Album",
+          artist: metadata.artist || "Unknown Artist",
+          title: metadata.name || track.filename.replace(/\.[^/.]+$/, ""),
+          year: metadata.year || null,
+          artwork: artworkUri,
+        }
+      }));
+    } catch (e) {
+      console.log('Failed to fetch metadata for', track.filename, e);
+    }
+  };
+
+  // Memoize renderItem
   const renderItem = useCallback(({ item }) => {
     const isPlaying = currentTrack && item.id === currentTrack.id;
     return (
-      <TouchableOpacity
-        style={[
-          styles.trackItem,
-          { backgroundColor: themeColors.card },
-          isPlaying && {backgroundColor: themeColors.primary + '33'}
-        ]}
-        onPress={() => handleTrackPress(item)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.trackInfo}>
-          {item.artwork ? (
-            <Image 
-              source={{ uri: item.artwork }} 
-              style={styles.artwork}
-              resizeMode="cover"
-              cachePolicy="disk"
-            />
-          ) : (
-            <View style={[styles.artworkPlaceholder, { backgroundColor: themeColors.primary }]}>
-              <Music4 size={24} color="white" />
-            </View>
-          )}
-          <View style={styles.trackDetails}>
-            <Text style={[styles.trackTitle, { color: isPlaying ? themeColors.text : themeColors.text }]} numberOfLines={1}>
-              {item.title || item.filename}
-            </Text>
-            <Text style={[styles.trackArtist, { color: themeColors.textSecondary }]} numberOfLines={1}>
-              {item.artist || 'Unknown Artist'} • {formatDuration(item.duration)}
-            </Text>
-          </View>
-          {isPlaying && (
-            <Music4 size={18} color={themeColors.text} style={{ marginLeft: 8 }} />
-          )}
-        </View>
-        <View style={styles.trackActions}>
-          <Text style={[styles.trackDuration, { color: themeColors.textSecondary }]}>
-            {formatDuration(item.duration)}
-          </Text>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => favouriteStore.toggleFavourite(item)}
-          >
-            <Heart
-              size={20}
-              color={favouriteStore.isFavourite(item.id) ? themeColors.primary : themeColors.textSecondary}
-              fill={favouriteStore.isFavourite(item.id) ? themeColors.primary : "none"}
-            />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => handleMoreOptions(item)}
-          >
-            <MoreVertical size={20} color={themeColors.textSecondary} />
-          </TouchableOpacity>
-        </View>
-      </TouchableOpacity>
+      <TrackItem
+        item={item}
+        isPlaying={isPlaying}
+        themeColors={themeColors}
+        favouriteStore={favouriteStore}
+        handleTrackPress={handleTrackPress}
+        currentTrack={currentTrack}
+        fetchMetadataForTrack={fetchMetadataForTrack}
+        trackMetadata={trackMetadata}
+        handleMoreOptions={handleMoreOptions}
+        formatDuration={formatDuration}
+      />
     );
-  }, [themeColors, favouriteStore, handleTrackPress, currentTrack]);
+  }, [themeColors, favouriteStore, handleTrackPress, currentTrack, trackMetadata, fetchMetadataForTrack, handleMoreOptions, formatDuration]);
 
   if (isLoading && sortedAndFilteredAudio.length === 0) {
     return (
@@ -264,9 +371,9 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
       )}
 
       <FlatList
-        data={sortedAndFilteredAudio}
+        data={tracks}
         renderItem={renderItem}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => `${item.id}_${item.uri}`}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
         removeClippedSubviews={true}
@@ -291,6 +398,10 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
         }
         refreshing={refreshing}
         onRefresh={onRefresh}
+        onEndReached={() => fetchTracks(false)}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color={themeColors.primary} /> : null}
+        extraData={trackMetadata}
       />
 
       {/* Modals */}

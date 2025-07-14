@@ -222,17 +222,27 @@ const MoreScreen = () => {
   const ActionButton = ({ icon, label, onPress }) => (
     <TouchableOpacity
       onPress={onPress}
-      className="flex-1 py-3 rounded-xl flex-row items-center justify-center"
       style={{ 
+        flex: 1,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderRadius: 8,
         backgroundColor: themeColors.sectionBackground,
         borderWidth: activeTheme === "dark" ? 1 : 0,
-        borderColor: "rgba(255, 255, 255, 0.1)"
+        borderColor: "rgba(255, 255, 255, 0.1)",
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
       }}
     >
       {icon}
       <Text
-        className="ml-2 font-semibold"
-        style={{ color: themeColors.primary }}
+        style={{ 
+          marginLeft: 8,
+          fontSize: 14,
+          fontWeight: 'bold',
+          color: themeColors.primary,
+        }}
       >
         {label}
       </Text>
@@ -243,8 +253,11 @@ const MoreScreen = () => {
     <View className="mb-8">
       <View className="flex-row justify-between items-center mb-4">
         <Text
-          className="text-lg font-semibold"
-          style={{ color: themeColors.primary }}
+          style={{ 
+            fontSize: 18,
+            fontWeight: 'semibold',
+            color: themeColors.primary,
+          }}
         >
           {title}
         </Text>
@@ -258,15 +271,21 @@ const MoreScreen = () => {
 
   const HistoryItem = ({ title, subtitle, imageUrl }) => (
     <TouchableOpacity
-      className="w-24 mr-4"
+      style={{ 
+        width: 100, // Adjust as needed for horizontal scroll
+        marginRight: 12,
+      }}
       onPress={() => console.log("History item pressed")}
     >
       <View
-        className="w-24 h-24 rounded-lg mb-2"
         style={{ 
+          width: 100,
+          height: 100,
+          borderRadius: 12,
+          marginBottom: 8,
           backgroundColor: themeColors.sectionBackground,
           borderWidth: activeTheme === "dark" ? 1 : 0,
-          borderColor: "rgba(255, 255, 255, 0.1)"
+          borderColor: "rgba(255, 255, 255, 0.1)",
         }}
       >
         <Icons.Music
@@ -276,16 +295,21 @@ const MoreScreen = () => {
         />
       </View>
       <Text
-        className="text-xs font-medium"
-        style={{ color: themeColors.text }}
+        style={{ 
+          fontSize: 12,
+          fontWeight: 'medium',
+          color: themeColors.text,
+          textAlign: 'center',
+        }}
         numberOfLines={1}
       >
         {title}
       </Text>
       <Text
-        className="text-xs"
         style={{ 
-          color: activeTheme === "dark" ? "rgba(255, 255, 255, 0.7)" : themeColors.tabIconColor 
+          fontSize: 12,
+          color: activeTheme === "dark" ? "rgba(255, 255, 255, 0.7)" : themeColors.tabIconColor,
+          textAlign: 'center',
         }}
         numberOfLines={1}
       >
@@ -403,8 +427,11 @@ const MoreScreen = () => {
           >
             <Icons.Plus size={24} color={themeColors.primary} />
             <Text
-              className="mt-2 text-base"
-              style={{ color: themeColors.text }}
+              style={{ 
+                marginTop: 8,
+                fontSize: 16,
+                color: themeColors.text,
+              }}
             >
               New stream
             </Text>
@@ -427,18 +454,24 @@ const MoreScreen = () => {
               {history.slice(0, 10).map((item) => (
                 <TouchableOpacity
                   key={item.id}
-                  className="w-24 mr-4"
+                  style={{ 
+                    width: 100, // Adjust as needed for horizontal scroll
+                    marginRight: 12,
+                  }}
                   onPress={async () => {
                     await audioControl.setAndPlayPlaylist([item]);
                     router.push('/player/video');
                   }}
                 >
                   <View
-                    className="w-24 h-24 rounded-lg mb-2"
                     style={{ 
+                      width: 100,
+                      height: 100,
+                      borderRadius: 12,
+                      marginBottom: 8,
                       backgroundColor: themeColors.sectionBackground,
                       borderWidth: activeTheme === "dark" ? 1 : 0,
-                      borderColor: "rgba(255, 255, 255, 0.1)"
+                      borderColor: "rgba(255, 255, 255, 0.1)",
                     }}
                   >
                     {item.artwork ? (
@@ -448,15 +481,22 @@ const MoreScreen = () => {
                     )}
                   </View>
                   <Text
-                    className="text-xs font-medium"
-                    style={{ color: themeColors.text }}
+                    style={{ 
+                      fontSize: 12,
+                      fontWeight: 'medium',
+                      color: themeColors.text,
+                      textAlign: 'center',
+                    }}
                     numberOfLines={1}
                   >
                     {item.title}
                   </Text>
                   <Text
-                    className="text-xs"
-                    style={{ color: activeTheme === "dark" ? "rgba(255, 255, 255, 0.7)" : themeColors.tabIconColor }}
+                    style={{ 
+                      fontSize: 12,
+                      color: activeTheme === "dark" ? "rgba(255, 255, 255, 0.7)" : themeColors.tabIconColor,
+                      textAlign: 'center',
+                    }}
                     numberOfLines={1}
                   >
                     {item.artist}

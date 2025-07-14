@@ -188,8 +188,8 @@ const PlayerScreen = () => {
           <MoreVertical size={28} color={themeColors.text} />
         </TouchableOpacity>
       </View>
-      <View style={{ flex: 1 }}>
-        <View style={{ alignItems: 'center', marginBottom: 0, marginTop: 80 }}>
+      <View style={{ flex: 1, justifyContent: 'space-between', paddingBottom: 24 }}>
+        <View style={{ alignItems: 'center', marginTop: 32 }}>
           <View
             style={{
               backgroundColor: themeColors.card,
@@ -236,7 +236,7 @@ const PlayerScreen = () => {
           </View>
         </View>
 
-        <View style={{ width: '100%', marginTop: 32 }}>
+        <View style={{ width: '100%' }}>
           <View style={{ paddingHorizontal: 24, paddingVertical: 4 }}>
             <Slider
               style={{ width: '100%', height: 40 }}

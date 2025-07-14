@@ -152,8 +152,12 @@ const SettingsScreen = () => {
               description="Select directories to include in the media library"
             >
               <TouchableOpacity
-                className="px-3 py-1 rounded-full"
-                style={{ backgroundColor: themeColors.primaryLight }}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 20,
+                  backgroundColor: themeColors.primaryLight,
+                }}
                 onPress={() => console.log("Select folders")}
               >
                 <Text style={{ color: themeColors.primary }}>Select</Text>
@@ -181,8 +185,12 @@ const SettingsScreen = () => {
               description={`Currently using ${activeTheme} theme`}
             >
               <TouchableOpacity
-                className="px-3 py-1 rounded-full"
-                style={{ backgroundColor: themeColors.primaryLight }}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 20,
+                  backgroundColor: themeColors.primaryLight,
+                }}
                 onPress={toggleTheme}
               >
                 <Text style={{ color: themeColors.primary }}>Change</Text>
@@ -194,8 +202,12 @@ const SettingsScreen = () => {
               description={`Currently using ${accentColor} accent`}
             >
               <TouchableOpacity
-                className="px-3 py-1 rounded-full"
-                style={{ backgroundColor: themeColors.primaryLight }}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 20,
+                  backgroundColor: themeColors.primaryLight,
+                }}
                 onPress={() => setColorPickerVisible(true)}
               >
                 <Text style={{ color: themeColors.primary }}>Change</Text>
@@ -335,8 +347,12 @@ const SettingsScreen = () => {
               description="Free up space by removing temporary files"
             >
               <TouchableOpacity
-                className="px-3 py-1 rounded-full"
-                style={{ backgroundColor: themeColors.primaryLight }}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 20,
+                  backgroundColor: themeColors.primaryLight,
+                }}
                 onPress={handleClearCache}
               >
                 <Text style={{ color: themeColors.primary }}>Clear</Text>
@@ -351,8 +367,12 @@ const SettingsScreen = () => {
               description="Reset all settings and clear saved data"
             >
               <TouchableOpacity
-                className="px-3 py-1 rounded-full"
-                style={{ backgroundColor: themeColors.primaryLight }}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 20,
+                  backgroundColor: themeColors.primaryLight,
+                }}
                 onPress={handleResetApp}
               >
                 <Text style={{ color: themeColors.primary }}>Reset</Text>
