@@ -95,6 +95,34 @@ const PlaylistCard = React.memo(({ playlist, onPress, onOptions, onPlay, onShuff
   );
 });
 
+const TrackSelectItem = ({ item, meta, selected, onToggle, themeColors, fetchMetadataForTrack, playlistType }) => {
+  useEffect(() => { fetchMetadataForTrack(item); }, [item]);
+  return (
+    <TouchableOpacity
+      style={[styles.trackSelectCard, {
+        backgroundColor: selected
+          ? themeColors.primary + '20'
+          : themeColors.card
+      }]}
+      onPress={() => onToggle(item)}
+    >
+      <View style={styles.trackSelectInfo}>
+        <Text style={[styles.trackSelectTitle, { color: themeColors.text }]} numberOfLines={1}>
+          {meta.title || item.filename.replace(/\.[^/.]+$/, "")}
+        </Text>
+        <Text style={[styles.trackSelectArtist, { color: themeColors.textSecondary }]} numberOfLines={1}>
+          {meta.artist || "Unknown Artist"}
+        </Text>
+      </View>
+      {selected && (
+        <View style={[styles.checkmark, { backgroundColor: themeColors.primary }]}> 
+          <Text style={{ color: themeColors.background, fontSize: 12 }}>✓</Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+};
+
 const PlaylistScreen = () => {
   const { themeColors } = useThemeStore();
   const { playlists, createPlaylist, deletePlaylist, addTrackToPlaylist, removeTrackFromPlaylist, clearPlaylists } = usePlaylistStore();
@@ -279,14 +307,13 @@ const PlaylistScreen = () => {
   }, [audioControl, router]);
 
   const handleRenamePlaylist = useCallback(() => {
-    if (!renameValue.trim() || !optionsPlaylist) return;
-    const { playlists } = usePlaylistStore.getState();
-    const updated = playlists.map(p => p.id === optionsPlaylist.id ? { ...p, name: renameValue.trim() } : p);
-    usePlaylistStore.setState({ playlists: updated });
-    setRenameModal(false);
+    // Instead of renaming, show an alert to use file manager
+    Alert.alert(
+      'Rename Playlist',
+      'To rename a playlist or file, please use your device\'s file manager.'
+    );
     setOptionsVisible(false);
-    setRenameValue("");
-  }, [renameValue, optionsPlaylist]);
+  }, []);
 
   const handleClearAllPlaylists = useCallback(() => {
     Alert.alert(
@@ -477,34 +504,17 @@ const PlaylistScreen = () => {
             <FlatList
               data={tracks}
               keyExtractor={item => item.id}
-              renderItem={({ item }) => {
-                useEffect(() => { fetchMetadataForTrack(item); }, [item]);
-                const meta = trackMetadata[item.id] || {};
-                return (
-                  <TouchableOpacity
-                    style={[styles.trackSelectCard, {
-                      backgroundColor: selectedTracks.some(t => t.id === item.id)
-                        ? themeColors.primary + '20'
-                        : themeColors.card
-                    }]}
-                    onPress={() => toggleTrack(item)}
-                  >
-                    <View style={styles.trackSelectInfo}>
-                      <Text style={[styles.trackSelectTitle, { color: themeColors.text }]} numberOfLines={1}>
-                        {meta.title || item.filename.replace(/\.[^/.]+$/, "")}
-                      </Text>
-                      <Text style={[styles.trackSelectArtist, { color: themeColors.textSecondary }]} numberOfLines={1}>
-                        {meta.artist || "Unknown Artist"}
-                      </Text>
-                    </View>
-                    {selectedTracks.some(t => t.id === item.id) && (
-                      <View style={[styles.checkmark, { backgroundColor: themeColors.primary }]}> 
-                        <Text style={{ color: themeColors.background, fontSize: 12 }}>✓</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              }}
+              renderItem={({ item }) => (
+                <TrackSelectItem
+                  item={item}
+                  meta={trackMetadata[item.id] || {}}
+                  selected={selectedTracks.some(t => t.id === item.id)}
+                  onToggle={toggleTrack}
+                  themeColors={themeColors}
+                  fetchMetadataForTrack={fetchMetadataForTrack}
+                  playlistType={playlistType}
+                />
+              )}
               style={{ flex: 1 }}
               contentContainerStyle={{ padding: 16 }}
               onEndReached={() => fetchTracks(false)}
@@ -581,7 +591,7 @@ const PlaylistScreen = () => {
         <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={handleCloseOptions}>
           <View style={[styles.optionsContainer, { backgroundColor: themeColors.card }]}> 
             <Text style={[styles.optionText, { color: themeColors.text, fontWeight: 'bold', fontSize: 18, marginBottom: 12 }]}>Playlist Options</Text>
-            <TouchableOpacity style={styles.optionItem} onPress={() => { setRenameModal(true); setOptionsVisible(false); }}>
+            <TouchableOpacity style={styles.optionItem} onPress={handleRenamePlaylist}>
               <Edit3 size={20} color={themeColors.text} />
               <Text style={[styles.optionText, { color: themeColors.text }]}>Rename Playlist</Text>
             </TouchableOpacity>
@@ -589,46 +599,6 @@ const PlaylistScreen = () => {
               <Trash2 size={20} color={themeColors.error || '#EF4444'} />
               <Text style={[styles.optionText, { color: themeColors.error || '#EF4444' }]}>Delete Playlist</Text>
             </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Rename Modal */}
-      <Modal
-        visible={renameModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setRenameModal(false)}
-      >
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setRenameModal(false)}>
-          <View style={[styles.renameContainer, { backgroundColor: themeColors.card }]}> 
-            <Text style={[styles.renameTitle, { color: themeColors.text }]}>Rename Playlist</Text>
-            <TextInput
-              style={[styles.renameInput, { 
-                backgroundColor: themeColors.background, 
-                color: themeColors.text,
-                borderColor: themeColors.border 
-              }]}
-              placeholder="New playlist name"
-              placeholderTextColor={themeColors.textSecondary}
-              value={renameValue}
-              onChangeText={setRenameValue}
-              autoFocus
-            />
-            <View style={styles.renameButtons}>
-              <TouchableOpacity 
-                style={[styles.renameButton, { backgroundColor: themeColors.background }]} 
-                onPress={() => setRenameModal(false)}
-              >
-                <Text style={[styles.renameButtonText, { color: themeColors.textSecondary }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.renameButton, { backgroundColor: themeColors.primary }]} 
-                onPress={handleRenamePlaylist}
-              >
-                <Text style={[styles.renameButtonText, { color: themeColors.background }]}>Rename</Text>
-              </TouchableOpacity>
-            </View>
           </View>
         </TouchableOpacity>
       </Modal>

@@ -311,7 +311,6 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
           artworkUri = metadata.artwork;
         }
       }
-      console.log('Fetched metadata for', track.filename, metadata);
       setTrackMetadata(prev => ({
         ...prev,
         [track.id]: {
@@ -323,7 +322,7 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
         }
       }));
     } catch (e) {
-      console.log('Failed to fetch metadata for', track.filename, e);
+      // console.log('Failed to fetch metadata for', track.filename, e);
     }
   };
 

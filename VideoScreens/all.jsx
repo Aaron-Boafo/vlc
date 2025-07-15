@@ -156,34 +156,11 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
 
   const handleRename = () => {
     if (selectedVideo) {
-      setNewFileName(selectedVideo.filename.replace(/\.mp4$/, ''));
       setShowMoreModal(false);
-      setShowRenameModal(true);
-    }
-  };
-
-  const handleRenameConfirm = async () => {
-    if (selectedVideo && newFileName.trim()) {
-      try {
-        const finalFileName = newFileName.trim() + '.mp4';
-        await renameVideo(selectedVideo.id, finalFileName);
-        setShowRenameModal(false);
-        setNewFileName('');
-        Alert.alert('Success', 'Video renamed successfully.');
-      } catch (error) {
-        if (error.code === 'RESTRICTED_LOCATION') {
-          setCustomAlert({
-            visible: true,
-            title: '�� Cannot Rename File',
-            message: "This file cannot be renamed from within the app due to Android restrictions. Please use your device's file manager to rename it.",
-            buttons: [{ text: 'OK', style: 'primary', onPress: () => setCustomAlert(alert => ({ ...alert, visible: false })) }],
-          });
-        } else {
-          Alert.alert('Error', 'Failed to rename video.');
-        }
-      }
-    } else {
-      Alert.alert('Error', 'Please enter a valid file name.');
+      Alert.alert(
+        'Rename Video',
+        'To rename a video file, please use your device\'s file manager.'
+      );
     }
   };
 
@@ -365,14 +342,6 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
 
                   <TouchableOpacity 
                     style={styles.optionRow} 
-                    onPress={handleRename}
-                  >
-                    <Edit3 size={22} color={themeColors.text} style={styles.optionIcon} />
-                    <Text style={[styles.optionText, { color: themeColors.text }]}>Rename</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity 
-                    style={styles.optionRow} 
                     onPress={handleAddToFavorites}
                   >
                     <Heart 
@@ -411,73 +380,6 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
                 </View>
               </>
             )}
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* Rename Modal */}
-      <Modal
-        visible={showRenameModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowRenameModal(false)}
-      >
-        <Pressable 
-          style={styles.modalOverlay} 
-          onPress={() => setShowRenameModal(false)}
-        >
-          <Pressable 
-            style={[styles.renameModalContent, { backgroundColor: themeColors.card }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <View style={styles.renameModalHeader}>
-              <Text style={[styles.renameModalTitle, { color: themeColors.text }]}>
-                Rename Video
-              </Text>
-              <TouchableOpacity 
-                onPress={() => setShowRenameModal(false)}
-                style={styles.closeModalButton}
-              >
-                <MaterialIcons name="close" size={24} color={themeColors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.renameModalBody}>
-              <Text style={[styles.renameLabel, { color: themeColors.text }]}>
-                Enter new name:
-              </Text>
-              <TextInput
-                style={[styles.renameInput, { 
-                  backgroundColor: themeColors.background,
-                  color: themeColors.text,
-                  borderColor: themeColors.primary
-                }]}
-                value={newFileName}
-                onChangeText={setNewFileName}
-                placeholder="Enter video name"
-                placeholderTextColor={themeColors.textSecondary}
-                autoFocus
-                maxLength={100}
-              />
-              <Text style={[styles.renameHint, { color: themeColors.textSecondary }]}>
-                The .mp4 extension will be added automatically
-              </Text>
-            </View>
-
-            <View style={styles.renameModalActions}>
-              <TouchableOpacity 
-                style={[styles.renameButton, styles.cancelButton]} 
-                onPress={() => setShowRenameModal(false)}
-              >
-                <Text style={[styles.renameButtonText, { color: themeColors.text }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.renameButton, styles.confirmButton, { backgroundColor: themeColors.primary }]} 
-                onPress={handleRenameConfirm}
-              >
-                <Text style={[styles.renameButtonText, { color: themeColors.background }]}>Rename</Text>
-              </TouchableOpacity>
-            </View>
           </Pressable>
         </Pressable>
       </Modal>

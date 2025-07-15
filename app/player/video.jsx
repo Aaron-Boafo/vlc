@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { View, TouchableOpacity, StyleSheet, SafeAreaView, Text, TouchableWithoutFeedback } from 'react-native';
 import { Video } from 'expo-av';
 import { MaterialIcons, Entypo } from '@expo/vector-icons';
+import { ChevronDown } from 'lucide-react-native';
 import Slider from '@react-native-community/slider';
 import useVideoStore from '../../store/VideoHeadStore';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -196,7 +197,7 @@ const MinimalVideoPlayer = () => {
               {controlsVisible && !isLocked && (
                 <View style={styles.topOverlay}>
                   <TouchableOpacity onPress={handleBack} style={styles.topIconBtn}>
-                    <MaterialIcons name="arrow-back" size={28} color="#FFF" />
+                    <ChevronDown size={24} color="#FFF" />
                   </TouchableOpacity>
                   <Text style={styles.videoTitle} numberOfLines={1}>{currentVideo.title || ''}</Text>
                   <TouchableOpacity style={styles.topIconBtn} onPress={handleShowMoreOptions}>
