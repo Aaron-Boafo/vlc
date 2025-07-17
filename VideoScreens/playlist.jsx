@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import useVideoStore from '../store/VideoHeadStore';
+import useOptimizedVideoStore from '../store/optimizedVideoStore';
 import useThemeStore from '../store/theme';
 import { router } from 'expo-router';
 import * as VideoThumbnails from 'expo-video-thumbnails';
@@ -21,7 +21,7 @@ import SearchBar from '../components/SearchBar';
 
 const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearchQuery }) => {
   const { themeColors } = useThemeStore();
-  const { videoFiles, setCurrentVideo, videoPlaylists, createVideoPlaylist, addVideoToPlaylist, clearVideoPlaylists } = useVideoStore();
+  const { videoFiles, setCurrentVideo, videoPlaylists, createVideoPlaylist, addVideoToPlaylist, clearVideoPlaylists } = useOptimizedVideoStore();
   const [modalVisible, setModalVisible] = useState(false);
   const [playlistName, setPlaylistName] = useState('');
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
@@ -105,7 +105,7 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
     if (optionsPlaylist) {
       // Remove playlist from store
       const updatedPlaylists = videoPlaylists.filter(p => p.id !== optionsPlaylist.id);
-      useVideoStore.setState({ videoPlaylists: updatedPlaylists });
+      useOptimizedVideoStore.setState({ videoPlaylists: updatedPlaylists });
       setOptionsVisible(false);
       setOptionsPlaylist(null);
     }

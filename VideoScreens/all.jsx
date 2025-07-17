@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { VideoOff, Play, Heart, Share2, Trash2, Info, Clock, Star, Edit3 } from 'lucide-react-native';
-import useVideoStore from '../store/VideoHeadStore';
+import useOptimizedVideoStore from '../store/optimizedVideoStore';
 import useThemeStore from '../store/theme';
 import useFavouriteStore from '../store/favouriteStore';
 import useHistoryStore from '../store/historyStore';
@@ -26,7 +26,7 @@ import * as FileSystem from 'expo-file-system';
 import CustomAlert from '../components/CustomAlert';
 
 const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
-  const { videoFiles, isLoading, loadVideoFiles, setAndPlayVideo, removeVideo, renameVideo, toggleFavouriteVideo, forceReloadVideos } = useVideoStore();
+  const { videoFiles, isLoading, loadVideoFiles, setAndPlayVideo, removeVideo, renameVideo, toggleFavouriteVideo, forceReloadVideos } = useOptimizedVideoStore();
   const { themeColors } = useThemeStore();
   const favouriteStore = useFavouriteStore();
   const historyStore = useHistoryStore();

@@ -2,9 +2,9 @@ import { Stack, SplashScreen } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import "../global.css";
-import { View, Text } from 'react-native';
+import { View, Text, InteractionManager } from 'react-native';
 import { useFonts } from 'expo-font';
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { Audio } from 'expo-av';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import usePlaybackStore from '../store/playbackStore';
@@ -48,15 +48,23 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
-  useEffect(() => {
-    Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: backgroundPlay,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
-    });
+  const setupAudio = useCallback(async () => {
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: backgroundPlay,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+      });
+    } catch (error) {
+      console.error('Audio setup error:', error);
+    }
   }, [backgroundPlay]);
+
+  useEffect(() => {
+    InteractionManager.runAfterInteractions(setupAudio);
+  }, [setupAudio]);
 
   if (!fontsLoaded && !fontError) {
     return null;
@@ -72,7 +80,8 @@ export default function RootLayout() {
             animation: 'fade',
             animationDuration: 200,
             gestureEnabled: true,
-            detachInactiveScreens: true,
+            // Don't detach screens to prevent reloading
+            detachInactiveScreens: false,
           }}
         >
           <Stack.Screen name="index" options={{ headerShown: false }} />

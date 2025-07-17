@@ -1,10 +1,13 @@
 import { create } from "zustand";
+import { subscribeWithSelector } from "zustand/middleware";
 import { Audio } from "expo-av";
 import useHistoryStore from './historyStore';
 import usePlaybackStore from "./playbackStore";
+import AudioOptimizer from '../utils/audioOptimizations';
 import * as FileSystem from 'expo-file-system';
 
-const useAudioControl = create((set, get) => ({
+const useAudioControl = create(
+  subscribeWithSelector((set, get) => ({
   // Audio state
   sound: null,
   isPlaying: false,
@@ -98,7 +101,8 @@ const useAudioControl = create((set, get) => ({
       return;
     }
     set({ isLoading: true });
-    const { sound: existingSound } = get();
+    const { sound: existingSound, playQueue, currentIndex } = get();
+    
     try {
       if (existingSound) {
         const status = await existingSound.getStatusAsync();
@@ -113,7 +117,8 @@ const useAudioControl = create((set, get) => ({
     }
 
     if (!track?.uri) {
-      console.error("Attempted to play a track with no URI");
+      console.error("Attempted to play a track with no URI:", track);
+      console.error("Track details:", JSON.stringify(track, null, 2));
       return set({ isLoading: false, currentTrack: null });
     }
     
@@ -121,55 +126,83 @@ const useAudioControl = create((set, get) => ({
 
     try {
       const { playbackRate } = usePlaybackStore.getState();
-      const initialStatus = {
+      
+      // 🚀 Try to get optimized/preloaded sound first
+      let newSound;
+      try {
+        newSound = await AudioOptimizer.getOptimizedSound(track);
+        console.log('⚡ Using optimized sound for:', track.title);
+      } catch (optimizerError) {
+        console.log('Optimizer failed, using standard loading:', optimizerError);
+        // Fallback to standard loading
+        const initialStatus = {
+          shouldPlay: true,
+          volume: 1.0,
+          rate: playbackRate,
+          androidImplementation: 'MediaPlayer',
+          metadata: {
+            title: track.title || 'Unknown Title',
+            artist: track.artist || 'Unknown Artist',
+            album: track.album || 'Unknown Album',
+            artwork: track.artwork,
+          },
+        };
+
+        // --- FileSystem caching logic start ---
+        let audioUri = track.uri;
+        const isRemote = /^https?:\/\//.test(track.uri);
+        if (isRemote) {
+          const audiosDir = FileSystem.documentDirectory + 'audios/';
+          const filename = encodeURIComponent(track.title || track.uri.split('/').pop());
+          const localUri = audiosDir + filename;
+          // Ensure audios directory exists
+          await FileSystem.makeDirectoryAsync(audiosDir, { intermediates: true }).catch(() => {});
+          const fileInfo = await FileSystem.getInfoAsync(localUri);
+          if (!fileInfo.exists) {
+            try {
+              await FileSystem.downloadAsync(track.uri, localUri);
+            } catch (e) {
+              console.warn('Failed to cache audio, falling back to remote URI', e);
+            }
+          }
+          // Use local file if it exists
+          const cachedFileInfo = await FileSystem.getInfoAsync(localUri);
+          if (cachedFileInfo.exists) {
+            audioUri = localUri;
+          }
+        }
+        // --- FileSystem caching logic end ---
+
+        const soundResult = await Audio.Sound.createAsync(
+            { uri: audioUri },
+            initialStatus,
+            (status) => onPlaybackStatusUpdate(status, set, get)
+        );
+        newSound = soundResult.sound;
+      }
+
+      // Configure the sound for playback
+      await newSound.setStatusAsync({
         shouldPlay: true,
         volume: 1.0,
         rate: playbackRate,
-        androidImplementation: 'MediaPlayer',
-        metadata: {
-          title: track.title || 'Unknown Title',
-          artist: track.artist || 'Unknown Artist',
-          album: track.album || 'Unknown Album',
-          artwork: track.artwork,
-        },
-      };
+      });
+      
+      // Set up status callback
+      newSound.setOnPlaybackStatusUpdate((status) => onPlaybackStatusUpdate(status, set, get));
 
-      // --- FileSystem caching logic start ---
-      let audioUri = track.uri;
-      const isRemote = /^https?:\/\//.test(track.uri);
-      if (isRemote) {
-        const audiosDir = FileSystem.documentDirectory + 'audios/';
-        const filename = encodeURIComponent(track.title || track.uri.split('/').pop());
-        const localUri = audiosDir + filename;
-        // Ensure audios directory exists
-        await FileSystem.makeDirectoryAsync(audiosDir, { intermediates: true }).catch(() => {});
-        const fileInfo = await FileSystem.getInfoAsync(localUri);
-        if (!fileInfo.exists) {
-          try {
-            await FileSystem.downloadAsync(track.uri, localUri);
-          } catch (e) {
-            console.warn('Failed to cache audio, falling back to remote URI', e);
-          }
-        }
-        // Use local file if it exists
-        const cachedFileInfo = await FileSystem.getInfoAsync(localUri);
-        if (cachedFileInfo.exists) {
-          audioUri = localUri;
-        }
-      }
-      // --- FileSystem caching logic end ---
-
-      const { sound: newSound } = await Audio.Sound.createAsync(
-          { uri: audioUri },
-          initialStatus,
-          (status) => onPlaybackStatusUpdate(status, set, get)
-      );
       set({
           sound: newSound,
           isPlaying: true,
           isLoading: false,
           currentTrack: track,
       });
+
+      // 🚀 Start preloading next tracks in background
+      setTimeout(() => {
+        AudioOptimizer.preloadNextTracks(currentIndex, playQueue);
+      }, 1000); // Wait 1 second before starting preload
+
       get().fetchLyrics(track);
     } catch (error) {
       console.error("Error in _loadAndPlayTrack:", error);
@@ -440,7 +473,8 @@ const useAudioControl = create((set, get) => ({
   },
 
   hideMiniPlayer: () => set({ isMiniPlayerVisible: false }),
-}));
+}))
+);
 
 const onPlaybackStatusUpdate = (status, set, get) => {
   if (!status.isLoaded) {

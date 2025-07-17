@@ -1,11 +1,17 @@
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { memo, useCallback } from "react";
 import * as Icons from "lucide-react-native";
 import useThemeStore from "../store/theme";
-import useVideoStore from "../store/VideoHeadStore";
+import useOptimizedVideoStore from "../store/optimizedVideoStore";
 
-const VideoToggleBar = () => {
-  const { themeColors } = useThemeStore();
-  const { activeTab, toggleTabs } = useVideoStore();
+const VideoToggleBar = memo(() => {
+  const themeColors = useThemeStore(state => state.themeColors);
+  const activeTab = useOptimizedVideoStore(state => state.activeTab);
+  const toggleTabs = useOptimizedVideoStore(state => state.toggleTabs);
+
+  const handleToggle = useCallback((tagName) => {
+    toggleTabs(tagName);
+  }, [toggleTabs]);
 
   return (
     <View style={[
@@ -19,7 +25,7 @@ const VideoToggleBar = () => {
         return (
           <TouchableOpacity
             key={tag.name}
-            onPress={() => toggleTabs(tag.name)}
+            onPress={() => handleToggle(tag.name)}
             activeOpacity={0.7}
             style={[
               styles.toggleButton,
@@ -40,7 +46,7 @@ const VideoToggleBar = () => {
       })}
     </View>
   );
-};
+});
 
 const tags = [
   { name: "all", icon: Icons.LayoutGrid },
@@ -75,5 +81,7 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
 });
+
+VideoToggleBar.displayName = 'VideoToggleBar';
 
 export default VideoToggleBar; 

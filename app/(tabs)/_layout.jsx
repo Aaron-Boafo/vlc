@@ -6,15 +6,11 @@ import { Video } from 'lucide-react-native';
 import VideoMiniPlayer from '../../VideoComponents/VideoMiniPlayer';
 
 export default function TabLayouts() {
-  const { themeColors, isDarkMode, activeTheme, accentColor } = useThemeStore();
-
-  const tabKey = `${activeTheme}-${accentColor}`;
-  console.log('Tab key:', tabKey, 'Theme:', themeColors);
+  const { themeColors } = useThemeStore();
 
   return (
     <>
       <Tabs
-        key={tabKey}
         screenOptions={{
           headerShown: false,
           tabBarActiveTintColor: themeColors.primary,
@@ -24,13 +20,15 @@ export default function TabLayouts() {
             borderTopColor: themeColors.card + '60',
             borderTopWidth: 0.5,
           },
+          // Remove animations that cause reloading
           animation: 'none',
           animationDuration: 0,
-          animationTypeForReplace: 'push',
-          lazy: true,
-          lazyPlaceholder: () => null,
+          // Keep screens alive by default
+          lazy: false,
+          // Don't detach screens globally
+          detachInactiveScreens: false,
+          // Disable gestures that might interfere
           gestureEnabled: false,
-          // detachInactiveScreens: true, // Remove from global, set per tab
         }}
       >
         <Tabs.Screen
@@ -39,7 +37,8 @@ export default function TabLayouts() {
             title: "Video",
             headerShown: false,
             tabBarIcon: ({ color }) => <Icons.FileVideo color={color} />,
-            detachInactiveScreens: true,
+            // Keep video screen alive
+            detachInactiveScreens: false,
           }}
         />
         <Tabs.Screen
@@ -48,12 +47,38 @@ export default function TabLayouts() {
             title: "Audio",
             headerShown: false,
             tabBarIcon: ({ color }) => <Icons.FileAudio color={color} />,
-            detachInactiveScreens: false, // Preserve state
+            // Keep audio screen alive
+            detachInactiveScreens: false,
           }}
         />
-        <Tabs.Screen name="(browse)" options={{ title: "Browse", tabBarIcon: ({ focused, size, color }) => focused ? <Icons.FolderOpen size={size} color={color} /> : <Icons.FolderClosed size={size} color={color} />, detachInactiveScreens: true }} />
-        <Tabs.Screen name="(playlist)" options={{ title: "Playlist", tabBarIcon: ({ color, size }) => <Icons.ListMusic color={color} size={size} />, detachInactiveScreens: false }} />
-        <Tabs.Screen name="(more)" options={{ title: "More", tabBarIcon: ({ color, size }) => <Icons.Component color={color} size={size} />, detachInactiveScreens: true }} />
+        <Tabs.Screen 
+          name="(browse)" 
+          options={{ 
+            title: "Browse", 
+            tabBarIcon: ({ focused, size, color }) => 
+              focused ? <Icons.FolderOpen size={size} color={color} /> : <Icons.FolderClosed size={size} color={color} />,
+            // Browse can be detached as it's less critical
+            detachInactiveScreens: true 
+          }} 
+        />
+        <Tabs.Screen 
+          name="(playlist)" 
+          options={{ 
+            title: "Playlist", 
+            tabBarIcon: ({ color, size }) => <Icons.ListMusic color={color} size={size} />,
+            // Keep playlist alive
+            detachInactiveScreens: false 
+          }} 
+        />
+        <Tabs.Screen 
+          name="(more)" 
+          options={{ 
+            title: "More", 
+            tabBarIcon: ({ color, size }) => <Icons.Component color={color} size={size} />,
+            // More can be detached
+            detachInactiveScreens: true 
+          }} 
+        />
       </Tabs>
       <MiniPlayer />
       <VideoMiniPlayer />

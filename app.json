@@ -8,6 +8,7 @@
     "scheme": "visura",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "jsEngine": "hermes",
     "splash": {
       "image": "./assets/images/icon.png",
       "resizeMode": "contain",

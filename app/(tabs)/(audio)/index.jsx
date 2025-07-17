@@ -1,8 +1,8 @@
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Platform, ActivityIndicator, ScrollView } from "react-native";
-import React, { useEffect, useState } from "react";
-import useAudioStore from "../../../store/AudioHeadStore";
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Platform, ActivityIndicator, ScrollView, Image } from "react-native";
+import React, { useEffect, useState, useCallback } from "react";
+import useOptimizedAudioStore from "../../../store/optimizedAudioStore";
 import useThemeStore from "../../../store/theme";
-import { useNavigation } from "expo-router";
+import { useNavigation, useFocusEffect } from "expo-router";
 import useAudioControl from "../../../store/useAudioControl";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Music, Music4 } from "lucide-react-native";
@@ -15,19 +15,46 @@ import ArtistScreen from "../../../AudioScreens/artist";
 import FavouriteScreen from "../../../AudioScreens/favourite";
 import MoreOptionsMenu from '../../../components/MoreOptionsMenu';
 import SortOptionsSheet from "../../../components/SortOptionsSheet";
+import FastLoadingIndicator from "../../../components/FastLoadingIndicator";
+import StoreMigration from "../../../utils/storeMigration";
+import AdvancedSearch from "../../../utils/advancedSearch";
+import PerformanceAnalytics from "../../../utils/performanceAnalytics";
 import * as Icons from 'lucide-react-native';
 
 const AudioTabScreen = () => {
-  const { audioFiles, loadAudioFiles, isLoading, loadMetadataForFile, sortOrder, sortAudioFiles } = useAudioStore();
+  const { 
+    audioFiles, 
+    loadAudioFiles, 
+    isLoading, 
+    isInitialLoadComplete,
+    sortOrder, 
+    sortAudioFiles,
+    activeTab,
+    toggleTabs 
+  } = useOptimizedAudioStore();
   const { themeColors } = useThemeStore();
   const audioControl = useAudioControl();
   const navigation = useNavigation();
   const [visibleItems, setVisibleItems] = useState([]);
-  const { activeTab } = useAudioStore();
   const [showMore, setShowMore] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showSort, setShowSort] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [migrationComplete, setMigrationComplete] = useState(false);
+
+  // Run migration on first load
+  useEffect(() => {
+    const runMigration = async () => {
+      try {
+        await StoreMigration.migrateAudioStore();
+        setMigrationComplete(true);
+      } catch (error) {
+        console.error('Migration failed:', error);
+        setMigrationComplete(true); // Continue anyway
+      }
+    };
+    runMigration();
+  }, []);
 
   const audioSortOptions = [
     { label: 'Title (A-Z)', key: 'title', direction: 'asc', icon: Icons.ArrowDownAZ },
@@ -40,9 +67,29 @@ const AudioTabScreen = () => {
     { label: 'Date Added (Oldest)', key: 'modificationTime', direction: 'asc', icon: Icons.CalendarClock },
   ];
 
+  // Fast loading with the new optimized system
+  useFocusEffect(
+    useCallback(() => {
+      // Only load if migration is complete and we don't have data
+      if (migrationComplete && audioFiles.length === 0) {
+        console.log('🚀 Loading audio files with fast loader...');
+        const startTime = Date.now();
+        loadAudioFiles().then(() => {
+          PerformanceAnalytics.trackLoadTime('AudioFiles', startTime, Date.now(), audioFiles.length);
+        });
+      }
+    }, [migrationComplete, audioFiles.length, loadAudioFiles])
+  );
+
+  // 🔍 Build search index when audio files change
   useEffect(() => {
-    loadAudioFiles();
-  }, []);
+    if (audioFiles.length > 0) {
+      const startTime = Date.now();
+      AdvancedSearch.buildSearchIndex(audioFiles);
+      PerformanceAnalytics.trackLoadTime('SearchIndex', startTime, Date.now(), audioFiles.length);
+      console.log('🔍 Search index built for', audioFiles.length, 'files');
+    }
+  }, [audioFiles]);
 
   const handleTrackPress = async (item) => {
     // Use the full playlist starting from the selected track
@@ -56,12 +103,8 @@ const AudioTabScreen = () => {
     const visibleIds = viewableItems.map(item => item.item.id);
     setVisibleItems(visibleIds);
     
-    // Lazy load metadata for visible items
-    viewableItems.forEach(viewable => {
-      if (!viewable.item.metadataLoaded) {
-        loadMetadataForFile(viewable.item.id);
-      }
-    });
+    // Note: Metadata loading is now handled automatically in the background
+    // by the fast loading system, so no manual intervention needed
   };
   
   const renderItem = ({ item }) => {
@@ -95,12 +138,16 @@ const AudioTabScreen = () => {
   };
 
   const renderContent = () => {
-    if (isLoading && audioFiles.length === 0) {
+    // Show fast loading indicator during initial load
+    if (isLoading && !isInitialLoadComplete) {
       return (
-        <View style={[styles.centered, { backgroundColor: themeColors.background }]}>
-          <ActivityIndicator size="large" color={themeColors.primary} />
-          <Text style={{ color: themeColors.text, marginTop: 16 }}>Loading music...</Text>
-        </View>
+        <FastLoadingIndicator
+          isLoading={isLoading}
+          isInitialLoadComplete={isInitialLoadComplete}
+          itemCount={audioFiles.length}
+          mediaType="audio files"
+          showProgress={true}
+        />
       );
     }
   

@@ -15,7 +15,7 @@ import { Image } from 'expo-image';
 import {Music4, Play, Heart, MoreVertical, ListPlus, Info, Shuffle, PlusSquare, ArrowDownLeftSquare, Smartphone, ArrowLeft, Share2} from "lucide-react-native";
 import useThemeStore from "../store/theme";
 import useAudioControl from "../store/useAudioControl";
-import useAudioStore from "../store/AudioHeadStore";
+import useOptimizedAudioStore from "../store/optimizedAudioStore";
 import {router} from "expo-router";
 import useFavouriteStore from '../store/favouriteStore';
 import CustomAlert from '../components/CustomAlert';
@@ -28,7 +28,7 @@ import { getAudioMetadata } from '@missingcore/audio-metadata';
 
 // Memoize TrackItem for performance
 const TrackItem = React.memo(({ item, isPlaying, themeColors, favouriteStore, handleTrackPress, currentTrack, fetchMetadataForTrack, trackMetadata, handleMoreOptions, formatDuration }) => {
-  useEffect(() => { fetchMetadataForTrack(item); }, [item]);
+  React.useEffect(() => { fetchMetadataForTrack(item); }, [item, fetchMetadataForTrack]);
   const meta = trackMetadata[item.id] || {};
   return (
     <TouchableOpacity
@@ -94,7 +94,7 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
   const {themeColors} = useThemeStore();
   const audioControl = useAudioControl();
   const favouriteStore = useFavouriteStore();
-  const { audioFiles, isLoading, loadAudioFiles, sortOrder } = useAudioStore();
+  const { audioFiles, isLoading, loadAudioFiles, sortOrder } = useOptimizedAudioStore();
   const {width} = Dimensions.get("window");
   const [optionsVisible, setOptionsVisible] = useState(false);
   const [selectedTrack, setSelectedTrack] = useState(null);
@@ -104,67 +104,8 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
   const [refreshing, setRefreshing] = useState(false);
   const playlistStore = usePlaylistStore();
   const [customAlert, setCustomAlert] = useState({ visible: false, title: '', message: '', buttons: [] });
-  const [tracks, setTracks] = useState([]); // Only basic info
+  // Use optimized store data - no need for separate track loading
   const [trackMetadata, setTrackMetadata] = useState({}); // id -> metadata
-  const [loadingTracks, setLoadingTracks] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMoreTracks, setHasMoreTracks] = useState(true);
-  const tracksOffset = useRef(0);
-  const TRACKS_PAGE_SIZE = 50;
-
-  const fetchTracks = async (reset = false) => {
-    if (loadingTracks || loadingMore) return;
-    if (!reset && !hasMoreTracks) return;
-    if (reset) {
-      setTracks([]);
-      setTrackMetadata({});
-      tracksOffset.current = 0;
-      setHasMoreTracks(true);
-    }
-    const setLoading = reset ? setLoadingTracks : setLoadingMore;
-    setLoading(true);
-    try {
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status !== "granted") {
-        setTracks([]);
-        setHasMoreTracks(false);
-        setLoading(false);
-        return;
-      }
-      const media = await MediaLibrary.getAssetsAsync({
-        mediaType: MediaLibrary.MediaType.audio,
-        first: TRACKS_PAGE_SIZE,
-        sortBy: [MediaLibrary.SortBy.creationTime],
-        after: tracksOffset.current ? tracks[tracks.length - 1]?.id : undefined,
-      });
-      if (reset) {
-        setTracks(media.assets);
-        // Fetch metadata for all tracks in the first page
-        media.assets.forEach(fetchMetadataForTrack);
-      } else {
-        setTracks(prev => {
-          const existingIds = new Set(prev.map(t => t.id));
-          const newUnique = media.assets.filter(t => !existingIds.has(t.id));
-          // Fetch metadata for all new tracks
-          newUnique.forEach(fetchMetadataForTrack);
-          return [...prev, ...newUnique];
-        });
-      }
-      tracksOffset.current += media.assets.length;
-      setHasMoreTracks(media.hasNextPage);
-    } catch (e) {
-      setTracks([]);
-      setHasMoreTracks(false);
-    }
-    setLoading(false);
-    setLoadingMore(false);
-  };
-
-  useEffect(() => {
-    if (tracks.length === 0) {
-      fetchTracks(true);
-    }
-  }, [tracks.length]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -182,8 +123,24 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
 
   const handleTrackPress = useCallback(async (item) => {
     try {
-      const index = sortedAndFilteredAudio.findIndex(track => track.id === item.id);
-      await audioControl.setAndPlayPlaylist(sortedAndFilteredAudio, index);
+      // Filter out tracks without valid URIs
+      const validTracks = sortedAndFilteredAudio.filter(track => track.uri && track.uri.trim() !== '');
+      
+      if (validTracks.length === 0) {
+        Alert.alert("Error", "No valid audio files found");
+        return;
+      }
+      
+      // Find the index in the filtered array
+      const index = validTracks.findIndex(track => track.id === item.id);
+      
+      if (index === -1) {
+        Alert.alert("Error", "Selected track not found or invalid");
+        return;
+      }
+      
+      console.log('🎵 Playing track:', item.title, 'URI:', item.uri);
+      await audioControl.setAndPlayPlaylist(validTracks, index);
       router.push('/player/audio');
     } catch (error) {
       console.error("Error playing song:", error);
@@ -400,7 +357,7 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
       )}
 
       <FlatList
-        data={tracks}
+        data={sortedAndFilteredAudio}
         renderItem={renderItem}
         keyExtractor={(item) => `${item.id}_${item.uri}`}
         contentContainerStyle={styles.listContainer}
@@ -427,9 +384,7 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
         }
         refreshing={refreshing}
         onRefresh={onRefresh}
-        onEndReached={() => fetchTracks(false)}
         onEndReachedThreshold={0.5}
-        ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color={themeColors.primary} /> : null}
         extraData={trackMetadata}
       />
 

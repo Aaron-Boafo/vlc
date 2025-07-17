@@ -1,23 +1,30 @@
-import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, Image, StyleSheet, Platform } from 'react-native';
-import { Play, Pause, X } from 'lucide-react-native';
+import React, { useEffect, memo, useCallback, useMemo } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { Play, Pause, X, SkipForward, SkipBack } from 'lucide-react-native';
+import { Image } from 'expo-image';
+import { MaterialIcons } from '@expo/vector-icons';
+import Svg, { Circle, G } from 'react-native-svg';
 import useThemeStore from '../store/theme';
 import useAudioControl from '../store/useAudioControl';
 import { useRouter, useSegments } from 'expo-router';
-import { MaterialIcons } from '@expo/vector-icons';
-import Svg, { Circle, G } from 'react-native-svg';
+import ImageOptimizer from '../utils/imageOptimizer';
+import PerformanceAnalytics from '../utils/performanceAnalytics';
 import * as FileSystem from 'expo-file-system';
 
-const MiniPlayer = () => {
+const MiniPlayer = memo(() => {
+  const renderStart = Date.now();
+
   const { themeColors } = useThemeStore();
-  const { 
-    currentTrack, 
-    isPlaying, 
-    isMiniPlayerVisible, 
-    hideMiniPlayer, 
-    pause, 
+  const {
+    currentTrack,
+    isPlaying,
+    isMiniPlayerVisible,
+    hideMiniPlayer,
+    pause,
     play,
     stop,
+    next,
+    previous,
     sound,
     position,
     duration
@@ -25,43 +32,71 @@ const MiniPlayer = () => {
   const router = useRouter();
   const segments = useSegments();
 
-  // Defensive state initialization for artworkUri
+  // 🚀 Optimized artwork handling with ImageOptimizer
   const [artworkUri, setArtworkUri] = React.useState(null);
-  React.useEffect(() => {
-    setArtworkUri(currentTrack?.artwork ?? null);
-  }, [currentTrack?.artwork]);
 
   React.useEffect(() => {
     let isMounted = true;
-    const cacheArtwork = async () => {
-      if (!currentTrack?.artwork) return;
-      const isRemote = /^https?:\/\//.test(currentTrack.artwork);
-      if (!isRemote) {
-        setArtworkUri(currentTrack.artwork);
+    const loadOptimizedArtwork = async () => {
+      if (!currentTrack?.artwork) {
+        setArtworkUri(null);
         return;
       }
-      const artworkDir = FileSystem.documentDirectory + 'artwork/';
-      const filename = encodeURIComponent(currentTrack.title || currentTrack.artwork.split('/').pop());
-      const localUri = artworkDir + filename;
-      await FileSystem.makeDirectoryAsync(artworkDir, { intermediates: true }).catch(() => {});
-      const fileInfo = await FileSystem.getInfoAsync(localUri);
-      if (!fileInfo.exists) {
-        try {
-          await FileSystem.downloadAsync(currentTrack.artwork, localUri);
-        } catch (e) {
-          console.warn('Failed to cache artwork, falling back to remote URI', e);
+
+      try {
+        const optimizedUri = await ImageOptimizer.getOptimizedArtwork(
+          currentTrack.artwork,
+          currentTrack.id
+        );
+        if (isMounted) {
+          setArtworkUri(optimizedUri);
+        }
+      } catch (error) {
+        console.log('Artwork optimization failed:', error);
+        if (isMounted) {
+          setArtworkUri(currentTrack.artwork);
         }
       }
-      const cachedFileInfo = await FileSystem.getInfoAsync(localUri);
-      if (isMounted && cachedFileInfo.exists) {
-        setArtworkUri(localUri);
-      } else if (isMounted) {
-        setArtworkUri(currentTrack.artwork);
-      }
     };
-    cacheArtwork();
+
+    loadOptimizedArtwork();
     return () => { isMounted = false; };
-  }, [currentTrack?.artwork, currentTrack?.title]);
+  }, [currentTrack?.artwork, currentTrack?.id]);
+
+  // 🎯 Highly optimized values for 60 FPS performance
+  const throttledPosition = useMemo(() => {
+    // Update position every 2 seconds instead of every 500ms
+    return Math.floor(position / 2000) * 2000;
+  }, [Math.floor(position / 2000)]);
+
+  const progress = useMemo(() => {
+    if (duration === 0) return 0;
+    return Math.min(throttledPosition / duration, 1);
+  }, [throttledPosition, duration]);
+
+  const optimizedImageProps = useMemo(() => {
+    if (!artworkUri) return null;
+    return ImageOptimizer.getOptimizedImageProps(artworkUri, 48);
+  }, [artworkUri]);
+
+  // 🎯 Memoized callbacks
+  const handlePlayPause = useCallback(() => {
+    const startTime = Date.now();
+    isPlaying ? pause() : play();
+    PerformanceAnalytics.trackRenderTime('MiniPlayer-PlayPause', Date.now() - startTime);
+  }, [isPlaying, pause, play]);
+
+  const handleNext = useCallback(() => next(), [next]);
+  const handlePrevious = useCallback(() => previous(), [previous]);
+
+  const handleClose = useCallback(() => {
+    stop();
+    hideMiniPlayer();
+  }, [stop, hideMiniPlayer]);
+
+  const handleOpenFullPlayer = useCallback(() => {
+    router.push('/player/audio');
+  }, [router]);
 
   React.useEffect(() => {
     if (isMiniPlayerVisible && sound) {
@@ -73,6 +108,15 @@ const MiniPlayer = () => {
     }
   }, [isMiniPlayerVisible, sound]);
 
+  // 📊 Optimized performance tracking - reduce overhead
+  React.useEffect(() => {
+    const renderTime = Date.now() - renderStart;
+    // Only track significant renders and throttle tracking
+    if (renderTime > 100 && Math.random() < 0.1) { // Only track 10% of renders
+      PerformanceAnalytics.trackRenderTime('MiniPlayer', renderTime);
+    }
+  });
+
   // Check if the current screen is the player screen
   const isPlayerScreen = segments.includes('player');
 
@@ -81,18 +125,24 @@ const MiniPlayer = () => {
     return null;
   }
 
-  const handleOpenFullPlayer = () => {
-    router.push('/player/audio');
-  };
+  // 🚀 Optimized progress circle calculations - memoized for performance
+  const circleProps = useMemo(() => {
+    const buttonSize = 40;
+    const arcThickness = 3;
+    const svgSize = buttonSize + arcThickness * 2;
+    const radius = (svgSize - arcThickness) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDashoffset = circumference * (1 - progress);
 
-  // Progress for circular indicator
-  const buttonSize = 40; // Size of the play/pause button
-  const arcThickness = 3; // Thickness of the progress arc (reduced from 7)
-  const svgSize = buttonSize + arcThickness * 2; // SVG wraps the button with padding for the arc
-  const radius = (svgSize - arcThickness) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const progress = duration > 0 ? position / duration : 0;
-  const strokeDashoffset = circumference * (1 - progress);
+    return {
+      buttonSize,
+      arcThickness,
+      svgSize,
+      radius,
+      circumference,
+      strokeDashoffset
+    };
+  }, [progress]);
 
   return (
     <TouchableOpacity
@@ -103,7 +153,7 @@ const MiniPlayer = () => {
       {currentTrack.artwork ? (
         <Image source={{ uri: artworkUri }} style={styles.artwork} />
       ) : (
-        <View style={[styles.artwork, { backgroundColor: themeColors.primary, justifyContent: 'center', alignItems: 'center' }]}/>
+        <View style={[styles.artwork, { backgroundColor: themeColors.primary, justifyContent: 'center', alignItems: 'center' }]} />
       )}
       <View style={styles.infoContainer}>
         <Text style={[styles.title, { color: themeColors.text }]} numberOfLines={1}>
@@ -113,27 +163,35 @@ const MiniPlayer = () => {
           {currentTrack.artist || 'Unknown Artist'}
         </Text>
       </View>
-      <View style={{ width: svgSize, height: svgSize, justifyContent: 'center', alignItems: 'center', position: 'relative', marginLeft: 12, marginRight: 12 }}>
-        <Svg width={svgSize} height={svgSize} style={{ position: 'absolute', top: 0, left: 0 }}>
-          <G rotation={-90} origin={`${svgSize / 2}, ${svgSize / 2}`}>
+      <View style={{
+        width: circleProps.svgSize,
+        height: circleProps.svgSize,
+        justifyContent: 'center',
+        alignItems: 'center',
+        position: 'relative',
+        marginLeft: 12,
+        marginRight: 12
+      }}>
+        <Svg width={circleProps.svgSize} height={circleProps.svgSize} style={{ position: 'absolute', top: 0, left: 0 }}>
+          <G rotation={-90} origin={`${circleProps.svgSize / 2}, ${circleProps.svgSize / 2}`}>
             <Circle
-              cx={svgSize / 2}
-              cy={svgSize / 2}
-              r={radius}
+              cx={circleProps.svgSize / 2}
+              cy={circleProps.svgSize / 2}
+              r={circleProps.radius}
               stroke={themeColors.primary}
-              strokeWidth={arcThickness}
+              strokeWidth={circleProps.arcThickness}
               fill="none"
-              strokeDasharray={circumference}
-              strokeDashoffset={strokeDashoffset}
+              strokeDasharray={circleProps.circumference}
+              strokeDashoffset={circleProps.strokeDashoffset}
               strokeLinecap="round"
             />
           </G>
         </Svg>
         <TouchableOpacity
           style={{
-            width: buttonSize,
-            height: buttonSize,
-            borderRadius: buttonSize / 2,
+            width: circleProps.buttonSize,
+            height: circleProps.buttonSize,
+            borderRadius: circleProps.buttonSize / 2,
             backgroundColor: themeColors.background,
             alignItems: 'center',
             justifyContent: 'center',
@@ -143,10 +201,7 @@ const MiniPlayer = () => {
             shadowRadius: 4,
             shadowOffset: { width: 0, height: 2 },
           }}
-          onPress={e => {
-            e.stopPropagation();
-            isPlaying ? pause() : play();
-          }}
+          onPress={handlePlayPause}
           activeOpacity={0.8}
         >
           {isPlaying ? (
@@ -168,7 +223,7 @@ const MiniPlayer = () => {
       </TouchableOpacity>
     </TouchableOpacity>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
