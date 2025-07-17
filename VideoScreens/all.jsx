@@ -46,7 +46,7 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
   const [videoThumbnails, setVideoThumbnails] = useState({});
 
   useEffect(() => {
-    if (!videoFiles || videoFiles.length === 0) {
+    if (!videoFiles || !Array.isArray(videoFiles) || videoFiles.length === 0) {
       loadVideoFiles().catch(error => {
         console.error('Error loading videos:', error);
         setLoadingError(error.message);
@@ -78,6 +78,7 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
   };
   
   const filteredVideos = useMemo(() => {
+    if (!videoFiles || !Array.isArray(videoFiles)) return [];
     if (!searchQuery) return videoFiles;
     return videoFiles.filter(video =>
       (video.title || video.filename).toLowerCase().includes(searchQuery.toLowerCase())

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  StyleSheet,
 } from "react-native";
 import { router } from "expo-router";
 import * as Icons from "lucide-react-native";
@@ -23,6 +24,7 @@ import useAudioStore from '../../../store/AudioHeadStore';
 import * as FileSystem from 'expo-file-system';
 import CustomAlert from '../../../components/CustomAlert';
 import AppLogo from '../../../components/AppLogo';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Try to import ytdl, but don't fail if it's not available
 let ytdl = null;
@@ -48,6 +50,82 @@ const MoreScreen = () => {
   const videoFiles = useVideoStore(state => state.videoFiles);
   const [storageInfo, setStorageInfo] = useState({ totalSize: 0, fileCount: 0, loading: false });
   const [customAlert, setCustomAlert] = useState({ visible: false, title: '', message: '', buttons: [] });
+  const [userProfile, setUserProfile] = useState({
+    name: 'Visura User',
+    email: 'user@visura.com',
+    isSignedIn: false,
+    avatar: null,
+    preferences: {
+      theme: 'auto',
+      language: 'en',
+      notifications: true
+    }
+  });
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginForm, setLoginForm] = useState({
+    email: '',
+    password: ''
+  });
+
+  // Load user profile from storage
+  useEffect(() => {
+    loadUserProfile();
+  }, []);
+
+  const loadUserProfile = async () => {
+    try {
+      const savedProfile = await AsyncStorage.getItem('@user_profile');
+      if (savedProfile) {
+        setUserProfile(JSON.parse(savedProfile));
+      }
+    } catch (error) {
+      console.error('Error loading user profile:', error);
+    }
+  };
+
+  const saveUserProfile = async (profile) => {
+    try {
+      await AsyncStorage.setItem('@user_profile', JSON.stringify(profile));
+      setUserProfile(profile);
+    } catch (error) {
+      console.error('Error saving user profile:', error);
+    }
+  };
+
+  const handleLogin = async () => {
+    if (!loginForm.email || !loginForm.password) {
+      Alert.alert('Error', 'Please enter both email and password.');
+      return;
+    }
+
+    // Simple authentication (in a real app, you'd use a proper auth service)
+    if (loginForm.email === 'demo@visura.com' && loginForm.password === 'demo123') {
+      const newProfile = {
+        ...userProfile,
+        name: 'Demo User',
+        email: loginForm.email,
+        isSignedIn: true,
+        avatar: null
+      };
+      await saveUserProfile(newProfile);
+      setShowLoginModal(false);
+      setLoginForm({ email: '', password: '' });
+      Alert.alert('Success', 'Successfully signed in!');
+    } else {
+      Alert.alert('Error', 'Invalid email or password. Try demo@visura.com / demo123');
+    }
+  };
+
+  const handleLogout = async () => {
+    const newProfile = {
+      ...userProfile,
+      isSignedIn: false,
+      name: 'Visura User',
+      email: 'user@visura.com'
+    };
+    await saveUserProfile(newProfile);
+    Alert.alert('Success', 'Successfully signed out!');
+  };
 
   const validateUrl = (url) => {
     try {
@@ -381,14 +459,23 @@ const MoreScreen = () => {
         {/* User Info Card - moved inside ScrollView */}
         <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, marginHorizontal: 0, marginTop: 0, marginBottom: 10, backgroundColor: themeColors.sectionBackground, borderRadius: 16, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
           <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#4A90E2', alignItems: 'center', justifyContent: 'center', marginRight: 16, borderWidth: 2, borderColor: themeColors.primary }}>
-            <Icons.User size={32} color={'#fff'} />
+            {userProfile.avatar ? (
+              <Image source={{ uri: userProfile.avatar }} style={{ width: 52, height: 52, borderRadius: 26 }} />
+            ) : (
+              <Icons.User size={32} color={'#fff'} />
+            )}
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontWeight: 'bold', fontSize: 18, color: themeColors.text }}>NaN</Text>
+            <Text style={{ fontWeight: 'bold', fontSize: 18, color: themeColors.text }}>{userProfile.name}</Text>
             <Text style={{ color: themeColors.textSecondary, fontSize: 14, marginTop: 2 }}>Experience Visura</Text>
-            <Text style={{ color: themeColors.primary, fontSize: 13, marginTop: 2 }}>Not signed in. Create an account to use cloud services.</Text>
+            <Text style={{ color: themeColors.primary, fontSize: 13, marginTop: 2 }}>
+              {userProfile.isSignedIn ? 'Signed in. Cloud services available.' : 'Not signed in. Create an account to use cloud services.'}
+            </Text>
           </View>
-          <TouchableOpacity style={{ marginLeft: 8, padding: 6 }}>
+          <TouchableOpacity 
+            style={{ marginLeft: 8, padding: 6 }}
+            onPress={() => userProfile.isSignedIn ? handleLogout() : setShowLoginModal(true)}
+          >
             <Icons.Info size={22} color={themeColors.primary} />
           </TouchableOpacity>
         </View>
@@ -747,6 +834,52 @@ const MoreScreen = () => {
         </View>
       </Modal>
 
+      <Modal
+        visible={showLoginModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowLoginModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: themeColors.background }]}>
+            <Text style={[styles.modalTitle, { color: themeColors.text }]}>Sign In</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: themeColors.card, color: themeColors.text, borderColor: themeColors.primary }]}
+              placeholder="Email"
+              placeholderTextColor={themeColors.textSecondary}
+              value={loginForm.email}
+              onChangeText={(text) => setLoginForm({ ...loginForm, email: text })}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <TextInput
+              style={[styles.input, { backgroundColor: themeColors.card, color: themeColors.text, borderColor: themeColors.primary }]}
+              placeholder="Password"
+              placeholderTextColor={themeColors.textSecondary}
+              value={loginForm.password}
+              onChangeText={(text) => setLoginForm({ ...loginForm, password: text })}
+              secureTextEntry
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: themeColors.primary }]}
+                onPress={handleLogin}
+              >
+                <Text style={styles.modalButtonText}>Sign In</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: 'transparent', borderColor: themeColors.primary, borderWidth: 1 }]}
+                onPress={() => setShowLoginModal(false)}
+              >
+                <Text style={[styles.modalButtonText, { color: themeColors.primary }]}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={[styles.demoText, { color: themeColors.textSecondary }]}>
+              Demo: demo@visura.com / demo123            </Text>
+          </View>
+        </View>
+      </Modal>
+
       <CustomAlert
         visible={customAlert.visible}
         title={customAlert.title}
@@ -757,5 +890,60 @@ const MoreScreen = () => {
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '80%',
+    padding: 20,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    fontSize: 16,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginHorizontal: 5,
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 600,
+  },
+  demoText: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 16,
+    fontStyle: 'italic',
+  },
+});
 
 export default MoreScreen;

@@ -194,7 +194,7 @@ const useVideoStore = create(
 
       // Set a single video to play
       setAndPlayVideo: (video, shouldContinuePlayback = false) => {
-        const videoFiles = get().videoFiles;
+        const videoFiles = get().videoFiles || [];
         const index = videoFiles.findIndex(v => v.id === video.id);
         set({
           currentVideo: video,
@@ -238,6 +238,9 @@ const useVideoStore = create(
 
       playNext: () => {
         const { currentVideoIndex, videoFiles } = get();
+        if (!videoFiles || !Array.isArray(videoFiles) || videoFiles.length === 0) {
+          return;
+        }
         const nextIndex = (currentVideoIndex + 1) % videoFiles.length;
         if (nextIndex < videoFiles.length) {
           set({
@@ -249,6 +252,9 @@ const useVideoStore = create(
 
       playPrevious: () => {
         const { currentVideoIndex, videoFiles } = get();
+        if (!videoFiles || !Array.isArray(videoFiles) || videoFiles.length === 0) {
+          return;
+        }
         const prevIndex = (currentVideoIndex - 1 + videoFiles.length) % videoFiles.length;
         if (prevIndex >= 0) {
           set({
@@ -262,10 +268,10 @@ const useVideoStore = create(
 
       // Sorting function
       sortVideoFiles: (key, direction) => {
-        const sortedFiles = [...get().videoFiles].sort((a, b) => {
+        const videoFiles = get().videoFiles || [];
+        const sortedFiles = [...videoFiles].sort((a, b) => {
           const valA = a[key] || '';
           const valB = b[key] || '';
-          
           if (key === 'filename') {
             return direction === 'asc' 
               ? valA.localeCompare(valB) 
@@ -417,6 +423,7 @@ const useVideoStore = create(
         favouriteVideos: state.favouriteVideos,
         videoHistory: state.videoHistory,
         videoPlaylists: state.videoPlaylists,
+        sortOrder: state.sortOrder,
       }),
       // Defensive: fallback to empty state if persisted state is invalid
       merge: (persistedState, currentState) => {

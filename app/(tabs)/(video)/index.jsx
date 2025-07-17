@@ -87,8 +87,8 @@ export default function VideoTabScreen() {
         onClose={() => setShowSort(false)}
         title="Sort Videos"
         sortOptions={videoSortOptions}
-        currentSortOrder={useVideoStore.getState().sortOrder}
-        onSort={(newSortOrder) => useVideoStore.getState().sortVideoFiles(newSortOrder)}
+        currentSortOrder={useVideoStore.getState().sortOrder || { key: "filename", direction: "asc" }}
+        onSort={(newSortOrder) => useVideoStore.getState().sortVideoFiles(newSortOrder.key, newSortOrder.direction)}
       />
       <MoreOptionsMenu
         visible={showMore}

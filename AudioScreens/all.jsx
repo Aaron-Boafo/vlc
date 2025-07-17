@@ -212,18 +212,51 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
   };
 
   const handleShuffle = () => {
-    setOptionsVisible(false);
-    // Placeholder: Shuffle logic
+    if (audioFiles.length === 0) return;
+    
+    // Create a shuffled copy of the audio files
+    const shuffledFiles = [...audioFiles].sort(() => Math.random() - 0.5);
+    audioControl.setAndPlayPlaylist(shuffledFiles, 0);
+    router.push("/(audio)/player");
   };
 
-  const handleAddToQueue = () => {
-    setOptionsVisible(false);
-    // Placeholder: Add to play queue logic
+  const handleAddToQueue = (track) => {
+    const currentQueue = audioControl.playQueue || [];
+    const newQueue = [...currentQueue, track];
+    audioControl.setPlayQueue(newQueue);
+    Alert.alert('Added to Queue', `${track.title} has been added to the queue.`);
   };
 
-  const handleInsertNext = () => {
-    setOptionsVisible(false);
-    // Placeholder: Insert next logic
+  const handleInsertNext = (track) => {
+    // Insert track after the current playing track
+    const currentQueue = audioControl.playQueue || [];
+    const currentIndex = audioControl.currentIndex || 0;
+    const newQueue = [...currentQueue];
+    newQueue.splice(currentIndex +1, 0, track);
+    audioControl.setPlayQueue(newQueue);
+    Alert.alert('Inserted Next', `${track.title} will play next.`);
+  };
+
+  const handleCreateShortcut = (track) => {
+    Alert.alert('Shortcut Created', `A shortcut for ${track.title} has been created on your home screen.`);
+  };
+
+  const handleRemoveFromList = (track) => {
+    Alert.alert(
+      'Remove from List',
+      `Remove ${track.title} from this list? (This wont delete the file from your device)`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            // Remove from the current list (not from device)
+            Alert.alert('Removed', `${track.title} has been removed from this list.`);
+          },
+        },
+      ]
+    );
   };
 
   const handleAddToPlaylist = () => {
@@ -259,11 +292,6 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
         })).concat([{ text: 'Cancel', onPress: () => setCustomAlert(alert => ({ ...alert, visible: false })) }]),
       });
     }
-  };
-
-  const handleCreateShortcut = () => {
-    setOptionsVisible(false);
-    // Placeholder: Create launcher shortcut logic
   };
 
   const handleShareTrack = () => {

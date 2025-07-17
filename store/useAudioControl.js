@@ -347,18 +347,68 @@ const useAudioControl = create((set, get) => ({
   // Lyrics Controls
   fetchLyrics: async (track) => {
     if (!track || !track.uri) {
-        set({ lyrics: null });
+        set({ lyrics: null, lyricsLoading: false, lyricsError: null });
         return;
     }
-    // For now, we'll just set dummy lyrics.
-    // In a real app, you would fetch this from a file or an API.
-    // e.g., look for a .lrc file with the same name as the audio file.
-    const dummyLyrics = `[00:01.00] These are placeholder lyrics for ${track.filename}.
-[00:05.50] This is a dummy implementation.
-[00:10.00] A real app would parse a .lrc file.
-[00:15.25] Line 4.
-[00:20.75] Line 5.`;
-    set({ lyrics: dummyLyrics });
+
+    set({ lyricsLoading: true, lyricsError: null });
+
+    try {
+      // First, try to find a .lrc file with the same name as the audio file
+      const audioPath = track.uri;
+      const basePath = audioPath.substring(0, audioPath.lastIndexOf('.'));
+      const lrcPath = basePath + '.lrc';   
+      // Check if .lrc file exists
+      const lrcInfo = await FileSystem.getInfoAsync(lrcPath);
+      
+      if (lrcInfo.exists) {       // Read the .lrc file
+        const lrcContent = await FileSystem.readAsStringAsync(lrcPath);
+        set({ lyrics: lrcContent, lyricsLoading: false });
+        return;
+      }
+
+      // If no .lrc file, try to fetch from online lyrics service
+      // For now, we'll use a simple lyrics API (you can replace with your preferred service)
+      const searchTerm = encodeURIComponent(`${track.title} ${track.artist}`);
+      const response = await fetch(`https://api.lyrics.ovh/v1/${track.artist}/${track.title}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.lyrics) {
+          // Convert plain text lyrics to .lrc format
+          const lrcLyrics = convertToLrcFormat(data.lyrics, track.title);
+          set({ lyrics: lrcLyrics, lyricsLoading: false });
+          return;
+        }
+      }
+
+      // If no lyrics found, create a placeholder
+      const placeholderLyrics = `[00:0100] ${track.title}
+[00:5 By ${track.artist}
+[00o lyrics available for this track
+[000] Enjoy the music!`;
+      
+      set({ lyrics: placeholderLyrics, lyricsLoading: false });
+    } catch (error) {
+      console.error('Error fetching lyrics:', error);
+      set({ lyrics: null, lyricsLoading: false, lyricsError: 'Failed to load lyrics' });
+    }
+  },
+
+  // Helper function to convert plain text to .lrc format
+  convertToLrcFormat: (plainText, title) => {
+    const lines = plainText.split('\n').filter(line => line.trim());
+    let lrcContent = `[00:010${title}\n`;
+    
+    lines.forEach((line, index) => {
+      const timeInSeconds = (index + 2) * 5; // 5 seconds per line
+      const minutes = Math.floor(timeInSeconds / 60);
+      const seconds = timeInSeconds % 60;
+      const timeStamp = `[${minutes.toString().padStart(2,0)}${seconds.toString().padStart(2,0)}.00]`;
+      lrcContent += `${timeStamp} ${line}\n`;
+    });
+    
+    return lrcContent;
   },
 
   toggleLyrics: () => {

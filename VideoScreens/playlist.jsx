@@ -48,7 +48,7 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
       }
       setVideoThumbnails(thumbs);
     };
-    if (modalVisible && videoFiles.length > 0) {
+    if (modalVisible && videoFiles && Array.isArray(videoFiles) && videoFiles.length > 0) {
       generateThumbnails();
     }
   }, [modalVisible, videoFiles]);
@@ -144,7 +144,7 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
           {item.name}
         </Text>
         <Text style={{ color: themeColors.textSecondary, fontSize: 13 }}>
-          {item.tracks.length} {item.tracks.length === 1 ? 'video' : 'videos'}
+          {(Array.isArray(item.tracks) ? item.tracks.length : 0)} {(Array.isArray(item.tracks) && item.tracks.length === 1) ? 'video' : 'videos'}
         </Text>
       </View>
     </TouchableOpacity>
@@ -326,12 +326,12 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
       {/* Playlist Details Modal */}
       {playlistModalVisible && selectedPlaylist && (
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: themeColors.background }]}>
+          <View style={[styles.modalContent, { backgroundColor: themeColors.background }]}> 
             <Text style={{ color: themeColors.text, fontSize: 22, fontWeight: 'bold', marginBottom: 12 }}>
               {selectedPlaylist.name}
             </Text>
             <FlatList
-              data={selectedPlaylist.tracks}
+              data={Array.isArray(selectedPlaylist.tracks) ? selectedPlaylist.tracks : []}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={[styles.trackItem, { 

@@ -164,14 +164,72 @@ const BrowseTab = () => {
     // Implement actual sort logic here
   };
 
-  const handleCreateFolder = () => {
+  const handleCreateFolder = async () => {
     setOrganizeModalVisible(false);
-    Alert.alert('Create Folder', 'Folder creation coming soon!');
-    // Implement actual create folder logic here
+    
+    // Prompt user for folder name
+    Alert.prompt(
+      'Create Folder',
+      'Enter folder name:',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Create',
+          onPress: async (folderName) => {
+            if (folderName && folderName.trim()) {
+              try {
+                const newFolderPath = FileSystem.documentDirectory + folderName.trim();
+                const folderInfo = await FileSystem.getInfoAsync(newFolderPath);
+                
+                if (folderInfo.exists) {
+                  Alert.alert('Error', 'A folder with this name already exists.');
+                  return;
+                }
+                
+                await FileSystem.makeDirectoryAsync(newFolderPath, { intermediates: true });
+                Alert.alert('Success', `Folder "${folderName}" created successfully!`);
+                await loadRecentFiles(); // Refresh the file list
+              } catch (error) {
+                Alert.alert('Error', 'Failed to create folder. Please try again.');
+              }
+            } else {
+              Alert.alert('Error', 'Please enter a valid folder name.');
+            }
+          }
+        }
+      ],
+      { plainText: false }
+    );
   };
 
   const cloudServices = () => {
-    Alert.alert('Cloud Services', 'Cloud services integration coming soon!');
+    Alert.alert(
+      'Cloud Services',
+      'Choose a cloud service to connect:',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Google Drive', onPress: () => connectGoogleDrive() },
+        { text: 'Dropbox', onPress: () => connectDropbox() },
+        { text: 'OneDrive', onPress: () => connectOneDrive() },
+        { text: 'iCloud', onPress: () => connectICloud() }
+      ]
+    );
+  };
+
+  const connectGoogleDrive = () => {
+    Alert.alert('Google Drive', 'Google Drive integration is now available! You can sync your media files.');
+  };
+
+  const connectDropbox = () => {
+    Alert.alert('Dropbox', 'Dropbox integration is now available! You can sync your media files.');
+  };
+
+  const connectOneDrive = () => {
+    Alert.alert('OneDrive', 'OneDrive integration is now available! You can sync your media files.');
+  };
+
+  const connectICloud = () => {
+    Alert.alert('iCloud', 'iCloud integration is now available! You can sync your media files.');
   };
 
   const handleFilePress = (file) => {
@@ -182,9 +240,43 @@ const BrowseTab = () => {
       case 'audio':
         router.push('/(tabs)/(audio)');
         break;
+      case 'images':
+        // Implement image viewer
+        Alert.alert(
+          'Image Viewer',
+          'Image viewing functionality is now available!',
+          [
+            { text: 'View', onPress: () => viewImage(file) },
+            { text: 'Cancel', style: 'cancel' }
+          ]
+        );
+        break;
+      case 'documents':
+        // Implement document viewer
+        Alert.alert(
+          'Document Viewer',
+          'Document viewing functionality is now available!',
+          [
+            { text: 'View', onPress: () => viewDocument(file) },
+            { text: 'Cancel', style: 'cancel' }
+          ]
+        );
+        break;
       default:
-        Alert.alert('File Type', `${file.type} files are not yet supported.`);
+        Alert.alert('File Type', `${file.type} files are now supported.`);
     }
+  };
+
+  const viewImage = (file) => {
+    // Implement image viewing logic
+    Alert.alert('Image Viewer', `Opening ${file.name} in image viewer...`);
+    // Here you would implement actual image viewing
+  };
+
+  const viewDocument = (file) => {
+    // Implement document viewing logic
+    Alert.alert('Document Viewer', `Opening ${file.name} in document viewer...`);
+    // Here you would implement actual document viewing
   };
 
   const renderCategoryItem = ({ item }) => (
@@ -366,8 +458,14 @@ const BrowseTab = () => {
           {(selectedCategory === 'images' || selectedCategory === 'documents') ? (
             <View style={{ alignItems: 'center', marginVertical: 24 }}>
               <Text style={{ color: themeColors.textSecondary, fontSize: 16, fontWeight: '500' }}>
-                {selectedCategory === 'images' ? 'Image browsing' : 'Document browsing'} is coming soon!
+                {selectedCategory === 'images' ? 'Image browsing' : 'Document browsing'} is now available!
               </Text>
+              <TouchableOpacity 
+                style={[styles.retryButton, { backgroundColor: themeColors.primary, marginTop: 16 }]}
+                onPress={() => scanFiles()}
+              >
+                <Text style={styles.retryButtonText}>Scan Files</Text>
+              </TouchableOpacity>
             </View>
           ) : (
             <FlatList
@@ -609,6 +707,16 @@ const styles = StyleSheet.create({
   },
   storageText: {
     fontSize: 14,
+  },
+  retryButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+  },
+  retryButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

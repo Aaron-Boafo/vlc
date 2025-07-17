@@ -4,7 +4,7 @@ import { Video } from 'expo-av';
 import { Play, Pause, X, Trash2 } from 'lucide-react-native';
 import useVideoStore from '../store/VideoHeadStore';
 import { router } from 'expo-router';
-import Animated, { useAnimatedStyle, withTiming, useSharedValue, useAnimatedGestureHandler } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, withTiming, useSharedValue, useAnimatedGestureHandler, runOnJS } from 'react-native-reanimated';
 import { PanGestureHandler } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
