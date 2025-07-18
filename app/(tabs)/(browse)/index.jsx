@@ -13,6 +13,7 @@ import {
   Modal as RNModal,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Icons from 'lucide-react-native';
 import useThemeStore from '../../../store/theme';
 import { router } from 'expo-router';
 import * as FileSystem from 'expo-file-system';
@@ -21,6 +22,7 @@ import AudioHeader from '../../../AudioComponents/title';
 import { SafeAreaView as SafeAreaViewRN } from 'react-native-safe-area-context';
 import FileBrowser from '../../../components/FileBrowser';
 import * as DocumentPicker from 'expo-document-picker';
+import StreamModal from '../../../components/StreamModal';
 
 const BrowseTab = () => {
   const { themeColors } = useThemeStore();
@@ -33,6 +35,7 @@ const BrowseTab = () => {
   const [showStorageSheet, setShowStorageSheet] = useState(false);
   const [storageRoot, setStorageRoot] = useState(null);
   const [storageTitle, setStorageTitle] = useState('');
+  const [showStreamModal, setShowStreamModal] = useState(false);
   const [storages, setStorages] = useState([
     { id: 'internal', name: 'Internal Storage', icon: 'folder', root: FileSystem.documentDirectory }
   ]);
@@ -383,6 +386,29 @@ const BrowseTab = () => {
           )}
         </View>
 
+{/* stream button */}
+        <TouchableOpacity
+  style={{
+    backgroundColor: themeColors.sectionBackground,
+    width: 162,
+    height: 106,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
+    marginRight: 12, // Add some spacing if needed
+  }}
+  onPress={() => setShowStreamModal(true)}
+>
+  <Icons.Plus size={24} color={themeColors.primary} />
+  <Text style={[styles.streamButtonText, { color: themeColors.text }]}>
+    New stream
+  </Text>
+</TouchableOpacity>
         {/* Storage Info */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: themeColors.primary }]}>Storages</Text>
@@ -451,6 +477,12 @@ const BrowseTab = () => {
             </View>
           </View>
         </RNModal>
+
+        {/* Stream Modal */}
+        <StreamModal 
+          visible={showStreamModal} 
+          onClose={() => setShowStreamModal(false)} 
+        />
       </ScrollView>
     </SafeAreaViewRN>
   );
@@ -465,17 +497,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     margin: 16,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    gap: 12,
+    paddingVertical: 14,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
+    fontFamily: 'System', // Use system font for better readability
   },
   content: {
     flex: 1,
     paddingHorizontal: 16,
+    paddingBottom: 32,
   },
   section: {
     marginTop: 24,
@@ -487,77 +525,83 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 16,
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+    fontFamily: 'System',
   },
   seeAllText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
+    fontFamily: 'System',
   },
   categoriesList: {
     paddingRight: 16,
+    paddingVertical: 4,
   },
   categoryCard: {
     alignItems: 'center',
     padding: 16,
     marginRight: 12,
-    borderRadius: 12,
-    minWidth: 80,
-    elevation: 2,
+    borderRadius: 16,
+    minWidth: 100,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.03,
     shadowRadius: 4,
+    elevation: 2,
   },
   categoryIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   categoryName: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
     textAlign: 'center',
+    fontFamily: 'System',
   },
   quickActionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
+    marginHorizontal: -4,
   },
   quickActionCard: {
     flex: 1,
     minWidth: '45%',
     alignItems: 'center',
     padding: 20,
-    borderRadius: 12,
-    elevation: 2,
+    borderRadius: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.03,
     shadowRadius: 4,
-    gap: 8,
+    elevation: 2,
   },
   quickActionText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
     textAlign: 'center',
+    marginTop: 4,
   },
   recentFileCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
-    marginBottom: 8,
-    borderRadius: 12,
-    elevation: 2,
+    marginBottom: 10,
+    borderRadius: 16,
+    borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.03,
     shadowRadius: 4,
+    elevation: 1,
   },
   fileInfo: {
     flexDirection: 'row',
@@ -565,51 +609,92 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   fileDetails: {
-    marginLeft: 12,
+    marginLeft: 16,
     flex: 1,
   },
   fileName: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
     marginBottom: 2,
+    fontFamily: 'System',
   },
   fileMeta: {
-    fontSize: 12,
+    fontSize: 13,
+    fontFamily: 'System',
   },
-  storageCard: {
+  streamButton: {
+    width: '100%',
+    aspectRatio: 1.6,
+    borderRadius: 16,
     padding: 16,
-    marginTop: 24,
-    marginBottom: 32,
-    borderRadius: 12,
-    elevation: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    overflow: 'hidden',
+  },
+  streamButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 12,
+    fontFamily: 'System',
+  },
+  storageCard: {
+    padding: 20,
+    marginTop: 24,
+    marginBottom: 32,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   storageHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    gap: 8,
+    marginBottom: 16,
+    gap: 12,
   },
   storageTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
+    fontFamily: 'System',
   },
   storageBar: {
-    height: 8,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    borderRadius: 4,
-    marginBottom: 8,
+    height: 6,
+    borderRadius: 3,
+    marginBottom: 12,
+    overflow: 'hidden',
   },
   storageProgress: {
     height: '100%',
-    borderRadius: 4,
+    borderRadius: 3,
   },
   storageText: {
     fontSize: 14,
+    fontFamily: 'System',
+  },
+  cardGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 16,
+  },
+  highlight: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 4,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
   },
 });
-
 export default BrowseTab;

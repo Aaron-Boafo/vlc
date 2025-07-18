@@ -4,14 +4,15 @@ import { StatusBar } from 'expo-status-bar';
 import "../global.css";
 import { View } from 'react-native';
 import { useFonts } from 'expo-font';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Audio } from 'expo-av';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import usePlaybackStore from '../store/playbackStore';
+import AppThemeProvider from '../components/ThemeProvider';
 
 SplashScreen.preventAutoHideAsync();
 
-export default function RootLayout() {
+function RootLayoutContent() {
   const [fontsLoaded, fontError] = useFonts({
     'Inter-Regular': require('../assets/fonts/inter/extras/ttf/Inter-Regular.ttf'),
     'Inter-Medium': require('../assets/fonts/inter/extras/ttf/Inter-Medium.ttf'),
@@ -20,12 +21,7 @@ export default function RootLayout() {
   });
   const { backgroundPlay } = usePlaybackStore();
 
-  useEffect(() => {
-    if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded, fontError]);
-
+  // Set up audio mode
   useEffect(() => {
     Audio.setAudioModeAsync({
       allowsRecordingIOS: false,
@@ -36,7 +32,15 @@ export default function RootLayout() {
     });
   }, [backgroundPlay]);
 
-  if (!fontsLoaded && !fontError) {
+  // Hide splash screen when fonts are loaded
+  useEffect(() => {
+    if (fontsLoaded || fontError) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded, fontError]);
+
+  // Don't render anything until fonts are loaded
+  if (!fontsLoaded) {
     return null;
   }
 
@@ -69,5 +73,14 @@ export default function RootLayout() {
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>
+  );
+}
+
+// Main app component with theme provider
+export default function RootLayout() {
+  return (
+    <AppThemeProvider>
+      <RootLayoutContent />
+    </AppThemeProvider>
   );
 }
