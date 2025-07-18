@@ -975,13 +975,13 @@ export default function MoreTab() {
             <SettingItem isLast={true} icon={<Icons.Smartphone size={22} color={accentColor} />} title={t("Device")} description={DEVICE} />
           </Section>
           <Section title={t("FEEDBACK & SUPPORT")}>
-            <SettingItem icon={<Icons.MessageCircle size={22} color={accentColor} />} title={t("Send Feedback")} onPress={() => Linking.openURL("mailto:support@videolan.org")} />
-            <SettingItem icon={<Icons.HelpCircle size={22} color={accentColor} />} title={t("Help Center")} onPress={() => Linking.openURL("https://www.videolan.org/support/")} />
-            <SettingItem isLast={true} icon={<Icons.GitBranch size={22} color={accentColor} />} title={t("Open Source Credits")} onPress={() => Linking.openURL("https://github.com/videolan/vlc")} />
+            <SettingItem icon={<Icons.MessageCircle size={22} color={accentColor} />} title={t("Send Feedback")} onPress={() => Linking.openURL("https://www.youware.com/project/visura-ct9esryamu")} />
+            <SettingItem icon={<Icons.HelpCircle size={22} color={accentColor} />} title={t("Help Center")} onPress={() => Linking.openURL("https://www.youware.com/project/visura-ct9esryamu")} />
+            <SettingItem isLast={true} icon={<Icons.GitBranch size={22} color={accentColor} />} title={t("Open Source Credits")} onPress={() => Linking.openURL("https://www.youware.com/project/visura-ct9esryamu")} />
           </Section>
           <Section title={t("LEGAL")}>
-            <SettingItem icon={<Icons.FileText size={22} color={accentColor} />} title={t("Privacy Policy")} onPress={() => Linking.openURL("https://www.videolan.org/legal.html")} />
-            <SettingItem isLast={true} icon={<Icons.FileTerminal size={22} color={accentColor} />} title={t("Terms of Service")} onPress={() => Linking.openURL("https://www.videolan.org/legal.html")} />
+            <SettingItem icon={<Icons.FileText size={22} color={accentColor} />} title={t("Privacy Policy")} onPress={() => Linking.openURL("https://www.youware.com/project/visura-ct9esryamu")} />
+            <SettingItem isLast={true} icon={<Icons.FileTerminal size={22} color={accentColor} />} title={t("Terms of Service")} onPress={() => Linking.openURL("https://www.youware.com/project/visura-ct9esryamu")} />
           </Section>
           <View style={{ padding: 16, marginTop: 16 }}>
             <Text style={{ color: themeColors.textSecondary, fontSize: 13, textAlign: 'center' }} allowFontScaling>

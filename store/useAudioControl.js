@@ -1,9 +1,13 @@
 import { create } from "zustand";
+import { subscribeWithSelector } from "zustand/middleware";
 import { Audio } from "expo-av";
 import useHistoryStore from './historyStore';
 import usePlaybackStore from "./playbackStore";
+import AudioOptimizer from '../utils/audioOptimizations';
+import * as FileSystem from 'expo-file-system';
 
-const useAudioControl = create((set, get) => ({
+const useAudioControl = create(
+  subscribeWithSelector((set, get) => ({
   // Audio state
   sound: null,
   isPlaying: false,
@@ -46,6 +50,15 @@ const useAudioControl = create((set, get) => ({
   },
 
   setAndPlayPlaylist: async (tracks, startIndex = 0) => {
+    // Validate input
+    if (!tracks || !Array.isArray(tracks) || tracks.length === 0) {
+      console.error("Invalid tracks provided to setAndPlayPlaylist:", tracks);
+      return;
+    }
+    
+    // Ensure startIndex is within bounds
+    const validStartIndex = Math.max(0, Math.min(startIndex, tracks.length - 1));
+    
     const { sound } = get();
     if (sound) {
       try {
@@ -55,20 +68,39 @@ const useAudioControl = create((set, get) => ({
         console.error("Error stopping/unloading previous sound:", error);
       }
     }
-    const trackToPlay = tracks[startIndex];
+    const trackToPlay = tracks[validStartIndex];
+    
+    // Validate track has required properties
+    if (!trackToPlay || !trackToPlay.uri) {
+      console.error("Invalid track at index", validStartIndex, ":", trackToPlay);
+      return;
+    }
+    
+    // 🎨 Enrich track with metadata if not already present
+    const enrichedTrack = await get()._enrichTrackMetadata(trackToPlay);
+    
     set({
       playQueue: tracks,
       originalQueue: tracks,
-      currentIndex: startIndex,
-      currentTrack: trackToPlay,
+      currentIndex: validStartIndex,
+      currentTrack: enrichedTrack,
       sound: null,
       isMiniPlayerVisible: true,
     });
-    get()._loadAndPlayTrack(trackToPlay);
+    get()._loadAndPlayTrack(enrichedTrack);
   },
 
   // Set play queue without starting
   setPlayQueue: async (tracks, startIndex = 0) => {
+    // Validate input
+    if (!tracks || !Array.isArray(tracks) || tracks.length === 0) {
+      console.error("Invalid tracks provided to setPlayQueue:", tracks);
+      return;
+    }
+    
+    // Ensure startIndex is within bounds
+    const validStartIndex = Math.max(0, Math.min(startIndex, tracks.length - 1));
+    
     const { sound } = get();
     if (sound) {
       try {
@@ -81,29 +113,28 @@ const useAudioControl = create((set, get) => ({
     set({
       playQueue: tracks,
       originalQueue: tracks,
-      currentIndex: startIndex,
-      currentTrack: tracks[startIndex] || null,
+      currentIndex: validStartIndex,
+      currentTrack: tracks[validStartIndex] || null,
       isPlaying: false,
       sound: null,
       isMiniPlayerVisible: true,
     });
     // Also fetch lyrics for the new track
-    get().fetchLyrics(tracks[startIndex]);
+    get().fetchLyrics(tracks[validStartIndex]);
     get().clearSleepTimer();
   },
 
   _loadAndPlayTrack: async (track) => {
     if (get().isLoading) {
-      console.log('[AUDIO] Play request ignored: already loading');
       return;
     }
     set({ isLoading: true });
-    const { sound: existingSound } = get();
+    const { sound: existingSound, playQueue, currentIndex } = get();
+    
     try {
       if (existingSound) {
         const status = await existingSound.getStatusAsync();
         if (status.isLoaded) {
-          console.log('[AUDIO] Unloading sound for:', existingSound._key || 'unknown', 'Track:', get().currentTrack?.title);
           await existingSound.stopAsync();
           await existingSound.unloadAsync();
         }
@@ -114,45 +145,92 @@ const useAudioControl = create((set, get) => ({
     }
 
     if (!track?.uri) {
-      console.error("Attempted to play a track with no URI");
+      console.error("Attempted to play a track with no URI:", track);
+      console.error("Track details:", JSON.stringify(track, null, 2));
       return set({ isLoading: false, currentTrack: null });
     }
     
     set({ isLoading: true, sound: null, isPlaying: false, position: 0 });
 
     try {
-      console.log('[AUDIO] Creating new sound for:', track.title, track.uri);
       const { playbackRate } = usePlaybackStore.getState();
-      const initialStatus = {
+      
+      // 🚀 Try to get optimized/preloaded sound first
+      let newSound;
+      try {
+        newSound = await AudioOptimizer.getOptimizedSound(track);
+        console.log('⚡ Using optimized sound for:', track.title);
+      } catch (optimizerError) {
+        console.log('Optimizer failed, using standard loading:', optimizerError);
+        // Fallback to standard loading
+        const initialStatus = {
+          shouldPlay: true,
+          volume: 1.0,
+          rate: playbackRate,
+          androidImplementation: 'MediaPlayer',
+          metadata: {
+            title: track.title || 'Unknown Title',
+            artist: track.artist || 'Unknown Artist',
+            album: track.album || 'Unknown Album',
+            artwork: track.artwork,
+          },
+        };
+
+        // --- FileSystem caching logic start ---
+        let audioUri = track.uri;
+        const isRemote = /^https?:\/\//.test(track.uri);
+        if (isRemote) {
+          const audiosDir = FileSystem.documentDirectory + 'audios/';
+          const filename = encodeURIComponent(track.title || track.uri.split('/').pop());
+          const localUri = audiosDir + filename;
+          // Ensure audios directory exists
+          await FileSystem.makeDirectoryAsync(audiosDir, { intermediates: true }).catch(() => {});
+          const fileInfo = await FileSystem.getInfoAsync(localUri);
+          if (!fileInfo.exists) {
+            try {
+              await FileSystem.downloadAsync(track.uri, localUri);
+            } catch (e) {
+              console.warn('Failed to cache audio, falling back to remote URI', e);
+            }
+          }
+          // Use local file if it exists
+          const cachedFileInfo = await FileSystem.getInfoAsync(localUri);
+          if (cachedFileInfo.exists) {
+            audioUri = localUri;
+          }
+        }
+        // --- FileSystem caching logic end ---
+
+        const soundResult = await Audio.Sound.createAsync(
+            { uri: audioUri },
+            initialStatus,
+            (status) => onPlaybackStatusUpdate(status, set, get)
+        );
+        newSound = soundResult.sound;
+      }
+
+      // Configure the sound for playback
+      await newSound.setStatusAsync({
         shouldPlay: true,
         volume: 1.0,
         rate: playbackRate,
-        androidImplementation: 'MediaPlayer',
-        metadata: {
-          title: track.title || 'Unknown Title',
-          artist: track.artist || 'Unknown Artist',
-          album: track.album || 'Unknown Album',
-          artwork: track.artwork,
-        },
-      };
+      });
+      
+      // Set up status callback
+      newSound.setOnPlaybackStatusUpdate((status) => onPlaybackStatusUpdate(status, set, get));
 
-      const { sound: newSound } = await Audio.Sound.createAsync(
-          { uri: track.uri },
-          initialStatus,
-          (status) => onPlaybackStatusUpdate(status, set, get)
-      );
       set({
           sound: newSound,
           isPlaying: true,
           isLoading: false,
           currentTrack: track,
       });
-      console.log('[AUDIO] Now playing:', track.title);
-      try {
-        if (useHistoryStore.getState().saveHistory) {
-          useHistoryStore.getState().addToHistory(track);
-        }
-      } catch (e) {}
+
+      // 🚀 Start preloading next tracks in background
+      setTimeout(() => {
+        AudioOptimizer.preloadNextTracks(currentIndex, playQueue);
+      }, 1000); // Wait 1 second before starting preload
+
       get().fetchLyrics(track);
     } catch (error) {
       console.error("Error in _loadAndPlayTrack:", error);
@@ -167,7 +245,6 @@ const useAudioControl = create((set, get) => ({
     
     if (sound) {
       set({ isPlaying: true });
-      console.log('[AUDIO] Resuming sound for:', currentTrack?.title);
       await sound.playAsync();
     } else if (currentTrack) {
       get()._loadAndPlayTrack(currentTrack);
@@ -186,7 +263,6 @@ const useAudioControl = create((set, get) => ({
           await sound.pauseAsync();
           set({ isLoading: false});
         } catch (error) {
-          console.error("Error pausing audio:", error);
           set({isLoading: false, isPlaying: true }); // Revert playing state on error
         }
       }
@@ -220,16 +296,61 @@ const useAudioControl = create((set, get) => ({
     get().clearSleepTimer();
   },
 
+  // Shuffle Controls
+  toggleShuffle: () => {
+    const { isShuffleOn, playQueue, currentIndex, originalQueue } = get();
+    if (!isShuffleOn) {
+      // Enable shuffle: shuffle the queue except the current track
+      const currentTrack = playQueue[currentIndex];
+      const rest = playQueue.filter((_, i) => i !== currentIndex);
+      // Fisher-Yates shuffle
+      for (let i = rest.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [rest[i], rest[j]] = [rest[j], rest[i]];
+      }
+      const shuffledQueue = [currentTrack, ...rest];
+      set({
+        isShuffleOn: true,
+        playQueue: shuffledQueue,
+        currentIndex: 0,
+      });
+    } else {
+      // Disable shuffle: restore original order and current index
+      const currentTrack = playQueue[get().currentIndex];
+      const originalIdx = originalQueue.findIndex(t => t.id === currentTrack.id);
+      set({
+        isShuffleOn: false,
+        playQueue: originalQueue,
+        currentIndex: originalIdx === -1 ? 0 : originalIdx,
+      });
+    }
+  },
+
   // Next track
   next: async () => {
-    const { playQueue, currentIndex } = get();
+    const { playQueue, currentIndex, isShuffleOn } = get();
     if (playQueue.length === 0) return;
 
-    const nextIndex = (currentIndex + 1) % playQueue.length;
+    let nextIndex;
+    if (isShuffleOn) {
+      // Pick a random index that's not the current one
+      if (playQueue.length === 1) {
+        nextIndex = 0;
+      } else {
+        do {
+          nextIndex = Math.floor(Math.random() * playQueue.length);
+        } while (nextIndex === currentIndex);
+      }
+    } else {
+      nextIndex = (currentIndex + 1) % playQueue.length;
+    }
     const nextTrack = playQueue[nextIndex];
-
-    set({ currentIndex: nextIndex });
-    get()._loadAndPlayTrack(nextTrack);
+    
+    // 🎨 Enrich track with metadata before playing
+    const enrichedTrack = await get()._enrichTrackMetadata(nextTrack);
+    
+    set({ currentIndex: nextIndex, currentTrack: enrichedTrack });
+    get()._loadAndPlayTrack(enrichedTrack);
   },
 
   // Previous track
@@ -248,8 +369,11 @@ const useAudioControl = create((set, get) => ({
       currentIndex === 0 ? playQueue.length - 1 : currentIndex - 1;
     const prevTrack = playQueue[prevIndex];
     
-    set({ currentIndex: prevIndex });
-    get()._loadAndPlayTrack(prevTrack);
+    // 🎨 Enrich track with metadata before playing
+    const enrichedTrack = await get()._enrichTrackMetadata(prevTrack);
+    
+    set({ currentIndex: prevIndex, currentTrack: enrichedTrack });
+    get()._loadAndPlayTrack(enrichedTrack);
   },
 
   // Seek to position
@@ -291,18 +415,68 @@ const useAudioControl = create((set, get) => ({
   // Lyrics Controls
   fetchLyrics: async (track) => {
     if (!track || !track.uri) {
-        set({ lyrics: null });
+        set({ lyrics: null, lyricsLoading: false, lyricsError: null });
         return;
     }
-    // For now, we'll just set dummy lyrics.
-    // In a real app, you would fetch this from a file or an API.
-    // e.g., look for a .lrc file with the same name as the audio file.
-    const dummyLyrics = `[00:01.00] These are placeholder lyrics for ${track.filename}.
-[00:05.50] This is a dummy implementation.
-[00:10.00] A real app would parse a .lrc file.
-[00:15.25] Line 4.
-[00:20.75] Line 5.`;
-    set({ lyrics: dummyLyrics });
+
+    set({ lyricsLoading: true, lyricsError: null });
+
+    try {
+      // First, try to find a .lrc file with the same name as the audio file
+      const audioPath = track.uri;
+      const basePath = audioPath.substring(0, audioPath.lastIndexOf('.'));
+      const lrcPath = basePath + '.lrc';   
+      // Check if .lrc file exists
+      const lrcInfo = await FileSystem.getInfoAsync(lrcPath);
+      
+      if (lrcInfo.exists) {       // Read the .lrc file
+        const lrcContent = await FileSystem.readAsStringAsync(lrcPath);
+        set({ lyrics: lrcContent, lyricsLoading: false });
+        return;
+      }
+
+      // If no .lrc file, try to fetch from online lyrics service
+      // For now, we'll use a simple lyrics API (you can replace with your preferred service)
+      const searchTerm = encodeURIComponent(`${track.title} ${track.artist}`);
+      const response = await fetch(`https://api.lyrics.ovh/v1/${track.artist}/${track.title}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.lyrics) {
+          // Convert plain text lyrics to .lrc format
+          const lrcLyrics = get().convertToLrcFormat(data.lyrics, track.title);
+          set({ lyrics: lrcLyrics, lyricsLoading: false });
+          return;
+        }
+      }
+
+      // If no lyrics found, create a placeholder
+      const placeholderLyrics = `[00:01.00] ${track.title}
+[00:05.00] By ${track.artist}
+[00:10.00] No lyrics available for this track
+[00:15.00] Enjoy the music!`;
+      
+      set({ lyrics: placeholderLyrics, lyricsLoading: false });
+    } catch (error) {
+      console.error('Error fetching lyrics:', error);
+      set({ lyrics: null, lyricsLoading: false, lyricsError: 'Failed to load lyrics' });
+    }
+  },
+
+  // Helper function to convert plain text to .lrc format
+  convertToLrcFormat: (plainText, title) => {
+    const lines = plainText.split('\n').filter(line => line.trim());
+    let lrcContent = `[00:01.00] ${title}\n`;
+    
+    lines.forEach((line, index) => {
+      const timeInSeconds = (index + 2) * 5; // 5 seconds per line
+      const minutes = Math.floor(timeInSeconds / 60);
+      const seconds = timeInSeconds % 60;
+      const timeStamp = `[${minutes.toString().padStart(2,'0')}:${seconds.toString().padStart(2,'0')}.00]`;
+      lrcContent += `${timeStamp} ${line}\n`;
+    });
+    
+    return lrcContent;
   },
 
   toggleLyrics: () => {
@@ -334,7 +508,52 @@ const useAudioControl = create((set, get) => ({
   },
 
   hideMiniPlayer: () => set({ isMiniPlayerVisible: false }),
-}));
+
+  // 🎨 Enrich track with metadata including artwork
+  _enrichTrackMetadata: async (track) => {
+    // If track already has artwork and complete metadata, return as is
+    if (track.artwork && track.title && track.artist) {
+      return track;
+    }
+
+    try {
+      // Import getAudioMetadata dynamically to avoid circular dependencies
+      const { getAudioMetadata } = await import('@missingcore/audio-metadata');
+      
+      const data = await getAudioMetadata(track.uri, ["album", "artist", "name", "year", "artwork"]);
+      const metadata = data.metadata || {};
+      
+      let artworkUri = null;
+      if (metadata.artwork) {
+        if (metadata.artwork.startsWith('data:image')) {
+          artworkUri = metadata.artwork;
+        } else if (/^[A-Za-z0-9+/=]+$/.test(metadata.artwork)) {
+          artworkUri = `data:image/png;base64,${metadata.artwork}`;
+        } else {
+          artworkUri = metadata.artwork;
+        }
+      }
+
+      // Return enriched track with metadata
+      const enrichedTrack = {
+        ...track,
+        title: metadata.name || track.title || track.filename?.replace(/\.[^/.]+$/, "") || 'Unknown Track',
+        artist: metadata.artist || track.artist || 'Unknown Artist',
+        album: metadata.album || track.album || 'Unknown Album',
+        year: metadata.year || track.year || null,
+        artwork: artworkUri || track.artwork || null,
+      };
+      
+      console.log('🎨 Enriched track:', enrichedTrack.title, 'with artwork:', !!enrichedTrack.artwork);
+      return enrichedTrack;
+    } catch (error) {
+      console.log('Failed to enrich track metadata for:', track.filename || track.title, error);
+      // Return original track if metadata fetching fails
+      return track;
+    }
+  },
+}))
+);
 
 const onPlaybackStatusUpdate = (status, set, get) => {
   if (!status.isLoaded) {

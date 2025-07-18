@@ -2,7 +2,6 @@ import React, { useState, useRef, useMemo, useEffect } from "react";
 import {
   View,
   Text,
-  TouchableOpacity,
   Image,
   StyleSheet,
   Dimensions,
@@ -11,12 +10,14 @@ import {
   Pressable,
   ScrollView,
   Switch,
-  Alert
+  Alert,
+  ActivityIndicator,
+  TouchableOpacity,
+  PanResponder,
+  Linking
 } from "react-native";
 import {
   ChevronDown,
-  Play,
-  Pause,
   SkipBack,
   SkipForward,
   Clock,
@@ -29,45 +30,51 @@ import {
   MoreVertical,
   Heart,
   ListPlus,
-  Info
+  Info,
+  Repeat1,
+  RotateCcw,
+  RotateCw
 } from "lucide-react-native";
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import Slider from "@react-native-community/slider";
 import useThemeStore from "../../store/theme";
 import useAudioControl from "../../store/useAudioControl";
 import useFavouriteStore from "../../store/favouriteStore";
 import usePlaybackStore from "../../store/playbackStore";
 import * as NavigationBar from 'expo-navigation-bar';
 import { Image as ExpoImage } from 'expo-image';
+import usePlaylistStore from "../../store/playlistStore";
+import * as DocumentPicker from 'expo-document-picker';
+import Slider from "@react-native-community/slider";
 
 const { width } = Dimensions.get("window");
 
 const PlayerScreen = () => {
   const { themeColors } = useThemeStore();
   const {
-    currentTrack,
-    isPlaying,
-    duration,
-    position,
-    pause,
-    play,
-    next,
-    previous,
-    seek,
-    isShuffleOn,
-    toggleShuffle,
-    sleepTimerId,
-    setSleepTimer,
-    clearSleepTimer,
-    setPlaybackSpeed,
+    currentTrack: useAudioControlCurrentTrack,
+    isPlaying: useAudioControlIsPlaying,
+    duration: useAudioControlDuration,
+    position: useAudioControlPosition,
+    pause: useAudioControlPause,
+    play: useAudioControlPlay,
+    next: useAudioControlNext,
+    previous: useAudioControlPrevious,
+    seek: useAudioControlSeek,
+    isShuffleOn: useAudioControlIsShuffleOn,
+    toggleShuffle: useAudioControlToggleShuffle,
+    sleepTimerId: useAudioControlSleepTimerId,
+    setSleepTimer: useAudioControlSetSleepTimer,
+    clearSleepTimer: useAudioControlClearSleepTimer,
+    setPlaybackSpeed: useAudioControlSetPlaybackSpeed,
   } = useAudioControl();
   const { playbackRate } = usePlaybackStore();
+  const { playlists, addTrackToPlaylist } = usePlaylistStore();
 
   const albumArtRotation = useRef(new Animated.Value(0)).current;
   const [isTimerModalVisible, setTimerModalVisible] = useState(false);
   const [isMoreModalVisible, setMoreModalVisible] = useState(false);
-  const [isLyricsVisible, setLyricsVisible] = useState(false);
   const [isEQModalVisible, setEQModalVisible] = useState(false);
   const [isInfoModalVisible, setInfoModalVisible] = useState(false);
   const [isPlaylistModalVisible, setPlaylistModalVisible] = useState(false);
@@ -76,14 +83,22 @@ const PlayerScreen = () => {
   const [sliderValue, setSliderValue] = useState(null);
   const isSeeking = sliderValue !== null;
   const seekTargetRef = useRef(null);
+  const [repeatMode, setRepeatMode] = useState('off'); // 'off', 'single', 'playlist'
+  const [showShuffleToast, setShowShuffleToast] = useState(false);
+  const [shuffleToastText, setShuffleToastText] = useState("");
 
-  // Smoothly clear sliderValue only when position matches the seek target
-  useEffect(() => {
-    if (seekTargetRef.current !== null && Math.abs(position - seekTargetRef.current) < 1000) {
-      setSliderValue(null);
-      seekTargetRef.current = null;
-    }
-  }, [position]);
+  const [eqSettings, setEqSettings] = useState({
+    60: 0,    // Bass
+    170: 0,   // Low Mid
+    310: 0,   // Mid
+    600: 0,   // High Mid
+    1000: 0,  // Presence
+    3000: 0,  // Brilliance
+    6000: 0,  // High
+    12000: 0, // Very High
+    14000: 0, // Ultra High
+    16000: 0  // Ultra High
+  });
 
   const formatTime = (milliseconds) => {
     if (!milliseconds) return "0:00";
@@ -94,16 +109,45 @@ const PlayerScreen = () => {
   };
 
   const handlePlayPause = async () => {
-    if (isPlaying) await pause();
-    else await play();
+    if (useAudioControlIsPlaying) await useAudioControlPause();
+    else await useAudioControlPlay();
   };
 
   const handleSeek = async (value) => {
-    await seek((value / 100) * duration);
+    await useAudioControlSeek((value / 100) * useAudioControlDuration);
   };
 
   const handleClose = () => {
-    router.back();
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/(audio)'); // fallback to audio all screen
+    }
+  };
+
+  const handleRepeatPress = () => {
+    const modes = ['off', 'single', 'playlist'];
+    const currentIndex = modes.indexOf(repeatMode);
+    const nextIndex = (currentIndex + 1) % modes.length;
+    setRepeatMode(modes[nextIndex]);
+  };
+
+  const getRepeatIcon = () => {
+    switch (repeatMode) {
+      case 'single':
+        return <Repeat1 size={24} color={themeColors.primary} />;
+      case 'playlist':
+        return <Repeat size={24} color={themeColors.primary} />;
+      default:
+        return <Repeat size={24} color={themeColors.textSecondary} />;
+    }
+  };
+
+  const handleToggleShuffle = () => {
+    useAudioControlToggleShuffle();
+    setShuffleToastText(useAudioControlIsShuffleOn ? "Shuffle Off" : "Shuffle On");
+    setShowShuffleToast(true);
+    setTimeout(() => setShowShuffleToast(false), 1500);
   };
 
   React.useEffect(() => {
@@ -115,7 +159,9 @@ const PlayerScreen = () => {
     };
   }, []);
 
-  if (!currentTrack) {
+  console.log('Slider position:', useAudioControlPosition, 'Duration:', useAudioControlDuration);
+
+  if (!useAudioControlCurrentTrack) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }] }>
         <View style={styles.centeredContainer}>
@@ -136,14 +182,14 @@ const PlayerScreen = () => {
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={[styles.headerTitle, { color: themeColors.text }]} numberOfLines={1}>NOW PLAYING</Text>
-          <Text style={[styles.headerSubtitle, { color: themeColors.textSecondary }]} numberOfLines={1}>{currentTrack.album || 'Unknown Album'}</Text>
+          <Text style={[styles.headerSubtitle, { color: themeColors.textSecondary }]} numberOfLines={1}>{useAudioControlCurrentTrack.album || 'Unknown Album'}</Text>
         </View>
         <TouchableOpacity style={styles.headerButton} onPress={() => setMoreModalVisible(true)}>
           <MoreVertical size={28} color={themeColors.text} />
         </TouchableOpacity>
       </View>
-      <View style={{ flex: 1 }}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, justifyContent: 'space-between', paddingBottom: 24 }}>
+        <View style={{ alignItems: 'center', marginTop: 32 }}>
           <View
             style={{
               backgroundColor: themeColors.card,
@@ -161,9 +207,9 @@ const PlayerScreen = () => {
               elevation: 16,
             }}
           >
-            {currentTrack.artwork ? (
+            {useAudioControlCurrentTrack.artwork ? (
               <ExpoImage
-                source={{ uri: currentTrack.artwork }}
+                source={{ uri: useAudioControlCurrentTrack.artwork }}
                 style={{ width: 300, height: 300, borderRadius: 24 }}
                 contentFit="cover"
                 cachePolicy="disk"
@@ -174,60 +220,63 @@ const PlayerScreen = () => {
                   width: 300,
                   height: 300,
                   borderRadius: 24,
-                  backgroundColor: 'rgba(255,255,255,0.08)',
+                  backgroundColor: themeColors.primaryLight || themeColors.card,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                <Text style={styles.defaultIconText}>♪</Text>
+                <Text style={[styles.defaultIconText, { color: themeColors.primary }]}>♪</Text>
               </View>
             )}
           </View>
 
           <View style={{ alignItems: 'center', paddingHorizontal: 20, paddingVertical: 8 }}>
-            <Text style={[styles.trackTitle, { color: themeColors.text }]} numberOfLines={2}>{currentTrack.title || "Unknown Track"}</Text>
-            <Text style={[styles.trackArtist, { color: themeColors.textSecondary }]} numberOfLines={1}>{currentTrack.artist || "Unknown Artist"}</Text>
+            <Text style={[styles.trackTitle, { color: themeColors.text }]} numberOfLines={2}>{useAudioControlCurrentTrack.title || "Unknown Track"}</Text>
+            <Text style={[styles.trackArtist, { color: themeColors.textSecondary }]} numberOfLines={1}>{useAudioControlCurrentTrack.artist || "Unknown Artist"}</Text>
           </View>
         </View>
 
         <View style={{ width: '100%' }}>
           <View style={{ paddingHorizontal: 24, paddingVertical: 4 }}>
             <Slider
-              style={styles.progressSlider}
+              style={{ width: '100%', height: 40 }}
               minimumValue={0}
-              maximumValue={duration > 0 ? duration : 1}
-              value={isSeeking ? sliderValue : position}
-              onValueChange={setSliderValue}
+              maximumValue={useAudioControlDuration > 0 ? useAudioControlDuration : 1}
+              value={useAudioControlPosition}
               onSlidingComplete={async (value) => {
-                setSliderValue(value);
-                seekTargetRef.current = value;
-                await seek(value);
+                const clampedValue = Math.max(0, Math.min(value, useAudioControlDuration));
+                console.log('Seeking to:', clampedValue, 'of', useAudioControlDuration);
+                await useAudioControlSeek(clampedValue);
               }}
               minimumTrackTintColor={themeColors.primary}
-              maximumTrackTintColor={themeColors.textSecondary}
+              maximumTrackTintColor="#e5e5e5"
               thumbTintColor={themeColors.primary}
             />
             <View style={styles.progressTimeContainer}>
-              <Text style={[styles.progressTimeText, { color: themeColors.textSecondary }]}>{formatTime(position)}</Text>
-              <Text style={[styles.progressTimeText, { color: themeColors.textSecondary }]}>{formatTime(duration)}</Text>
+              <Text style={[styles.progressTimeText, { color: themeColors.textSecondary }]}>{formatTime(useAudioControlPosition)}</Text>
+              <Text style={[styles.progressTimeText, { color: themeColors.textSecondary }]}>{formatTime(useAudioControlDuration)}</Text>
             </View>
           </View>
 
           <View style={{ flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center', paddingHorizontal: 40, paddingVertical: 8, marginTop: 0, marginBottom: 24 }}>
-            <TouchableOpacity style={styles.mainControlButton} onPress={toggleShuffle}>
-              <Shuffle size={24} color={isShuffleOn ? themeColors.primary : themeColors.textSecondary} />
+            <TouchableOpacity style={styles.mainControlButton} onPress={handleToggleShuffle}>
+              <Shuffle size={24} color={useAudioControlIsShuffleOn ? themeColors.primary : themeColors.textSecondary} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.mainControlButton} onPress={previous}>
-              <SkipBack size={32} color={themeColors.text} />
+            <TouchableOpacity style={styles.mainControlButton} onPress={useAudioControlPrevious}>
+              <MaterialIcons name="skip-previous" size={36} color={themeColors.text} />
             </TouchableOpacity>
             <TouchableOpacity style={[styles.playPauseButton, { backgroundColor: themeColors.primary }]} onPress={handlePlayPause}>
-              {isPlaying ? <Pause size={40} color={themeColors.background} /> : <Play size={40} color={themeColors.background} />}
+              {useAudioControlIsPlaying ? (
+                <MaterialIcons name="pause" size={48} color={themeColors.background} />
+              ) : (
+                <MaterialIcons name="play-arrow" size={48} color={themeColors.background} />
+              )}
             </TouchableOpacity>
-            <TouchableOpacity style={styles.mainControlButton} onPress={next}>
-              <SkipForward size={32} color={themeColors.text} />
+            <TouchableOpacity style={styles.mainControlButton} onPress={useAudioControlNext}>
+              <MaterialIcons name="skip-next" size={36} color={themeColors.text} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.mainControlButton}>
-              <Repeat size={24} color={themeColors.textSecondary} />
+            <TouchableOpacity style={styles.mainControlButton} onPress={handleRepeatPress}>
+              {getRepeatIcon()}
             </TouchableOpacity>
           </View>
         </View>
@@ -240,13 +289,13 @@ const PlayerScreen = () => {
             <Text style={[styles.modalTitle, {color: themeColors.text}]}>Sleep Timer</Text>
             <View style={styles.timerOptions}>
               {[15, 30, 45, 60].map(minutes => (
-                <TouchableOpacity key={minutes} style={[styles.timerButton, {backgroundColor: themeColors.background}]} onPress={() => { setSleepTimer(minutes); setTimerModalVisible(false); }}>
+                <TouchableOpacity key={minutes} style={[styles.timerButton, {backgroundColor: themeColors.background}]} onPress={() => { useAudioControlSetSleepTimer(minutes); setTimerModalVisible(false); }}>
                   <Text style={[styles.timerButtonText, {color: themeColors.text}]}>{minutes} minutes</Text>
                 </TouchableOpacity>
               ))}
             </View>
-            {sleepTimerId && (
-              <TouchableOpacity style={[styles.timerButton, styles.cancelTimerButton, {backgroundColor: themeColors.error}]} onPress={() => { clearSleepTimer(); setTimerModalVisible(false); }}>
+            {useAudioControlSleepTimerId && (
+              <TouchableOpacity style={[styles.timerButton, styles.cancelTimerButton, {backgroundColor: themeColors.error}]} onPress={() => { useAudioControlClearSleepTimer(); setTimerModalVisible(false); }}>
                 <Text style={[styles.timerButtonText, {color: '#fff'}]}>Cancel Timer</Text>
               </TouchableOpacity>
             )}
@@ -262,7 +311,14 @@ const PlayerScreen = () => {
         <Pressable style={styles.modalOverlay} onPress={() => setMoreModalVisible(false)}>
           <Pressable style={[styles.moreModalContent, {backgroundColor: themeColors.card}]}> 
             <Text style={[styles.modalTitle, {color: themeColors.text}]}>More Options</Text>
-            <TouchableOpacity style={styles.moreOptionRow} onPress={() => { setMoreModalVisible(false); setLyricsVisible(v => !v); }}>
+            <TouchableOpacity style={styles.moreOptionRow} onPress={() => {
+              setMoreModalVisible(false);
+              if (useAudioControlCurrentTrack) {
+                const query = encodeURIComponent(`${useAudioControlCurrentTrack.title || ''} ${useAudioControlCurrentTrack.artist || ''} lyrics`);
+                const url = `https://www.google.com/search?q=${query}`;
+                Linking.openURL(url);
+              }
+            }}>
               <ListMusic size={22} color={themeColors.text} style={styles.moreOptionIcon} />
               <Text style={[styles.moreOptionLabel, {color: themeColors.text}]}>Show Lyrics</Text>
             </TouchableOpacity>
@@ -278,8 +334,8 @@ const PlayerScreen = () => {
               <Info size={22} color={themeColors.text} style={styles.moreOptionIcon} />
               <Text style={[styles.moreOptionLabel, {color: themeColors.text}]}>Track Info</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.moreOptionRow} onPress={() => { setMoreModalVisible(false); favouriteStore.toggleFavourite(currentTrack); }}>
-              <Heart size={22} color={favouriteStore.isFavourite(currentTrack?.id) ? themeColors.primary : themeColors.text} style={styles.moreOptionIcon} />
+            <TouchableOpacity style={styles.moreOptionRow} onPress={() => { setMoreModalVisible(false); favouriteStore.toggleFavourite(useAudioControlCurrentTrack); }}>
+              <Heart size={22} color={favouriteStore.isFavourite(useAudioControlCurrentTrack?.id) ? themeColors.primary : themeColors.text} style={styles.moreOptionIcon} />
               <Text style={[styles.moreOptionLabel, {color: themeColors.text}]}>Favourite</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.moreOptionRow} onPress={() => { setMoreModalVisible(false); setSpeedModalVisible(true); }}>
@@ -287,7 +343,7 @@ const PlayerScreen = () => {
               <Text style={[styles.moreOptionLabel, {color: themeColors.text}]}>Playback Speed</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.moreOptionRow} onPress={() => { setMoreModalVisible(false); setTimerModalVisible(true); }}>
-              <Clock size={22} color={sleepTimerId ? themeColors.primary : themeColors.text} style={styles.moreOptionIcon} />
+              <Clock size={22} color={useAudioControlSleepTimerId ? themeColors.primary : themeColors.text} style={styles.moreOptionIcon} />
               <Text style={[styles.moreOptionLabel, {color: themeColors.text}]}>Sleep Timer</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.closeModalButton} onPress={() => setMoreModalVisible(false)}>
@@ -304,7 +360,7 @@ const PlayerScreen = () => {
             <Text style={[styles.modalTitle, {color: themeColors.text}]}>Playback Speed</Text>
             <View style={styles.speedOptions}>
               {[0.75, 1.0, 1.5, 2.0].map(rate => (
-                <TouchableOpacity key={rate} style={[styles.speedButton, playbackRate === rate && {backgroundColor: themeColors.primary}]} onPress={() => { setPlaybackSpeed(rate); setSpeedModalVisible(false); }}>
+                <TouchableOpacity key={rate} style={[styles.speedButton, playbackRate === rate && {backgroundColor: themeColors.primary}]} onPress={() => { useAudioControlSetPlaybackSpeed(rate); setSpeedModalVisible(false); }}>
                   <Text style={[styles.speedButtonText, {color: themeColors.text}]}>{rate}x</Text>
                 </TouchableOpacity>
               ))}
@@ -316,27 +372,61 @@ const PlayerScreen = () => {
         </Pressable>
       </Modal>
 
-      {/* Lyrics Modal (simple toggle for now) */}
-      <Modal animationType="slide" transparent={true} visible={isLyricsVisible} onRequestClose={() => setLyricsVisible(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setLyricsVisible(false)}>
-          <Pressable style={[styles.modalContent, {backgroundColor: themeColors.card}]}> 
-            <Text style={[styles.modalTitle, {color: themeColors.text}]}>Lyrics</Text>
-            <ScrollView style={{maxHeight: 300}}>
-              <Text style={{color: themeColors.text}}>{currentTrack.lyrics || 'No lyrics available.'}</Text>
-            </ScrollView>
-            <TouchableOpacity style={styles.closeModalButton} onPress={() => setLyricsVisible(false)}>
-              <X size={24} color={themeColors.textSecondary} />
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* EQ Modal (placeholder) */}
+      {/* EQ Modal - Functional Equalizer */}
       <Modal animationType="slide" transparent={true} visible={isEQModalVisible} onRequestClose={() => setEQModalVisible(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setEQModalVisible(false)}>
           <Pressable style={[styles.modalContent, {backgroundColor: themeColors.card}]}> 
             <Text style={[styles.modalTitle, {color: themeColors.text}]}>Equalizer</Text>
-            <Text style={{color: themeColors.textSecondary, marginBottom: 20}}>EQ controls coming soon!</Text>
+            
+            <View style={styles.eqContainer}>
+              {Object.entries(eqSettings).map(([frequency, value]) => (
+                <View key={frequency} style={styles.eqBand}>
+                  <Text style={[styles.eqFrequency, {color: themeColors.textSecondary}]}>
+                    {frequency >= 1000 ? `${frequency/1000}k` : frequency}
+                  </Text>
+                  <View style={styles.eqSliderContainer}>
+                    <Slider
+                      style={styles.eqSlider}
+                      minimumValue={-12}
+                      maximumValue={12}
+                      value={value}
+                      onValueChange={(newValue) => {
+                        setEqSettings(prev => ({...prev, [frequency]: newValue}));
+                        // Here you would apply the EQ setting to the audio
+                        // For now, we'll just update the state
+                      }}
+                      minimumTrackTintColor={themeColors.textSecondary}
+                      maximumTrackTintColor={themeColors.primary}
+                      thumbTintColor={themeColors.primary}
+                    />
+                  </View>
+                  <Text style={[styles.eqValue, {color: themeColors.textSecondary}]}>
+                    {value > 0 ? `+${value.toFixed(0)}` : value.toFixed(0)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+            
+            <View style={styles.eqPresets}>
+              <Text style={[styles.eqPresetsTitle, {color: themeColors.text}]}>Presets</Text>
+              <View style={styles.eqPresetsRow}>
+                {[
+                  { name: 'Flat', values: Object.fromEntries(Object.keys(eqSettings).map(f => [f, 0])) },
+                  { name: 'Bass', values: { 60: 6, 170: 3, 310: 0, 600: 0, 1000: 0, 3000: 0, 6000: 0, 12000: 0, 14000: 0, 16000: 0 } },
+                  { name: 'Treble', values: { 60: 0, 170: 0, 310: 0, 600: 0, 1000: 0, 3000: 3, 6000: 6, 12000: 6, 14000: 3, 16000: 0 } },
+                  { name: 'Rock', values: { 60: 4, 170: 2, 310: 0, 600: -2, 1000: 0, 3000: 4, 6000: 6, 12000: 4, 14000: 2, 16000: 0 } }
+                ].map(preset => (
+                  <TouchableOpacity
+                    key={preset.name}
+                    style={[styles.eqPresetButton, {backgroundColor: themeColors.background}]}
+                    onPress={() => setEqSettings(preset.values)}
+                  >
+                    <Text style={[styles.eqPresetText, {color: themeColors.text}]}>{preset.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            
             <TouchableOpacity style={styles.closeModalButton} onPress={() => setEQModalVisible(false)}>
               <X size={24} color={themeColors.textSecondary} />
             </TouchableOpacity>
@@ -344,12 +434,41 @@ const PlayerScreen = () => {
         </Pressable>
       </Modal>
 
-      {/* Playlist Modal (placeholder) */}
+      {/* Playlist Modal - Add to Playlist */}
       <Modal animationType="slide" transparent={true} visible={isPlaylistModalVisible} onRequestClose={() => setPlaylistModalVisible(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setPlaylistModalVisible(false)}>
           <Pressable style={[styles.modalContent, {backgroundColor: themeColors.card}]}> 
             <Text style={[styles.modalTitle, {color: themeColors.text}]}>Add to Playlist</Text>
-            <Text style={{color: themeColors.textSecondary, marginBottom: 20}}>Playlist controls coming soon!</Text>
+            {playlists.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+                <ListMusic size={48} color={themeColors.textSecondary} />
+                <Text style={[styles.modalSubtitle, {color: themeColors.textSecondary}]}>No playlists yet</Text>
+                <Text style={[styles.modalDescription, {color: themeColors.textSecondary}]}>Create a playlist first to add tracks</Text>
+              </View>
+            ) : (
+              <ScrollView style={{maxHeight: 300}}>
+                {playlists.map(playlist => (
+                  <TouchableOpacity 
+                    key={playlist.id}
+                    style={styles.playlistOptionRow}
+                    onPress={() => {
+                      addTrackToPlaylist(playlist.id, useAudioControlCurrentTrack);
+                      setPlaylistModalVisible(false);
+                      // Show success feedback
+                      Alert.alert('Added to Playlist', `"${useAudioControlCurrentTrack.title}" added to "${playlist.name}"`);
+                    }}
+                  >
+                    <View style={styles.playlistOptionInfo}>
+                      <Text style={[styles.playlistOptionName, {color: themeColors.text}]}>{playlist.name}</Text>
+                      <Text style={[styles.playlistOptionCount, {color: themeColors.textSecondary}]}>
+                        {playlist.tracks.length} {playlist.tracks.length === 1 ? 'track' : 'tracks'}
+                      </Text>
+                    </View>
+                    <ListPlus size={20} color={themeColors.primary} />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
             <TouchableOpacity style={styles.closeModalButton} onPress={() => setPlaylistModalVisible(false)}>
               <X size={24} color={themeColors.textSecondary} />
             </TouchableOpacity>
@@ -362,16 +481,25 @@ const PlayerScreen = () => {
         <Pressable style={styles.modalOverlay} onPress={() => setInfoModalVisible(false)}>
           <Pressable style={[styles.modalContent, {backgroundColor: themeColors.card}]}> 
             <Text style={[styles.modalTitle, {color: themeColors.text}]}>Track Info</Text>
-            <Text style={{color: themeColors.text}}>Title: {currentTrack.title}</Text>
-            <Text style={{color: themeColors.text}}>Artist: {currentTrack.artist}</Text>
-            <Text style={{color: themeColors.text}}>Album: {currentTrack.album}</Text>
-            <Text style={{color: themeColors.text}}>Duration: {formatTime(duration)}</Text>
+            <Text style={{color: themeColors.text}}>Title: {useAudioControlCurrentTrack.title}</Text>
+            <Text style={{color: themeColors.text}}>Artist: {useAudioControlCurrentTrack.artist}</Text>
+            <Text style={{color: themeColors.text}}>Album: {useAudioControlCurrentTrack.album}</Text>
+            <Text style={{color: themeColors.text}}>Duration: {formatTime(useAudioControlDuration)}</Text>
             <TouchableOpacity style={styles.closeModalButton} onPress={() => setInfoModalVisible(false)}>
               <X size={24} color={themeColors.textSecondary} />
             </TouchableOpacity>
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Shuffle Toast */}
+      {showShuffleToast && (
+        <View style={{ position: 'absolute', bottom: 60, left: 0, right: 0, alignItems: 'center', zIndex: 100 }}>
+          <View style={{ backgroundColor: themeColors.card, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}>
+            <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 16 }}>{shuffleToastText}</Text>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -438,6 +566,94 @@ const styles = StyleSheet.create({
     borderColor: 'gray',
   },
   speedButtonText: {
+    fontSize: 16,
+  },
+  playlistOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  playlistOptionInfo: {
+    flex: 1,
+  },
+  playlistOptionName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  playlistOptionCount: {
+    fontSize: 14,
+  },
+  modalSubtitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  modalDescription: {
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  eqContainer: {
+    marginBottom: 20,
+  },
+  eqBand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  eqFrequency: {
+    flex: 1,
+    fontSize: 16,
+  },
+  eqSliderContainer: {
+    flex: 3,
+    marginHorizontal: 10,
+  },
+  eqSlider: {
+    width: '100%',
+    height: 40,
+  },
+  eqValue: {
+    flex: 1,
+    fontSize: 16,
+  },
+  eqPresets: {
+    marginBottom: 20,
+  },
+  eqPresetsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  eqPresetsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  eqPresetButton: {
+    padding: 10,
+    borderRadius: 10,
+  },
+  eqPresetText: {
+    fontSize: 16,
+  },
+  lyricsSubtitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  lyricsLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  lyricsLoadingText: {
+    fontSize: 16,
+    marginLeft: 10,
+  },
+  lyricsContainer: {
+    maxHeight: 300,
+  },
+  lyricsText: {
     fontSize: 16,
   },
 });

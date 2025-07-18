@@ -3,13 +3,14 @@ import {
   View,
   Text,
   FlatList,
-  TouchableOpacity,
   StyleSheet,
   Dimensions,
   Image,
+  TouchableOpacity,
+  TextInput,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import useVideoStore from '../store/VideoHeadStore';
+import useOptimizedVideoStore from '../store/optimizedVideoStore';
 import useThemeStore from '../store/theme';
 import { router } from 'expo-router';
 import SearchBar from '../components/SearchBar';
@@ -18,7 +19,7 @@ import { VideoOff } from '@expo/vector-icons';
 const { width } = Dimensions.get('window');
 
 const VideoFavouriteScreen = ({ showSearch, setShowSearch, searchQuery, setSearchQuery }) => {
-  const { favouriteVideos, setCurrentVideo, removeFromFavourites } = useVideoStore();
+  const { favouriteVideos, setCurrentVideo, removeFromFavourites } = useOptimizedVideoStore();
   const { themeColors } = useThemeStore();
 
   const formatDuration = (seconds) => {

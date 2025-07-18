@@ -65,9 +65,9 @@ const onboardingData = [
 ];
 
 const AnimatedIcon = ({icon, size, isActive}) => {
-  const scaleAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(isActive ? 1 : 0)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const opacityAnim = useRef(new Animated.Value(isActive ? 1 : 0)).current;
 
   useEffect(() => {
     if (isActive) {
@@ -131,7 +131,10 @@ const AnimatedIcon = ({icon, size, isActive}) => {
       style={[
         styles.iconWrapper,
         {
-          transform: [{scale: scaleAnim}, {rotate}],
+          transform: [
+            {scale: scaleAnim}, 
+            {rotate: rotate}
+          ],
           opacity: opacityAnim,
         },
       ]}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, View, TouchableOpacity, StyleSheet, Dimensions, Text } from 'react-native';
+import { Modal, View, StyleSheet, Dimensions, Text, TouchableOpacity } from 'react-native';
 import useThemeStore from '../store/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 

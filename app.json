@@ -8,12 +8,21 @@
     "scheme": "visura",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "jsEngine": "hermes",
+    "splash": {
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.samspeedy.visura",
       "infoPlist": {
         "NSAppleMusicUsageDescription": "This app needs access to your media library to play your music and videos.",
         "NSMicrophoneUsageDescription": "This app needs microphone access for audio features.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to select and save media.",
+        "NSCameraUsageDescription": "This app needs access to your camera to take photos or videos.",
+        "NSPhotoLibraryAddUsageDescription": "This app needs access to save photos and videos to your library.",
         "UIBackgroundModes": [
           "audio",
           "background-processing"
@@ -24,13 +33,10 @@
       "package": "com.samspeedy.visura",
       "versionCode": 1,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "foregroundService": {
-        "mediaPlayback": "Required for background audio playback."
-      },
       "permissions": [
         "READ_EXTERNAL_STORAGE",
         "READ_MEDIA_AUDIO",
@@ -50,7 +56,7 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/icon.png"
     },
     "plugins": [
       "expo-router",
@@ -66,7 +72,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"

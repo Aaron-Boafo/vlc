@@ -9,10 +9,23 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "NODE_ENV": "production"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "NODE_ENV": "production"
+      },
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease"
+      },
+      "ios": {
+        "buildConfiguration": "Release"
+      }
     }
   },
   "submit": {

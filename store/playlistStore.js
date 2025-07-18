@@ -4,13 +4,14 @@ import uuid from 'react-native-uuid';
 
 const usePlaylistStore = create(persist((set, get) => ({
   playlists: [],
-  createPlaylist: (name, tracks = [], artwork = null) => {
+  // type: 'audio' | 'video'
+  createPlaylist: (name, type, tracks = [], artwork = null) => {
     const id = uuid.v4();
-    console.log('createPlaylist called', name, tracks, artwork, id);
+    console.log('createPlaylist called', name, type, tracks, artwork, id);
     set(state => ({
       playlists: [
         ...state.playlists,
-        { id, name, tracks, artwork }
+        { id, name, type, tracks, artwork }
       ]
     }));
     return id;

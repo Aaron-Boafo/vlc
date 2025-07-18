@@ -3,7 +3,6 @@ import {
   View,
   Text,
   FlatList,
-  TouchableOpacity,
   StyleSheet,
   TextInput,
   Alert,
@@ -11,9 +10,10 @@ import {
   Modal,
   Pressable,
   Image,
+  TouchableOpacity,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import useVideoStore from '../store/VideoHeadStore';
+import useOptimizedVideoStore from '../store/optimizedVideoStore';
 import useThemeStore from '../store/theme';
 import { router } from 'expo-router';
 import * as VideoThumbnails from 'expo-video-thumbnails';
@@ -21,7 +21,7 @@ import SearchBar from '../components/SearchBar';
 
 const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearchQuery }) => {
   const { themeColors } = useThemeStore();
-  const { videoFiles, setCurrentVideo, videoPlaylists, createVideoPlaylist, addVideoToPlaylist, clearVideoPlaylists } = useVideoStore();
+  const { videoFiles, setCurrentVideo, videoPlaylists, createVideoPlaylist, addVideoToPlaylist, clearVideoPlaylists } = useOptimizedVideoStore();
   const [modalVisible, setModalVisible] = useState(false);
   const [playlistName, setPlaylistName] = useState('');
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
@@ -48,7 +48,7 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
       }
       setVideoThumbnails(thumbs);
     };
-    if (modalVisible && videoFiles.length > 0) {
+    if (modalVisible && videoFiles && Array.isArray(videoFiles) && videoFiles.length > 0) {
       generateThumbnails();
     }
   }, [modalVisible, videoFiles]);
@@ -105,7 +105,7 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
     if (optionsPlaylist) {
       // Remove playlist from store
       const updatedPlaylists = videoPlaylists.filter(p => p.id !== optionsPlaylist.id);
-      useVideoStore.setState({ videoPlaylists: updatedPlaylists });
+      useOptimizedVideoStore.setState({ videoPlaylists: updatedPlaylists });
       setOptionsVisible(false);
       setOptionsPlaylist(null);
     }
@@ -144,7 +144,7 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
           {item.name}
         </Text>
         <Text style={{ color: themeColors.textSecondary, fontSize: 13 }}>
-          {item.tracks.length} {item.tracks.length === 1 ? 'video' : 'videos'}
+          {(Array.isArray(item.tracks) ? item.tracks.length : 0)} {(Array.isArray(item.tracks) && item.tracks.length === 1) ? 'video' : 'videos'}
         </Text>
       </View>
     </TouchableOpacity>
@@ -326,12 +326,12 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
       {/* Playlist Details Modal */}
       {playlistModalVisible && selectedPlaylist && (
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: themeColors.background }]}>
+          <View style={[styles.modalContent, { backgroundColor: themeColors.background }]}> 
             <Text style={{ color: themeColors.text, fontSize: 22, fontWeight: 'bold', marginBottom: 12 }}>
               {selectedPlaylist.name}
             </Text>
             <FlatList
-              data={selectedPlaylist.tracks}
+              data={Array.isArray(selectedPlaylist.tracks) ? selectedPlaylist.tracks : []}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={[styles.trackItem, { 

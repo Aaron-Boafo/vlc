@@ -12,6 +12,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import SearchBar from '../components/SearchBar';
+import * as DocumentPicker from 'expo-document-picker';
 
 const PlaylistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) => {
   const { themeColors } = useThemeStore();
@@ -245,6 +246,60 @@ const PlaylistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch
         { text: 'Clear All', style: 'destructive', onPress: () => clearPlaylists() }
       ]
     );
+  };
+
+  // Import a playlist from a file
+  const handleImportPlaylist = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: 'application/json' });
+      if (result.canceled || !result.assets || !result.assets[0]) return;
+      const fileUri = result.assets[0].uri;
+      const content = await FileSystem.readAsStringAsync(fileUri);
+      const imported = JSON.parse(content);
+      if (imported && imported.name && imported.tracks) {
+        const id = createPlaylist(imported.name);
+        imported.tracks.forEach(track => addTrackToPlaylist(id, track));
+        Alert.alert('Success', `Imported playlist: ${imported.name}`);
+      } else {
+        Alert.alert('Error', 'Invalid playlist file.');
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Failed to import playlist.');
+    }
+  };
+
+  // Backup all playlists to a file
+  const handleBackupPlaylists = async () => {
+    try {
+      const backupUri = FileSystem.documentDirectory + 'playlists_backup.json';
+      await FileSystem.writeAsStringAsync(backupUri, JSON.stringify(playlists));
+      Alert.alert('Success', 'Playlists backed up to app storage.');
+    } catch (e) {
+      Alert.alert('Error', 'Failed to backup playlists.');
+    }
+  };
+
+  // Restore playlists from a backup file
+  const handleRestorePlaylists = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: 'application/json' });
+      if (result.canceled || !result.assets || !result.assets[0]) return;
+      const fileUri = result.assets[0].uri;
+      const content = await FileSystem.readAsStringAsync(fileUri);
+      const restored = JSON.parse(content);
+      if (Array.isArray(restored)) {
+        clearPlaylists();
+        restored.forEach(pl => {
+          const id = createPlaylist(pl.name);
+          pl.tracks.forEach(track => addTrackToPlaylist(id, track));
+        });
+        Alert.alert('Success', 'Playlists restored from backup.');
+      } else {
+        Alert.alert('Error', 'Invalid backup file.');
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Failed to restore playlists.');
+    }
   };
 
   const filteredTracks = allTracks.filter(f => {
@@ -570,6 +625,69 @@ const PlaylistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch
           </View>
         </View>
       </Modal>
+
+      {/* Add these buttons to your UI for demonstration */}
+      {optionsVisible && (
+        <Modal
+          visible={optionsVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={handleCloseOptions}
+        >
+          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={handleCloseOptions} />
+          <View style={{
+            width: '90%',
+            borderRadius: 18,
+            padding: 20,
+            backgroundColor: themeColors.background,
+            elevation: 8,
+          }}>
+            {optionsPlaylist ? (
+              <>
+                <TouchableOpacity style={styles.optionRow} onPress={() => handlePlayPlaylist(optionsPlaylist)}>
+                  <AntDesign name="play" size={20} color={themeColors.text} style={styles.optionIcon} />
+                  <Text style={{ color: themeColors.text, fontSize: 16 }}>Play</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.optionRow} onPress={() => handleShufflePlaylist(optionsPlaylist)}>
+                  <MaterialCommunityIcons name="shuffle-variant" size={20} color={themeColors.text} style={styles.optionIcon} />
+                  <Text style={{ color: themeColors.text, fontSize: 16 }}>Shuffle</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.optionRow} onPress={() => { setRenameModal(true); setRenameValue(optionsPlaylist.name); }}>
+                  <AntDesign name="edit" size={20} color={themeColors.text} style={styles.optionIcon} />
+                  <Text style={{ color: themeColors.text, fontSize: 16 }}>Rename</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.optionRow} onPress={() => handleChangeArtwork(optionsPlaylist)}>
+                  <AntDesign name="picture" size={20} color={themeColors.text} style={styles.optionIcon} />
+                  <Text style={{ color: themeColors.text, fontSize: 16 }}>Change Artwork</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.optionRow} onPress={() => handleSharePlaylist(optionsPlaylist)}>
+                  <AntDesign name="sharealt" size={20} color={themeColors.text} style={styles.optionIcon} />
+                  <Text style={{ color: themeColors.text, fontSize: 16 }}>Share</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.optionRow} onPress={() => handleDeletePlaylist(optionsPlaylist.id, optionsPlaylist.name)}>
+                  <AntDesign name="delete" size={20} color="#FF5722" style={styles.optionIcon} />
+                  <Text style={{ color: '#FF5722', fontSize: 16 }}>Delete</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <TouchableOpacity style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.1)' }} onPress={() => { handleImportPlaylist(); handleCloseOptions(); }}>
+                  <Text style={{ fontSize: 16, color: themeColors.text }}>Import Playlist</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.1)' }} onPress={() => { handleBackupPlaylists(); handleCloseOptions(); }}>
+                  <Text style={{ fontSize: 16, color: themeColors.text }}>Backup Playlists</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.1)' }} onPress={() => { handleRestorePlaylists(); handleCloseOptions(); }}>
+                  <Text style={{ fontSize: 16, color: themeColors.text }}>Restore Playlists</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            <TouchableOpacity style={{ paddingVertical: 12, marginTop: 8 }} onPress={handleCloseOptions}>
+              <Text style={{ fontSize: 16, color: themeColors.primary }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 };

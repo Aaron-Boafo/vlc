@@ -5,6 +5,8 @@ import * as MediaLibrary from "expo-media-library";
 import * as FileSystem from "expo-file-system";
 import { router } from 'expo-router';
 
+const VIDEO_LIST_PATH = FileSystem.documentDirectory + 'video_list.json';
+
 const safeParse = (value, fallback) => {
   try {
     return JSON.parse(value);
@@ -97,83 +99,102 @@ const useVideoStore = create(
         try {
           console.log('[VideoStore] Starting video files load...');
           set({ isLoading: true, videoFiles: [] });
-
-          const { status } = await MediaLibrary.requestPermissionsAsync();
-          if (status !== "granted") {
-            console.log("[VideoStore] Media library permission not granted");
+          if (!VIDEO_LIST_PATH) {
             set({ isLoading: false, videoFiles: [] });
+            throw new Error('Video list path is not defined');
+          }
+          const fileInfo = await FileSystem.getInfoAsync(VIDEO_LIST_PATH);
+          if (fileInfo.exists) {
+            // Load from cache
+            const content = await FileSystem.readAsStringAsync(VIDEO_LIST_PATH);
+            const videoFiles = JSON.parse(content);
+            set({ videoFiles, isLoading: false });
             return;
           }
-
-          let allFiles = [];
-          let hasNextPage = true;
-          let page = 0;
-          const batchSize = 50; // Increased batch size for better performance
-
-          console.log('[VideoStore] Loading videos in batches...');
-
-          while (hasNextPage) {
-            try {
-              const media = await MediaLibrary.getAssetsAsync({
-                mediaType: MediaLibrary.MediaType.video,
-                first: batchSize,
-                sortBy: [MediaLibrary.SortBy.creationTime],
-              });
-
-              if (!media.assets || media.assets.length === 0) {
-                console.log('[VideoStore] No more videos found');
-                break;
-              }
-
-              const basicFiles = media.assets.map((asset) => ({
-                id: asset.id,
-                uri: asset.uri,
-                filename: asset.filename || 'Unknown Video',
-                duration: asset.duration || 0,
-                width: asset.width || 0,
-                height: asset.height || 0,
-                creationTime: asset.creationTime || Date.now(),
-                modificationTime: asset.modificationTime || Date.now(),
-                size: asset.fileSize || 0,
-              }));
-
-              allFiles = allFiles.concat(basicFiles);
-              
-              // Update UI after each batch for progressive loading
-              set({ videoFiles: [...allFiles] });
-              
-              console.log(`[VideoStore] Loaded batch ${page + 1}: ${basicFiles.length} videos (Total: ${allFiles.length})`);
-              
-              hasNextPage = media.hasNextPage;
-              page++;
-              
-              // Safety check to prevent infinite loops
-              if (page > 100) {
-                console.warn('[VideoStore] Safety limit reached, stopping batch loading');
-                break;
-              }
-            } catch (batchError) {
-              console.error(`[VideoStore] Error loading batch ${page}:`, batchError);
-              // Continue with next batch instead of failing completely
-              hasNextPage = false;
-            }
-          }
-
-          // Final sort by creation time (newest first)
-          const sortedFiles = [...allFiles].sort((a, b) => b.creationTime - a.creationTime);
-          
-          console.log(`[VideoStore] Video loading complete: ${sortedFiles.length} videos loaded`);
-          set({ videoFiles: sortedFiles, isLoading: false });
-          
+          // If not cached, scan and cache
+          await get().refreshVideoFiles();
         } catch (error) {
-          console.error("[VideoStore] Error loading video files:", error);
+          console.error('[VideoStore] Error loading video files:', error);
           set({ isLoading: false, videoFiles: [] });
+          throw error;
+        }
+      },
+
+      // Force rescan and update cache
+      refreshVideoFiles: async () => {
+        try {
+          set({ isLoading: true, videoFiles: [] });
+          // Add timeout to prevent infinite loading
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Video loading timeout - taking too long')), 30000);
+          });
+          const loadPromise = (async () => {
+            const { status } = await MediaLibrary.requestPermissionsAsync();
+            if (status !== "granted") {
+              console.log("[VideoStore] Media library permission not granted");
+              set({ isLoading: false, videoFiles: [] });
+              return;
+            }
+            set({ videoFiles: [] });
+            let allFiles = [];
+            let hasNextPage = true;
+            let page = 0;
+            const batchSize = 100;
+            console.log('[VideoStore] Loading videos in batches...');
+            while (hasNextPage) {
+              try {
+                const media = await MediaLibrary.getAssetsAsync({
+                  mediaType: MediaLibrary.MediaType.video,
+                  first: batchSize,
+                  sortBy: [MediaLibrary.SortBy.creationTime],
+                });
+                if (!media.assets || media.assets.length === 0) {
+                  console.log('[VideoStore] No more videos found');
+                  break;
+                }
+                const basicFiles = media.assets.map((asset) => ({
+                  id: asset.id,
+                  uri: asset.uri,
+                  filename: asset.filename || 'Unknown Video',
+                  duration: asset.duration || 0,
+                  width: asset.width || 0,
+                  height: asset.height || 0,
+                  creationTime: asset.creationTime || Date.now(),
+                  modificationTime: asset.modificationTime || Date.now(),
+                  size: asset.fileSize || 0,
+                }));
+                allFiles = allFiles.concat(basicFiles);
+                set({ videoFiles: [...allFiles] });
+                hasNextPage = media.hasNextPage;
+                page++;
+                if (page > 50) {
+                  console.warn('[VideoStore] Safety limit reached, stopping batch loading');
+                  break;
+                }
+                if (hasNextPage) {
+                  await new Promise(resolve => setTimeout(resolve, 10));
+                }
+              } catch (batchError) {
+                console.error(`[VideoStore] Error loading batch ${page}:`, batchError);
+                hasNextPage = false;
+              }
+            }
+            const sortedFiles = [...allFiles].sort((a, b) => b.creationTime - a.creationTime);
+            set({ videoFiles: sortedFiles, isLoading: false });
+            // Save to cache
+            await FileSystem.writeAsStringAsync(VIDEO_LIST_PATH, JSON.stringify(sortedFiles));
+          })();
+          await Promise.race([loadPromise, timeoutPromise]);
+        } catch (error) {
+          console.error('[VideoStore] Error refreshing video files:', error);
+          set({ isLoading: false, videoFiles: [] });
+          throw error;
         }
       },
 
       // Set a single video to play
       setAndPlayVideo: (video, shouldContinuePlayback = false) => {
-        const videoFiles = get().videoFiles;
+        const videoFiles = get().videoFiles || [];
         const index = videoFiles.findIndex(v => v.id === video.id);
         set({
           currentVideo: video,
@@ -217,6 +238,9 @@ const useVideoStore = create(
 
       playNext: () => {
         const { currentVideoIndex, videoFiles } = get();
+        if (!videoFiles || !Array.isArray(videoFiles) || videoFiles.length === 0) {
+          return;
+        }
         const nextIndex = (currentVideoIndex + 1) % videoFiles.length;
         if (nextIndex < videoFiles.length) {
           set({
@@ -228,6 +252,9 @@ const useVideoStore = create(
 
       playPrevious: () => {
         const { currentVideoIndex, videoFiles } = get();
+        if (!videoFiles || !Array.isArray(videoFiles) || videoFiles.length === 0) {
+          return;
+        }
         const prevIndex = (currentVideoIndex - 1 + videoFiles.length) % videoFiles.length;
         if (prevIndex >= 0) {
           set({
@@ -241,10 +268,10 @@ const useVideoStore = create(
 
       // Sorting function
       sortVideoFiles: (key, direction) => {
-        const sortedFiles = [...get().videoFiles].sort((a, b) => {
+        const videoFiles = get().videoFiles || [];
+        const sortedFiles = [...videoFiles].sort((a, b) => {
           const valA = a[key] || '';
           const valB = b[key] || '';
-          
           if (key === 'filename') {
             return direction === 'asc' 
               ? valA.localeCompare(valB) 
@@ -359,6 +386,32 @@ const useVideoStore = create(
           throw error;
         }
       },
+
+      // Clear video cache (useful for memory management)
+      clearVideoCache: () => {
+        set({ videoFiles: [], isLoading: false });
+      },
+
+      // Force reload videos (bypass cache)
+      forceReloadVideos: async () => {
+        console.log('[VideoStore] Force reloading videos...');
+        set({ videoFiles: [], isLoading: true });
+        await get().loadVideoFiles();
+      },
+
+      // Reset video store state completely
+      resetVideoStore: () => {
+        set({ 
+          videoFiles: [], 
+          isLoading: false,
+          currentVideo: null,
+          currentVideoIndex: -1,
+          isMiniPlayerVisible: false,
+          isMiniPlayerPlaying: false,
+          miniPlayerVideo: null,
+          miniPlayerPosition: 0
+        });
+      }
     }),
 
     {
@@ -370,6 +423,7 @@ const useVideoStore = create(
         favouriteVideos: state.favouriteVideos,
         videoHistory: state.videoHistory,
         videoPlaylists: state.videoPlaylists,
+        sortOrder: state.sortOrder,
       }),
       // Defensive: fallback to empty state if persisted state is invalid
       merge: (persistedState, currentState) => {

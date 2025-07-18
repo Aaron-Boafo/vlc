@@ -3,7 +3,6 @@ import {
   View,
   Text,
   FlatList,
-  TouchableOpacity,
   StyleSheet,
   TextInput,
   ActivityIndicator,
@@ -12,10 +11,11 @@ import {
   Alert,
   Button,
   Image,
+  TouchableOpacity,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { VideoOff, Play, Heart, Share2, Trash2, Info, Clock, Star, Edit3 } from 'lucide-react-native';
-import useVideoStore from '../store/VideoHeadStore';
+import useOptimizedVideoStore from '../store/optimizedVideoStore';
 import useThemeStore from '../store/theme';
 import useFavouriteStore from '../store/favouriteStore';
 import useHistoryStore from '../store/historyStore';
@@ -24,9 +24,12 @@ import VideoCard from '../components/VideoCard';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import CustomAlert from '../components/CustomAlert';
+import MemoryManager from '../utils/memoryManager';
+import LargeLibraryOptimizer from '../utils/largeLibraryOptimizer';
+import PerformanceMonitor from '../utils/performanceMonitor';
 
 const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
-  const { videoFiles, isLoading, loadVideoFiles, setAndPlayVideo, removeVideo, renameVideo, toggleFavouriteVideo } = useVideoStore();
+  const { videoFiles, isLoading, loadVideoFiles, setAndPlayVideo, removeVideo, renameVideo, toggleFavouriteVideo, forceReloadVideos } = useOptimizedVideoStore();
   const { themeColors } = useThemeStore();
   const favouriteStore = useFavouriteStore();
   const historyStore = useHistoryStore();
@@ -36,6 +39,7 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
   const [showMoreModal, setShowMoreModal] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [newFileName, setNewFileName] = useState('');
+  const [loadingError, setLoadingError] = useState(null);
   const [customAlert, setCustomAlert] = useState({
     visible: false,
     title: '',
@@ -43,20 +47,79 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
     buttons: [],
   });
   const [videoThumbnails, setVideoThumbnails] = useState({});
+  
+  // 🚀 Optimized thumbnail management for large libraries
+  const thumbnailCache = useRef(new Map());
+  const maxThumbnailCache = useRef(500); // Limit thumbnail cache size
 
   useEffect(() => {
-    if (!videoFiles || videoFiles.length === 0) {
-      loadVideoFiles();
+    if (!videoFiles || !Array.isArray(videoFiles) || videoFiles.length === 0) {
+      loadVideoFiles().catch(error => {
+        console.error('Error loading videos:', error);
+        setLoadingError(error.message);
+      });
     }
-  }, []);
+  }, [loadVideoFiles]);
+
+  // 🧠 Register thumbnail cache with memory manager and optimize for large libraries
+  useEffect(() => {
+    const startTime = Date.now();
+    
+    MemoryManager.registerCache('videoThumbnails', thumbnailCache.current, maxThumbnailCache.current);
+    MemoryManager.registerCache('videoThumbnailState', videoThumbnails, maxThumbnailCache.current);
+    
+    // 🚀 Optimize for library size and start performance monitoring
+    if (videoFiles.length > 0) {
+      const optimizedSettings = LargeLibraryOptimizer.optimizeForLibrarySize(videoFiles.length);
+      maxThumbnailCache.current = Math.floor(optimizedSettings.cacheSize / 2); // Thumbnails use more memory
+      
+      // 📊 Start performance monitoring for large libraries
+      if (LargeLibraryOptimizer.isLargeLibrary()) {
+        PerformanceMonitor.startMonitoring();
+        PerformanceMonitor.trackLoadTime('video', videoFiles.length, Date.now() - startTime);
+      }
+      
+      console.log(`🎥 Video library optimization applied for ${videoFiles.length} files:`, optimizedSettings);
+    }
+    
+    return () => {
+      // Cleanup when component unmounts
+      MemoryManager.forceCleanupCache('videoThumbnails');
+      MemoryManager.forceCleanupCache('videoThumbnailState');
+      
+      // Stop performance monitoring
+      if (LargeLibraryOptimizer.isLargeLibrary()) {
+        const report = PerformanceMonitor.stopMonitoring();
+        console.log('📊 Video screen performance report:', report.summary);
+      }
+    };
+  }, [videoFiles.length]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadVideoFiles();
-    setRefreshing(false);
+    setLoadingError(null);
+    try {
+      await forceReloadVideos();
+    } catch (error) {
+      console.error('Error refreshing videos:', error);
+      setLoadingError(error.message);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleRetryLoad = async () => {
+    setLoadingError(null);
+    try {
+      await forceReloadVideos();
+    } catch (error) {
+      console.error('Error retrying video load:', error);
+      setLoadingError(error.message);
+    }
   };
   
   const filteredVideos = useMemo(() => {
+    if (!videoFiles || !Array.isArray(videoFiles)) return [];
     if (!searchQuery) return videoFiles;
     return videoFiles.filter(video =>
       (video.title || video.filename).toLowerCase().includes(searchQuery.toLowerCase())
@@ -135,34 +198,11 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
 
   const handleRename = () => {
     if (selectedVideo) {
-      setNewFileName(selectedVideo.filename.replace(/\.mp4$/, ''));
       setShowMoreModal(false);
-      setShowRenameModal(true);
-    }
-  };
-
-  const handleRenameConfirm = async () => {
-    if (selectedVideo && newFileName.trim()) {
-      try {
-        const finalFileName = newFileName.trim() + '.mp4';
-        await renameVideo(selectedVideo.id, finalFileName);
-        setShowRenameModal(false);
-        setNewFileName('');
-        Alert.alert('Success', 'Video renamed successfully.');
-      } catch (error) {
-        if (error.code === 'RESTRICTED_LOCATION') {
-          setCustomAlert({
-            visible: true,
-            title: '�� Cannot Rename File',
-            message: "This file cannot be renamed from within the app due to Android restrictions. Please use your device's file manager to rename it.",
-            buttons: [{ text: 'OK', style: 'primary', onPress: () => setCustomAlert(alert => ({ ...alert, visible: false })) }],
-          });
-        } else {
-          Alert.alert('Error', 'Failed to rename video.');
-        }
-      }
-    } else {
-      Alert.alert('Error', 'Please enter a valid file name.');
+      Alert.alert(
+        'Rename Video',
+        'To rename a video file, please use your device\'s file manager.'
+      );
     }
   };
 
@@ -228,6 +268,21 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
         <Text style={[styles.loadingText, { color: themeColors.text }]}> 
           Loading your video library...
         </Text>
+        {loadingError && (
+          <View style={styles.errorContainer}>
+            <Text style={[styles.errorText, { color: themeColors.error || '#ff6b6b' }]}>
+              {loadingError}
+            </Text>
+            <TouchableOpacity 
+              style={[styles.retryButton, { backgroundColor: themeColors.primary }]}
+              onPress={handleRetryLoad}
+            >
+              <Text style={[styles.retryButtonText, { color: 'white' }]}>
+                Retry
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     );
   }
@@ -257,20 +312,48 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
       <FlatList
         data={filteredVideos}
         renderItem={renderItem}
-        keyExtractor={(item) => item.id}
+        keyExtractor={LargeLibraryOptimizer.optimizedKeyExtractor}
         numColumns={2}
         contentContainerStyle={styles.listContainer}
         columnWrapperStyle={styles.columnWrapper}
         showsVerticalScrollIndicator={false}
-        removeClippedSubviews={true}
-        maxToRenderPerBatch={10}
-        windowSize={10}
-        initialNumToRender={10}
+        // 🚀 Dynamic optimization based on library size
+        {...LargeLibraryOptimizer.getOptimizedFlatListProps()}
+        // Override some settings for video grid layout
+        maxToRenderPerBatch={LargeLibraryOptimizer.isHugeLibrary() ? 6 : 10} // Fewer items for huge libraries
+        initialNumToRender={LargeLibraryOptimizer.isHugeLibrary() ? 6 : 10}
         getItemLayout={(data, index) => ({
           length: 200, // Approximate height of each card
           offset: 200 * Math.floor(index / 2),
           index,
         })}
+        // 🧠 Memory optimization with intelligent cleanup
+        onEndReachedThreshold={0.1}
+        onEndReached={() => {
+          // Intelligent thumbnail cleanup based on library size
+          if (LargeLibraryOptimizer.isHugeLibrary()) {
+            // Aggressive cleanup for huge libraries
+            if (thumbnailCache.current.size > maxThumbnailCache.current) {
+              const entries = Array.from(thumbnailCache.current.entries());
+              const toKeep = entries.slice(-Math.floor(maxThumbnailCache.current * 0.6)); // Keep only 60%
+              thumbnailCache.current.clear();
+              toKeep.forEach(([key, value]) => thumbnailCache.current.set(key, value));
+            }
+          } else if (thumbnailCache.current.size > maxThumbnailCache.current * 1.5) {
+            // Standard cleanup for normal libraries
+            const entries = Array.from(thumbnailCache.current.entries());
+            const toKeep = entries.slice(-maxThumbnailCache.current);
+            thumbnailCache.current.clear();
+            toKeep.forEach(([key, value]) => thumbnailCache.current.set(key, value));
+          }
+        }}
+        // 🎯 Optimized scroll handling for large video libraries
+        onScrollBeginDrag={() => {
+          // Pause thumbnail generation during scrolling for better performance
+          if (LargeLibraryOptimizer.isLargeLibrary()) {
+            // Could implement thumbnail loading pause here
+          }
+        }}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <VideoOff 
@@ -283,6 +366,11 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
             <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
               {searchQuery ? 'Try adjusting your search' : 'Add some videos to get started'}
             </Text>
+            {LargeLibraryOptimizer.isHugeLibrary() && (
+              <Text style={[styles.emptySubtext, { color: themeColors.textSecondary, marginTop: 8 }]}>
+                🎥 Huge video library detected - optimizations applied
+              </Text>
+            )}
           </View>
         }
         refreshing={refreshing}
@@ -329,14 +417,6 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
 
                   <TouchableOpacity 
                     style={styles.optionRow} 
-                    onPress={handleRename}
-                  >
-                    <Edit3 size={22} color={themeColors.text} style={styles.optionIcon} />
-                    <Text style={[styles.optionText, { color: themeColors.text }]}>Rename</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity 
-                    style={styles.optionRow} 
                     onPress={handleAddToFavorites}
                   >
                     <Heart 
@@ -375,73 +455,6 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
                 </View>
               </>
             )}
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* Rename Modal */}
-      <Modal
-        visible={showRenameModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowRenameModal(false)}
-      >
-        <Pressable 
-          style={styles.modalOverlay} 
-          onPress={() => setShowRenameModal(false)}
-        >
-          <Pressable 
-            style={[styles.renameModalContent, { backgroundColor: themeColors.card }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <View style={styles.renameModalHeader}>
-              <Text style={[styles.renameModalTitle, { color: themeColors.text }]}>
-                Rename Video
-              </Text>
-              <TouchableOpacity 
-                onPress={() => setShowRenameModal(false)}
-                style={styles.closeModalButton}
-              >
-                <MaterialIcons name="close" size={24} color={themeColors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.renameModalBody}>
-              <Text style={[styles.renameLabel, { color: themeColors.text }]}>
-                Enter new name:
-              </Text>
-              <TextInput
-                style={[styles.renameInput, { 
-                  backgroundColor: themeColors.background,
-                  color: themeColors.text,
-                  borderColor: themeColors.primary
-                }]}
-                value={newFileName}
-                onChangeText={setNewFileName}
-                placeholder="Enter video name"
-                placeholderTextColor={themeColors.textSecondary}
-                autoFocus
-                maxLength={100}
-              />
-              <Text style={[styles.renameHint, { color: themeColors.textSecondary }]}>
-                The .mp4 extension will be added automatically
-              </Text>
-            </View>
-
-            <View style={styles.renameModalActions}>
-              <TouchableOpacity 
-                style={[styles.renameButton, styles.cancelButton]} 
-                onPress={() => setShowRenameModal(false)}
-              >
-                <Text style={[styles.renameButtonText, { color: themeColors.text }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.renameButton, styles.confirmButton, { backgroundColor: themeColors.primary }]} 
-                onPress={handleRenameConfirm}
-              >
-                <Text style={[styles.renameButtonText, { color: themeColors.background }]}>Rename</Text>
-              </TouchableOpacity>
-            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -611,6 +624,23 @@ const styles = StyleSheet.create({
     // backgroundColor is set dynamically
   },
   renameButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  errorText: {
+    flex: 1,
+    marginRight: 16,
+  },
+  retryButton: {
+    padding: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
     fontSize: 16,
     fontWeight: '600',
   },

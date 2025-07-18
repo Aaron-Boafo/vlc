@@ -474,18 +474,25 @@ export default function AuthForm({
                   onPress={activeTab === 'login' ? handleLogin : handleSignup}
                   style={styles.submitButton}
                   activeOpacity={0.9}
+                  disabled={isLoading}
                 >
                   <LinearGradient
                     colors={['#D147FF', '#9D4EDD']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
-                    style={styles.submitButtonGradient}
+                    style={[styles.submitButtonGradient, isLoading && { opacity: 0.9 }]}
                   >
                     <View style={styles.submitButtonContent}>
-                      <Text style={styles.submitButtonText}>
-                        {activeTab === 'login' ? 'SIGN IN' : 'SIGN UP'}
-                      </Text>
-                      <Icons.ArrowRight size={20} color="#FFF" style={styles.submitButtonIcon} />
+                      {isLoading ? (
+                        <ActivityIndicator color="#FFFFFF" size="small" />
+                      ) : (
+                        <>
+                          <Text style={styles.submitButtonText}>
+                            {activeTab === 'login' ? 'SIGN IN' : 'SIGN UP'}
+                          </Text>
+                          <Icons.ArrowRight size={20} color="#FFF" style={styles.submitButtonIcon} />
+                        </>
+                      )}
                     </View>
                   </LinearGradient>
                 </TouchableOpacity>
