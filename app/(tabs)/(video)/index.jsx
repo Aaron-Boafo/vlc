@@ -14,10 +14,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from 'expo-router';
 import MoreOptionsMenu from '../../../components/MoreOptionsMenu';
 import SortOptionsSheet from "../../../components/SortOptionsSheet";
-import FastLoadingIndicator from "../../../components/FastLoadingIndicator";
+import ProgressiveLoadingIndicator from "../../../components/ProgressiveLoadingIndicator";
 import StoreMigration from "../../../utils/storeMigration";
 import AdvancedSearch from "../../../utils/advancedSearch";
 import PerformanceAnalytics from "../../../utils/performanceAnalytics";
+import NavigationOptimizer from "../../../utils/navigationOptimizer";
+import LazyScreen from "../../../components/LazyScreen";
 import ImageOptimizer from "../../../utils/imageOptimizer";
 import * as Icons from 'lucide-react-native';
 
@@ -89,20 +91,7 @@ export default function VideoTabScreen() {
     }
   }, [videoFiles]);
 
-  const renderContent = () => {
-    // Show fast loading indicator during initial load
-    if (isLoading && !isInitialLoadComplete) {
-      return (
-        <FastLoadingIndicator
-          isLoading={isLoading}
-          isInitialLoadComplete={isInitialLoadComplete}
-          itemCount={videoFiles.length}
-          mediaType="video files"
-          showProgress={true}
-        />
-      );
-    }
-
+  const renderMainContent = () => {
     const sharedSearchProps = {
       showSearch,
       setShowSearch,
@@ -112,16 +101,71 @@ export default function VideoTabScreen() {
     
     switch (activeTab) {
       case "all":
-        return <VideoAllScreen {...sharedSearchProps} onCloseSearch={() => setShowSearch(false)} />;
+        return (
+          <LazyScreen preload={true} delay={0}>
+            <VideoAllScreen {...sharedSearchProps} onCloseSearch={() => setShowSearch(false)} />
+          </LazyScreen>
+        );
       case "playlist":
-        return <VideoPlaylistScreen {...sharedSearchProps} />;
+        return (
+          <LazyScreen delay={50}>
+            <VideoPlaylistScreen {...sharedSearchProps} />
+          </LazyScreen>
+        );
       case "favourite":
-        return <VideoFavouriteScreen {...sharedSearchProps} />;
+        return (
+          <LazyScreen delay={50}>
+            <VideoFavouriteScreen {...sharedSearchProps} />
+          </LazyScreen>
+        );
       case "history":
-        return <VideoHistoryScreen {...sharedSearchProps} />;
+        return (
+          <LazyScreen delay={50}>
+            <VideoHistoryScreen {...sharedSearchProps} />
+          </LazyScreen>
+        );
       default:
-        return <VideoAllScreen {...sharedSearchProps} onCloseSearch={() => setShowSearch(false)} />;
+        return (
+          <LazyScreen preload={true} delay={0}>
+            <VideoAllScreen {...sharedSearchProps} onCloseSearch={() => setShowSearch(false)} />
+          </LazyScreen>
+        );
     }
+  };
+
+  const renderContent = () => {
+    // Show progressive loading indicator during initial load
+    if (isLoading && videoFiles.length === 0) {
+      return (
+        <ProgressiveLoadingIndicator
+          isLoading={isLoading}
+          totalFiles={0}
+          loadedFiles={0}
+          isComplete={false}
+          mediaType="video files"
+        />
+      );
+    }
+
+    // Show progressive loading with content
+    if (isLoading || !isInitialLoadComplete) {
+      return (
+        <>
+          <ProgressiveLoadingIndicator
+            isLoading={isLoading}
+            totalFiles={videoFiles.length}
+            loadedFiles={videoFiles.length}
+            isComplete={isInitialLoadComplete}
+            mediaType="video files"
+          />
+          {/* Show loaded files while still loading */}
+          {videoFiles.length > 0 && renderMainContent()}
+        </>
+      );
+    }
+
+    // Show main content when loading is complete
+    return renderMainContent();
   };
 
   return (

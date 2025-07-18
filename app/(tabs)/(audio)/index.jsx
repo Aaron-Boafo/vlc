@@ -1,8 +1,8 @@
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Platform, ActivityIndicator, ScrollView, Image } from "react-native";
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import useOptimizedAudioStore from "../../../store/optimizedAudioStore";
 import useThemeStore from "../../../store/theme";
-import { useNavigation, useFocusEffect } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import useAudioControl from "../../../store/useAudioControl";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Music, Music4 } from "lucide-react-native";
@@ -15,10 +15,13 @@ import ArtistScreen from "../../../AudioScreens/artist";
 import FavouriteScreen from "../../../AudioScreens/favourite";
 import MoreOptionsMenu from '../../../components/MoreOptionsMenu';
 import SortOptionsSheet from "../../../components/SortOptionsSheet";
-import FastLoadingIndicator from "../../../components/FastLoadingIndicator";
+import ProgressiveLoadingIndicator from "../../../components/ProgressiveLoadingIndicator";
+import MetadataLoadingIndicator from "../../../components/MetadataLoadingIndicator";
 import StoreMigration from "../../../utils/storeMigration";
 import AdvancedSearch from "../../../utils/advancedSearch";
 import PerformanceAnalytics from "../../../utils/performanceAnalytics";
+import NavigationOptimizer from "../../../utils/navigationOptimizer";
+import LazyScreen from "../../../components/LazyScreen";
 import * as Icons from 'lucide-react-native';
 
 const AudioTabScreen = () => {
@@ -34,13 +37,14 @@ const AudioTabScreen = () => {
   } = useOptimizedAudioStore();
   const { themeColors } = useThemeStore();
   const audioControl = useAudioControl();
-  const navigation = useNavigation();
+  const router = useRouter();
   const [visibleItems, setVisibleItems] = useState([]);
   const [showMore, setShowMore] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showSort, setShowSort] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [migrationComplete, setMigrationComplete] = useState(false);
+  const [showMetadataLoading, setShowMetadataLoading] = useState(false);
 
   // Run migration on first load
   useEffect(() => {
@@ -76,10 +80,21 @@ const AudioTabScreen = () => {
         const startTime = Date.now();
         loadAudioFiles().then(() => {
           PerformanceAnalytics.trackLoadTime('AudioFiles', startTime, Date.now(), audioFiles.length);
+          // Show metadata loading indicator when files are loaded
+          if (audioFiles.length > 0) {
+            setShowMetadataLoading(true);
+          }
         });
       }
     }, [migrationComplete, audioFiles.length, loadAudioFiles])
   );
+
+  // Show metadata loading when files are initially loaded
+  useEffect(() => {
+    if (isInitialLoadComplete && audioFiles.length > 0 && !showMetadataLoading) {
+      setShowMetadataLoading(true);
+    }
+  }, [isInitialLoadComplete, audioFiles.length, showMetadataLoading]);
 
   // 🔍 Build search index when audio files change
   useEffect(() => {
@@ -96,7 +111,7 @@ const AudioTabScreen = () => {
     const allTracks = audioFiles;
     const startIndex = allTracks.findIndex(track => track.id === item.id);
     await audioControl.setAndPlayPlaylist(allTracks, startIndex);
-    navigation.navigate("(audio)/player");
+    router.push("/player/audio");
   };
   
   const handleViewableItemsChanged = ({ viewableItems }) => {
@@ -137,49 +152,116 @@ const AudioTabScreen = () => {
     );
   };
 
+  // Memoize shared props to prevent unnecessary re-renders
+  const sharedProps = useMemo(() => ({ 
+    showSearch, 
+    searchQuery, 
+    setSearchQuery, 
+    setShowSearch 
+  }), [showSearch, searchQuery, setSearchQuery, setShowSearch]);
+
+  const renderMainContent = useCallback(() => {
+    switch (activeTab) {
+      case "all":
+        return (
+          <LazyScreen preload={true} delay={0}>
+            <AllScreen {...sharedProps} />
+          </LazyScreen>
+        );
+      case "playlist":
+        return (
+          <LazyScreen delay={50}>
+            <PlaylistScreen {...sharedProps} />
+          </LazyScreen>
+        );
+      case "album":
+        return (
+          <LazyScreen delay={50}>
+            <AlbumsScreen {...sharedProps} />
+          </LazyScreen>
+        );
+      case "artist":
+        return (
+          <LazyScreen delay={50}>
+            <ArtistScreen {...sharedProps} />
+          </LazyScreen>
+        );
+      case "favourite":
+        return (
+          <LazyScreen delay={50}>
+            <FavouriteScreen {...sharedProps} />
+          </LazyScreen>
+        );
+      default:
+        return (
+          <LazyScreen preload={true} delay={0}>
+            <AllScreen {...sharedProps} />
+          </LazyScreen>
+        );
+    }
+  }, [activeTab, sharedProps]);
+
   const renderContent = () => {
-    // Show fast loading indicator during initial load
-    if (isLoading && !isInitialLoadComplete) {
+    // Show progressive loading indicator during initial load
+    if (isLoading && audioFiles.length === 0) {
       return (
-        <FastLoadingIndicator
+        <ProgressiveLoadingIndicator
           isLoading={isLoading}
-          isInitialLoadComplete={isInitialLoadComplete}
-          itemCount={audioFiles.length}
+          totalFiles={0}
+          loadedFiles={0}
+          isComplete={false}
           mediaType="audio files"
-          showProgress={true}
         />
+      );
+    }
+
+    // Show progressive loading with content
+    if (isLoading || !isInitialLoadComplete) {
+      return (
+        <>
+          <ProgressiveLoadingIndicator
+            isLoading={isLoading}
+            totalFiles={audioFiles.length}
+            loadedFiles={audioFiles.length}
+            isComplete={isInitialLoadComplete}
+            mediaType="audio files"
+          />
+          {/* Show metadata loading indicator when files are loaded but metadata is processing */}
+          {isInitialLoadComplete && audioFiles.length > 0 && (
+            <MetadataLoadingIndicator
+              visible={showMetadataLoading}
+              totalFiles={audioFiles.length}
+              onStatsUpdate={(stats) => {
+                // Hide metadata loading when complete
+                if (stats.total > 0 && (stats.successful + stats.fallback + stats.failed) >= stats.total) {
+                  setShowMetadataLoading(false);
+                }
+              }}
+            />
+          )}
+          {/* Show loaded files while still loading */}
+          {audioFiles.length > 0 && renderMainContent()}
+        </>
       );
     }
   
     if (!isLoading && audioFiles.length === 0) {
       return (
-          <View style={styles.centered}>
-            <Music size={64} color={themeColors.textSecondary} />
-            <Text style={[styles.emptyText, { color: themeColors.text }]}>No music found</Text>
-            <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
-              Make sure you have granted storage permissions and have music on your device.
-            </Text>
-            <TouchableOpacity onPress={loadAudioFiles} style={[styles.retryButton, { backgroundColor: themeColors.primary }]}>
-              <Text style={styles.retryButtonText}>Retry Scan</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={styles.centered}>
+          <Music size={64} color={themeColors.textSecondary} />
+          <Text style={[styles.emptyText, { color: themeColors.text }]}>No music found</Text>
+          <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
+            Make sure you have granted storage permissions and have music on your device.
+          </Text>
+          <TouchableOpacity onPress={loadAudioFiles} style={[styles.retryButton, { backgroundColor: themeColors.primary }]}>
+            <Text style={styles.retryButtonText}>Retry Scan</Text>
+          </TouchableOpacity>
+        </View>
       );
     }
 
-    switch (activeTab) {
-      case "all":
-        return <AllScreen showSearch={showSearch} searchQuery={searchQuery} setSearchQuery={setSearchQuery} setShowSearch={setShowSearch} />;
-      case "playlist":
-        return <PlaylistScreen showSearch={showSearch} searchQuery={searchQuery} setSearchQuery={setSearchQuery} setShowSearch={setShowSearch} />;
-      case "album":
-        return <AlbumsScreen showSearch={showSearch} searchQuery={searchQuery} setSearchQuery={setSearchQuery} setShowSearch={setShowSearch} />;
-      case "artist":
-        return <ArtistScreen showSearch={showSearch} searchQuery={searchQuery} setSearchQuery={setSearchQuery} setShowSearch={setShowSearch} />;
-      case "favourite":
-        return <FavouriteScreen showSearch={showSearch} searchQuery={searchQuery} setSearchQuery={setSearchQuery} setShowSearch={setShowSearch} />;
-      default:
-        return <AllScreen showSearch={showSearch} searchQuery={searchQuery} setSearchQuery={setSearchQuery} setShowSearch={setShowSearch} />;
-    }
+    // Show main content when loading is complete
+    return renderMainContent();
   };
 
   return (
@@ -199,8 +281,8 @@ const AudioTabScreen = () => {
       <MoreOptionsMenu
         visible={showMore}
         onClose={() => setShowMore(false)}
-        onSettings={() => navigation.push('(tabs)/(more)/settings')}
-        onAbout={() => navigation.push('(tabs)/(more)/about')}
+        onSettings={() => router.push('/(tabs)/(more)/settings')}
+        onAbout={() => router.push('/(tabs)/(more)/about')}
         onRefresh={loadAudioFiles}
       />
       <SortOptionsSheet

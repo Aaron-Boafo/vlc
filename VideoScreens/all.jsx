@@ -24,6 +24,9 @@ import VideoCard from '../components/VideoCard';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import CustomAlert from '../components/CustomAlert';
+import MemoryManager from '../utils/memoryManager';
+import LargeLibraryOptimizer from '../utils/largeLibraryOptimizer';
+import PerformanceMonitor from '../utils/performanceMonitor';
 
 const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
   const { videoFiles, isLoading, loadVideoFiles, setAndPlayVideo, removeVideo, renameVideo, toggleFavouriteVideo, forceReloadVideos } = useOptimizedVideoStore();
@@ -44,6 +47,10 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
     buttons: [],
   });
   const [videoThumbnails, setVideoThumbnails] = useState({});
+  
+  // 🚀 Optimized thumbnail management for large libraries
+  const thumbnailCache = useRef(new Map());
+  const maxThumbnailCache = useRef(500); // Limit thumbnail cache size
 
   useEffect(() => {
     if (!videoFiles || !Array.isArray(videoFiles) || videoFiles.length === 0) {
@@ -53,6 +60,40 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
       });
     }
   }, [loadVideoFiles]);
+
+  // 🧠 Register thumbnail cache with memory manager and optimize for large libraries
+  useEffect(() => {
+    const startTime = Date.now();
+    
+    MemoryManager.registerCache('videoThumbnails', thumbnailCache.current, maxThumbnailCache.current);
+    MemoryManager.registerCache('videoThumbnailState', videoThumbnails, maxThumbnailCache.current);
+    
+    // 🚀 Optimize for library size and start performance monitoring
+    if (videoFiles.length > 0) {
+      const optimizedSettings = LargeLibraryOptimizer.optimizeForLibrarySize(videoFiles.length);
+      maxThumbnailCache.current = Math.floor(optimizedSettings.cacheSize / 2); // Thumbnails use more memory
+      
+      // 📊 Start performance monitoring for large libraries
+      if (LargeLibraryOptimizer.isLargeLibrary()) {
+        PerformanceMonitor.startMonitoring();
+        PerformanceMonitor.trackLoadTime('video', videoFiles.length, Date.now() - startTime);
+      }
+      
+      console.log(`🎥 Video library optimization applied for ${videoFiles.length} files:`, optimizedSettings);
+    }
+    
+    return () => {
+      // Cleanup when component unmounts
+      MemoryManager.forceCleanupCache('videoThumbnails');
+      MemoryManager.forceCleanupCache('videoThumbnailState');
+      
+      // Stop performance monitoring
+      if (LargeLibraryOptimizer.isLargeLibrary()) {
+        const report = PerformanceMonitor.stopMonitoring();
+        console.log('📊 Video screen performance report:', report.summary);
+      }
+    };
+  }, [videoFiles.length]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -271,20 +312,48 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
       <FlatList
         data={filteredVideos}
         renderItem={renderItem}
-        keyExtractor={(item) => item.id}
+        keyExtractor={LargeLibraryOptimizer.optimizedKeyExtractor}
         numColumns={2}
         contentContainerStyle={styles.listContainer}
         columnWrapperStyle={styles.columnWrapper}
         showsVerticalScrollIndicator={false}
-        removeClippedSubviews={true}
-        maxToRenderPerBatch={10}
-        windowSize={10}
-        initialNumToRender={10}
+        // 🚀 Dynamic optimization based on library size
+        {...LargeLibraryOptimizer.getOptimizedFlatListProps()}
+        // Override some settings for video grid layout
+        maxToRenderPerBatch={LargeLibraryOptimizer.isHugeLibrary() ? 6 : 10} // Fewer items for huge libraries
+        initialNumToRender={LargeLibraryOptimizer.isHugeLibrary() ? 6 : 10}
         getItemLayout={(data, index) => ({
           length: 200, // Approximate height of each card
           offset: 200 * Math.floor(index / 2),
           index,
         })}
+        // 🧠 Memory optimization with intelligent cleanup
+        onEndReachedThreshold={0.1}
+        onEndReached={() => {
+          // Intelligent thumbnail cleanup based on library size
+          if (LargeLibraryOptimizer.isHugeLibrary()) {
+            // Aggressive cleanup for huge libraries
+            if (thumbnailCache.current.size > maxThumbnailCache.current) {
+              const entries = Array.from(thumbnailCache.current.entries());
+              const toKeep = entries.slice(-Math.floor(maxThumbnailCache.current * 0.6)); // Keep only 60%
+              thumbnailCache.current.clear();
+              toKeep.forEach(([key, value]) => thumbnailCache.current.set(key, value));
+            }
+          } else if (thumbnailCache.current.size > maxThumbnailCache.current * 1.5) {
+            // Standard cleanup for normal libraries
+            const entries = Array.from(thumbnailCache.current.entries());
+            const toKeep = entries.slice(-maxThumbnailCache.current);
+            thumbnailCache.current.clear();
+            toKeep.forEach(([key, value]) => thumbnailCache.current.set(key, value));
+          }
+        }}
+        // 🎯 Optimized scroll handling for large video libraries
+        onScrollBeginDrag={() => {
+          // Pause thumbnail generation during scrolling for better performance
+          if (LargeLibraryOptimizer.isLargeLibrary()) {
+            // Could implement thumbnail loading pause here
+          }
+        }}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <VideoOff 
@@ -297,6 +366,11 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
             <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
               {searchQuery ? 'Try adjusting your search' : 'Add some videos to get started'}
             </Text>
+            {LargeLibraryOptimizer.isHugeLibrary() && (
+              <Text style={[styles.emptySubtext, { color: themeColors.textSecondary, marginTop: 8 }]}>
+                🎥 Huge video library detected - optimizations applied
+              </Text>
+            )}
           </View>
         }
         refreshing={refreshing}

@@ -1,38 +1,53 @@
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import { FlatList } from 'react-native';
-import { getItemLayout } from '../utils/performance';
+import NavigationOptimizer from '../utils/navigationOptimizer';
 
 const OptimizedFlatList = memo(({ 
   data, 
   renderItem, 
   keyExtractor,
-  itemHeight = 60,
-  maxToRenderPerBatch = 10,
-  windowSize = 10,
-  ...props 
+  onEndReached,
+  onEndReachedThreshold = 0.5,
+  ...otherProps 
 }) => {
-  const getItemLayoutCallback = useCallback(
-    (data, index) => getItemLayout(data, index, itemHeight),
-    [itemHeight]
+  // Get device-optimized settings
+  const optimizedProps = useMemo(() => 
+    NavigationOptimizer.getOptimizedFlatListProps(), 
+    []
   );
 
+  // Optimized key extractor
   const keyExtractorCallback = useCallback(
     (item, index) => keyExtractor ? keyExtractor(item, index) : item.id?.toString() || index.toString(),
     [keyExtractor]
   );
 
+  // Optimized render item with error boundary
+  const renderItemCallback = useCallback((itemData) => {
+    try {
+      return renderItem(itemData);
+    } catch (error) {
+      console.warn('Render item error:', error);
+      return null;
+    }
+  }, [renderItem]);
+
+  // Optimized onEndReached with throttling
+  const onEndReachedCallback = useCallback(() => {
+    if (onEndReached && !NavigationOptimizer.isScrolling) {
+      onEndReached();
+    }
+  }, [onEndReached]);
+
   return (
     <FlatList
       data={data}
-      renderItem={renderItem}
+      renderItem={renderItemCallback}
       keyExtractor={keyExtractorCallback}
-      getItemLayout={getItemLayoutCallback}
-      maxToRenderPerBatch={maxToRenderPerBatch}
-      windowSize={windowSize}
-      removeClippedSubviews={true}
-      initialNumToRender={10}
-      updateCellsBatchingPeriod={50}
-      {...props}
+      onEndReached={onEndReachedCallback}
+      onEndReachedThreshold={onEndReachedThreshold}
+      {...optimizedProps}
+      {...otherProps}
     />
   );
 });

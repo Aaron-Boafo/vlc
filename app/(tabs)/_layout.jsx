@@ -1,12 +1,34 @@
 import { Tabs } from "expo-router";
+import React, { useCallback, useEffect } from "react";
 import useThemeStore from "../../store/theme";
 import * as Icons from "lucide-react-native";
 import MiniPlayer from "../../components/MiniPlayer";
-import { Video } from 'lucide-react-native';
 import VideoMiniPlayer from '../../VideoComponents/VideoMiniPlayer';
+import NavigationOptimizer from "../../utils/navigationOptimizer";
+import DeviceOptimizer from "../../utils/deviceOptimizer";
 
 export default function TabLayouts() {
   const { themeColors } = useThemeStore();
+  const [currentTab, setCurrentTab] = React.useState('(audio)');
+
+  // Initialize navigation optimizer
+  useEffect(() => {
+    NavigationOptimizer.clearCache(); // Clear any old cache
+    DeviceOptimizer.logDeviceInfo(); // Log device info for debugging
+  }, []);
+
+  // Optimized tab press handler
+  const handleTabPress = useCallback((tabName) => {
+    if (currentTab === tabName) return; // Skip if same tab
+
+    NavigationOptimizer.optimizeTransition(currentTab, tabName, () => {
+      setCurrentTab(tabName);
+    });
+  }, [currentTab]);
+
+  // Get device-optimized settings
+  const deviceSettings = DeviceOptimizer.getRenderingSettings();
+  const canHandleAnimations = DeviceOptimizer.canHandleAdvancedFeatures();
 
   return (
     <>
@@ -20,15 +42,24 @@ export default function TabLayouts() {
             borderTopColor: themeColors.card + '60',
             borderTopWidth: 0.5,
           },
-          // Remove animations that cause reloading
-          animation: 'none',
-          animationDuration: 0,
-          // Keep screens alive by default
+          // Optimize animations based on device capability
+          animation: canHandleAnimations ? 'shift' : 'none',
+          animationDuration: canHandleAnimations ? 150 : 0,
+          // Keep critical screens alive, detach less important ones
           lazy: false,
-          // Don't detach screens globally
           detachInactiveScreens: false,
-          // Disable gestures that might interfere
-          gestureEnabled: false,
+          // Optimize gestures based on device
+          gestureEnabled: canHandleAnimations,
+          // Add performance optimizations
+          freezeOnBlur: !canHandleAnimations, // Freeze background screens on low-end devices
+        }}
+        screenListeners={{
+          tabPress: (e) => {
+            const tabName = e.target?.split('-')[0];
+            if (tabName) {
+              handleTabPress(tabName);
+            }
+          },
         }}
       >
         <Tabs.Screen

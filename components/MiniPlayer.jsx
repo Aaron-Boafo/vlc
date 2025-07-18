@@ -1,15 +1,13 @@
-import React, { useEffect, memo, useCallback, useMemo } from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
-import { Play, Pause, X, SkipForward, SkipBack } from 'lucide-react-native';
+import { X } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import Svg, { Circle, G } from 'react-native-svg';
 import useThemeStore from '../store/theme';
 import useAudioControl from '../store/useAudioControl';
 import { useRouter, useSegments } from 'expo-router';
-import ImageOptimizer from '../utils/imageOptimizer';
 import PerformanceAnalytics from '../utils/performanceAnalytics';
-import * as FileSystem from 'expo-file-system';
 
 const MiniPlayer = memo(() => {
   const renderStart = Date.now();
@@ -23,8 +21,6 @@ const MiniPlayer = memo(() => {
     pause,
     play,
     stop,
-    next,
-    previous,
     sound,
     position,
     duration
@@ -32,36 +28,8 @@ const MiniPlayer = memo(() => {
   const router = useRouter();
   const segments = useSegments();
 
-  // 🚀 Optimized artwork handling with ImageOptimizer
-  const [artworkUri, setArtworkUri] = React.useState(null);
-
-  React.useEffect(() => {
-    let isMounted = true;
-    const loadOptimizedArtwork = async () => {
-      if (!currentTrack?.artwork) {
-        setArtworkUri(null);
-        return;
-      }
-
-      try {
-        const optimizedUri = await ImageOptimizer.getOptimizedArtwork(
-          currentTrack.artwork,
-          currentTrack.id
-        );
-        if (isMounted) {
-          setArtworkUri(optimizedUri);
-        }
-      } catch (error) {
-        console.log('Artwork optimization failed:', error);
-        if (isMounted) {
-          setArtworkUri(currentTrack.artwork);
-        }
-      }
-    };
-
-    loadOptimizedArtwork();
-    return () => { isMounted = false; };
-  }, [currentTrack?.artwork, currentTrack?.id]);
+  // 🎨 Use artwork directly from currentTrack (now enriched with metadata)
+  const artworkUri = currentTrack?.artwork;
 
   // 🎯 Highly optimized values for 60 FPS performance
   const throttledPosition = useMemo(() => {
@@ -74,25 +42,12 @@ const MiniPlayer = memo(() => {
     return Math.min(throttledPosition / duration, 1);
   }, [throttledPosition, duration]);
 
-  const optimizedImageProps = useMemo(() => {
-    if (!artworkUri) return null;
-    return ImageOptimizer.getOptimizedImageProps(artworkUri, 48);
-  }, [artworkUri]);
-
   // 🎯 Memoized callbacks
   const handlePlayPause = useCallback(() => {
     const startTime = Date.now();
     isPlaying ? pause() : play();
     PerformanceAnalytics.trackRenderTime('MiniPlayer-PlayPause', Date.now() - startTime);
   }, [isPlaying, pause, play]);
-
-  const handleNext = useCallback(() => next(), [next]);
-  const handlePrevious = useCallback(() => previous(), [previous]);
-
-  const handleClose = useCallback(() => {
-    stop();
-    hideMiniPlayer();
-  }, [stop, hideMiniPlayer]);
 
   const handleOpenFullPlayer = useCallback(() => {
     router.push('/player/audio');
@@ -120,11 +75,6 @@ const MiniPlayer = memo(() => {
   // Check if the current screen is the player screen
   const isPlayerScreen = segments.includes('player');
 
-  // Don't render the mini player if there's no track, if it's hidden, or if we are on the player screen
-  if (!currentTrack || !isMiniPlayerVisible || isPlayerScreen) {
-    return null;
-  }
-
   // 🚀 Optimized progress circle calculations - memoized for performance
   const circleProps = useMemo(() => {
     const buttonSize = 40;
@@ -143,6 +93,11 @@ const MiniPlayer = memo(() => {
       strokeDashoffset
     };
   }, [progress]);
+
+  // Don't render the mini player if there's no track, if it's hidden, or if we are on the player screen
+  if (!currentTrack || !isMiniPlayerVisible || isPlayerScreen) {
+    return null;
+  }
 
   return (
     <TouchableOpacity

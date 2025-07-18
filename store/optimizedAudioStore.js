@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import FastMediaLoader from '../utils/fastMediaLoader';
+import ProgressiveMediaLoader from '../utils/progressiveMediaLoader';
 
 const useOptimizedAudioStore = create(
   subscribeWithSelector(
@@ -32,24 +32,12 @@ const useOptimizedAudioStore = create(
           set({ isLoading: true, isInitialLoadComplete: false });
 
           try {
-            const files = await FastMediaLoader.loadMediaFast('audio', (progressFiles, isComplete) => {
-              // Update UI immediately as files are loaded
+            const files = await ProgressiveMediaLoader.loadMediaProgressively('audio', (progressFiles, isComplete) => {
+              // Update UI immediately as files are loaded progressively
               set({ 
                 audioFiles: progressFiles,
                 isInitialLoadComplete: isComplete,
                 isLoading: !isComplete,
-              });
-            });
-
-            // Setup metadata updates
-            FastMediaLoader.loadMetadataInBackground(files, 'audio', (updatedFile) => {
-              set(state => {
-                const index = state.audioFiles.findIndex(f => f.id === updatedFile.id);
-                if (index === -1) return state;
-
-                const newFiles = [...state.audioFiles];
-                newFiles[index] = updatedFile;
-                return { audioFiles: newFiles };
               });
             });
 

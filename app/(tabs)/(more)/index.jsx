@@ -16,11 +16,11 @@ import { router } from "expo-router";
 import * as Icons from "lucide-react-native";
 import useHistoryStore from "../../../store/historyStore";
 import useAudioControl from "../../../store/useAudioControl";
-import useVideoStore from "../../../store/VideoHeadStore";
+import useOptimizedVideoStore from "../../../store/optimizedVideoStore";
 import useThemeStore from "../../../store/theme";
 import MoreOptionsMenu from "../../../components/MoreOptionsMenu";
 import { SafeAreaView } from "react-native-safe-area-context";
-import useAudioStore from '../../../store/AudioHeadStore';
+import useOptimizedAudioStore from '../../../store/optimizedAudioStore';
 import * as FileSystem from 'expo-file-system';
 import CustomAlert from '../../../components/CustomAlert';
 import AppLogo from '../../../components/AppLogo';
@@ -43,11 +43,11 @@ const MoreScreen = () => {
   const [streamError, setStreamError] = useState("");
   const { history, clearHistory } = useHistoryStore();
   const audioControl = useAudioControl();
-  const videoControl = useVideoStore();
+  const videoControl = useOptimizedVideoStore();
   const [downloadsModalVisible, setDownloadsModalVisible] = useState(false);
   const [storageModalVisible, setStorageModalVisible] = useState(false);
-  const audioFiles = useAudioStore(state => state.audioFiles);
-  const videoFiles = useVideoStore(state => state.videoFiles);
+  const audioFiles = useOptimizedAudioStore(state => state.audioFiles);
+  const videoFiles = useOptimizedVideoStore(state => state.videoFiles);
   const [storageInfo, setStorageInfo] = useState({ totalSize: 0, fileCount: 0, loading: false });
   const [customAlert, setCustomAlert] = useState({ visible: false, title: '', message: '', buttons: [] });
   const [userProfile, setUserProfile] = useState({

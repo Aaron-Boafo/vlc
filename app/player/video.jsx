@@ -4,13 +4,13 @@ import { Video } from 'expo-av';
 import { MaterialIcons, Entypo } from '@expo/vector-icons';
 import { ChevronDown } from 'lucide-react-native';
 import Slider from '@react-native-community/slider';
-import useVideoStore from '../../store/VideoHeadStore';
+import useOptimizedVideoStore from '../../store/optimizedVideoStore';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import BottomSheet from '../../components/BottomSheet';
 import { useRouter } from 'expo-router';
 
 const MinimalVideoPlayer = () => {
-  const { currentVideo, playlist, currentVideoIndex, videoFiles, setCurrentVideo, setAndPlayVideo, showMiniPlayer } = useVideoStore();
+  const { currentVideo, playlist, currentVideoIndex, videoFiles, setCurrentVideo, setAndPlayVideo, showMiniPlayer } = useOptimizedVideoStore();
   const videoRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
@@ -47,7 +47,20 @@ const MinimalVideoPlayer = () => {
   }, []);
 
   if (!currentVideo || !currentVideo.uri) {
-    return <View style={styles.center}><MaterialIcons name="videocam-off" size={48} color="#888" /></View>;
+    console.log('🎥 Video Player Debug:', {
+      currentVideo,
+      hasCurrentVideo: !!currentVideo,
+      currentVideoUri: currentVideo?.uri,
+      videoFiles: videoFiles?.length || 0
+    });
+    return (
+      <View style={styles.center}>
+        <MaterialIcons name="videocam-off" size={48} color="#888" />
+        <Text style={{ color: '#888', marginTop: 16 }}>
+          {!currentVideo ? 'No video selected' : 'Video has no URI'}
+        </Text>
+      </View>
+    );
   }
 
   const handlePlayPause = async () => {

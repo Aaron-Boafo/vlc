@@ -1,13 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Image, Modal, StyleSheet, TextInput } from 'react-native';
 import useThemeStore from '../store/theme';
-import useAudioStore from '../store/AudioHeadStore';
+import useOptimizedAudioStore from '../store/optimizedAudioStore';
 import useAudioControl from '../store/useAudioControl';
 import SearchBar from '../components/SearchBar';
 
 const Albums = ({ showSearch, searchQuery, setSearchQuery }) => {
   const { themeColors } = useThemeStore();
-  const { audioFiles } = useAudioStore();
+  const { audioFiles } = useOptimizedAudioStore();
   const audioControl = useAudioControl();
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);

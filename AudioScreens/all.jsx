@@ -25,6 +25,9 @@ import usePlaylistStore from '../store/playlistStore';
 import { useRef } from "react";
 import * as MediaLibrary from 'expo-media-library';
 import { getAudioMetadata } from '@missingcore/audio-metadata';
+import MemoryManager from '../utils/memoryManager';
+import LargeLibraryOptimizer from '../utils/largeLibraryOptimizer';
+import PerformanceMonitor from '../utils/performanceMonitor';
 
 // Memoize TrackItem for performance
 const TrackItem = React.memo(({ item, isPlaying, themeColors, favouriteStore, handleTrackPress, currentTrack, fetchMetadataForTrack, trackMetadata, handleMoreOptions, formatDuration }) => {
@@ -104,8 +107,46 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
   const [refreshing, setRefreshing] = useState(false);
   const playlistStore = usePlaylistStore();
   const [customAlert, setCustomAlert] = useState({ visible: false, title: '', message: '', buttons: [] });
-  // Use optimized store data - no need for separate track loading
+  // 🚀 Optimized metadata management for large libraries
   const [trackMetadata, setTrackMetadata] = useState({}); // id -> metadata
+  const metadataCache = useRef(new Map()); // Use Map for better performance with large datasets
+  const loadingMetadata = useRef(new Set()); // Track what's currently loading to prevent duplicates
+  const metadataQueue = useRef([]); // Queue for batch processing
+  const maxCacheSize = useRef(1000); // Limit cache size to prevent memory issues
+
+  // 🧠 Register metadata cache with memory manager and optimize for large libraries
+  useEffect(() => {
+    const startTime = Date.now();
+    
+    MemoryManager.registerCache('audioMetadata', metadataCache.current, maxCacheSize.current);
+    MemoryManager.registerCache('audioTrackMetadata', trackMetadata, maxCacheSize.current);
+    
+    // 🚀 Optimize for library size and start performance monitoring
+    if (audioFiles.length > 0) {
+      const optimizedSettings = LargeLibraryOptimizer.optimizeForLibrarySize(audioFiles.length);
+      maxCacheSize.current = optimizedSettings.cacheSize;
+      
+      // 📊 Start performance monitoring for large libraries
+      if (LargeLibraryOptimizer.isLargeLibrary()) {
+        PerformanceMonitor.startMonitoring();
+        PerformanceMonitor.trackLoadTime('audio', audioFiles.length, Date.now() - startTime);
+      }
+      
+      console.log(`📚 Library optimization applied for ${audioFiles.length} files:`, optimizedSettings);
+    }
+    
+    return () => {
+      // Cleanup when component unmounts
+      MemoryManager.forceCleanupCache('audioMetadata');
+      MemoryManager.forceCleanupCache('audioTrackMetadata');
+      
+      // Stop performance monitoring
+      if (LargeLibraryOptimizer.isLargeLibrary()) {
+        const report = PerformanceMonitor.stopMonitoring();
+        console.log('📊 Audio screen performance report:', report.summary);
+      }
+    };
+  }, [audioFiles.length]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -131,22 +172,36 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
         return;
       }
       
+      // 🎨 Enrich tracks with metadata before playing
+      const enrichedTracks = validTracks.map(track => {
+        const meta = trackMetadata[track.id] || {};
+        return {
+          ...track,
+          title: meta.title || track.title || track.filename?.replace(/\.[^/.]+$/, "") || 'Unknown Track',
+          artist: meta.artist || track.artist || 'Unknown Artist',
+          album: meta.album || track.album || 'Unknown Album',
+          year: meta.year || track.year || null,
+          artwork: meta.artwork || track.artwork || null,
+        };
+      });
+      
       // Find the index in the filtered array
-      const index = validTracks.findIndex(track => track.id === item.id);
+      const index = enrichedTracks.findIndex(track => track.id === item.id);
       
       if (index === -1) {
         Alert.alert("Error", "Selected track not found or invalid");
         return;
       }
       
-      console.log('🎵 Playing track:', item.title, 'URI:', item.uri);
-      await audioControl.setAndPlayPlaylist(validTracks, index);
+      console.log('🎵 Playing track:', enrichedTracks[index].title, 'with artwork:', !!enrichedTracks[index].artwork);
+      console.log('🎨 Artwork URI:', enrichedTracks[index].artwork?.substring(0, 50) + '...');
+      await audioControl.setAndPlayPlaylist(enrichedTracks, index);
       router.push('/player/audio');
     } catch (error) {
       console.error("Error playing song:", error);
       Alert.alert("Error", "Failed to play song");
     }
-  }, [audioControl, sortedAndFilteredAudio]);
+  }, [audioControl, sortedAndFilteredAudio, trackMetadata]);
 
   const handleMoreOptions = (item) => {
     setSelectedTrack(item);
@@ -281,35 +336,89 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
     );
   }, [audioFiles, searchQuery, sortOrder]);
 
-  const fetchMetadataForTrack = async (track) => {
-    if (trackMetadata[track.id]) return;
+  // 🚀 Optimized metadata fetching for large libraries
+  const fetchMetadataForTrack = useCallback(async (track) => {
+    // Skip if already loaded or currently loading
+    if (trackMetadata[track.id] || loadingMetadata.current.has(track.id)) return;
+    
+    // Check cache first
+    if (metadataCache.current.has(track.id)) {
+      const cachedData = metadataCache.current.get(track.id);
+      setTrackMetadata(prev => ({ ...prev, [track.id]: cachedData }));
+      return;
+    }
+    
+    // Add to loading set to prevent duplicates
+    loadingMetadata.current.add(track.id);
+    
     try {
-      const data = await getAudioMetadata(track.uri, ["album", "artist", "name", "year", "artwork"]);
+      // Use timeout to prevent hanging on problematic files
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Metadata timeout')), 5000)
+      );
+      
+      const metadataPromise = getAudioMetadata(track.uri, ["album", "artist", "name", "year", "artwork"]);
+      
+      const data = await Promise.race([metadataPromise, timeoutPromise]);
       let artworkUri = null;
       const metadata = data.metadata || {};
+      
       if (metadata.artwork) {
-        if (metadata.artwork.startsWith('data:image')) {
-          artworkUri = metadata.artwork;
-        } else if (/^[A-Za-z0-9+/=]+$/.test(metadata.artwork)) {
-          artworkUri = `data:image/png;base64,${metadata.artwork}`;
-        } else {
-          artworkUri = metadata.artwork;
+        try {
+          if (metadata.artwork.startsWith('data:image')) {
+            artworkUri = metadata.artwork;
+          } else if (/^[A-Za-z0-9+/=]+$/.test(metadata.artwork)) {
+            artworkUri = `data:image/png;base64,${metadata.artwork}`;
+          } else {
+            artworkUri = metadata.artwork;
+          }
+        } catch (artworkError) {
+          console.log('Artwork processing failed for:', track.filename);
+          artworkUri = null;
         }
       }
-      setTrackMetadata(prev => ({
-        ...prev,
-        [track.id]: {
-          album: metadata.album || "Unknown Album",
-          artist: metadata.artist || "Unknown Artist",
-          title: metadata.name || track.filename.replace(/\.[^/.]+$/, ""),
-          year: metadata.year || null,
-          artwork: artworkUri,
-        }
-      }));
-    } catch (e) {
-      // console.log('Failed to fetch metadata for', track.filename, e);
+      
+      const processedMetadata = {
+        album: metadata.album || "Unknown Album",
+        artist: metadata.artist || "Unknown Artist",
+        title: metadata.name || track.filename?.replace(/\.[^/.]+$/, "") || "Unknown Track",
+        year: metadata.year || null,
+        artwork: artworkUri,
+        cachedAt: Date.now(),
+      };
+      
+      // Update state
+      setTrackMetadata(prev => ({ ...prev, [track.id]: processedMetadata }));
+      
+      // Cache the result
+      metadataCache.current.set(track.id, processedMetadata);
+      
+      // Memory management: limit cache size
+      if (metadataCache.current.size > maxCacheSize.current) {
+        const oldestKey = metadataCache.current.keys().next().value;
+        metadataCache.current.delete(oldestKey);
+      }
+      
+    } catch (error) {
+      // Fallback to filename-based metadata
+      const fallbackMetadata = {
+        album: "Unknown Album",
+        artist: "Unknown Artist", 
+        title: track.filename?.replace(/\.[^/.]+$/, "") || "Unknown Track",
+        year: null,
+        artwork: null,
+        cachedAt: Date.now(),
+        source: 'fallback'
+      };
+      
+      setTrackMetadata(prev => ({ ...prev, [track.id]: fallbackMetadata }));
+      metadataCache.current.set(track.id, fallbackMetadata);
+      
+    } finally {
+      // Remove from loading set
+      loadingMetadata.current.delete(track.id);
     }
-  };
+  }, [trackMetadata]);
 
   // Memoize renderItem
   const renderItem = useCallback(({ item }) => {
@@ -359,18 +468,38 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
       <FlatList
         data={sortedAndFilteredAudio}
         renderItem={renderItem}
-        keyExtractor={(item) => `${item.id}_${item.uri}`}
+        keyExtractor={LargeLibraryOptimizer.optimizedKeyExtractor}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
-        removeClippedSubviews={true}
-        maxToRenderPerBatch={15}
-        windowSize={10}
-        initialNumToRender={15}
-        getItemLayout={(data, index) => ({
-          length: 72, 
-          offset: 72 * index,
-          index,
-        })}
+        // 🚀 Dynamic optimization based on library size
+        {...LargeLibraryOptimizer.getOptimizedFlatListProps()}
+        // 🧠 Memory optimization with intelligent cleanup
+        onEndReachedThreshold={0.1}
+        onEndReached={() => {
+          // Intelligent memory cleanup based on library size
+          if (LargeLibraryOptimizer.isHugeLibrary()) {
+            // Aggressive cleanup for huge libraries
+            if (metadataCache.current.size > maxCacheSize.current) {
+              const entries = Array.from(metadataCache.current.entries());
+              const toKeep = entries.slice(-Math.floor(maxCacheSize.current * 0.7)); // Keep only 70%
+              metadataCache.current.clear();
+              toKeep.forEach(([key, value]) => metadataCache.current.set(key, value));
+            }
+          } else if (metadataCache.current.size > maxCacheSize.current * 1.5) {
+            // Standard cleanup for normal libraries
+            const entries = Array.from(metadataCache.current.entries());
+            const toKeep = entries.slice(-maxCacheSize.current);
+            metadataCache.current.clear();
+            toKeep.forEach(([key, value]) => metadataCache.current.set(key, value));
+          }
+        }}
+        // 🎯 Optimized scroll handling for large libraries
+        onScrollBeginDrag={() => {
+          // Pause metadata loading during scrolling for better performance
+          if (LargeLibraryOptimizer.isLargeLibrary()) {
+            loadingMetadata.current.clear();
+          }
+        }}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Music4 size={64} color={themeColors.textSecondary} />
@@ -380,11 +509,15 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
             <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
               {searchQuery ? 'Try adjusting your search' : 'Add some music to get started'}
             </Text>
+            {LargeLibraryOptimizer.isHugeLibrary() && (
+              <Text style={[styles.emptySubtext, { color: themeColors.textSecondary, marginTop: 8 }]}>
+                📚 Huge library detected - optimizations applied
+              </Text>
+            )}
           </View>
         }
         refreshing={refreshing}
         onRefresh={onRefresh}
-        onEndReachedThreshold={0.5}
         extraData={trackMetadata}
       />
 

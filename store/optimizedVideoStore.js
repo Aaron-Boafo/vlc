@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import FastMediaLoader from '../utils/fastMediaLoader';
+import ProgressiveMediaLoader from '../utils/progressiveMediaLoader';
 
 const useOptimizedVideoStore = create(
     subscribeWithSelector(
@@ -45,8 +45,8 @@ const useOptimizedVideoStore = create(
                     set({ isLoading: true, isInitialLoadComplete: false });
 
                     try {
-                        const files = await FastMediaLoader.loadMediaFast('video', (progressFiles, isComplete) => {
-                            // Update UI immediately as files are loaded
+                        const files = await ProgressiveMediaLoader.loadMediaProgressively('video', (progressFiles, isComplete) => {
+                            // Update UI immediately as files are loaded progressively
                             set({
                                 videoFiles: progressFiles,
                                 isInitialLoadComplete: isComplete,
@@ -91,13 +91,29 @@ const useOptimizedVideoStore = create(
 
                 // Video playback management
                 setAndPlayVideo: (video) => {
+                    // Validate input
+                    if (!video || !video.uri) {
+                        console.error("Invalid video provided to setAndPlayVideo:", video);
+                        return;
+                    }
+                    
+                    console.log('🎥 setAndPlayVideo called with:', {
+                        video: video,
+                        hasUri: !!video?.uri,
+                        uri: video?.uri,
+                        filename: video?.filename
+                    });
+                    
                     const videoFiles = get().videoFiles || [];
                     const index = videoFiles.findIndex(v => v.id === video.id);
+                    
                     set({
                         currentVideo: video,
                         currentVideoIndex: index,
                         isMiniPlayerVisible: false,
                     });
+
+                    console.log('🎥 Video store updated. Current video:', get().currentVideo);
 
                     // Add to history
                     get().addToHistory(video);

@@ -50,6 +50,15 @@ const useAudioControl = create(
   },
 
   setAndPlayPlaylist: async (tracks, startIndex = 0) => {
+    // Validate input
+    if (!tracks || !Array.isArray(tracks) || tracks.length === 0) {
+      console.error("Invalid tracks provided to setAndPlayPlaylist:", tracks);
+      return;
+    }
+    
+    // Ensure startIndex is within bounds
+    const validStartIndex = Math.max(0, Math.min(startIndex, tracks.length - 1));
+    
     const { sound } = get();
     if (sound) {
       try {
@@ -59,20 +68,39 @@ const useAudioControl = create(
         console.error("Error stopping/unloading previous sound:", error);
       }
     }
-    const trackToPlay = tracks[startIndex];
+    const trackToPlay = tracks[validStartIndex];
+    
+    // Validate track has required properties
+    if (!trackToPlay || !trackToPlay.uri) {
+      console.error("Invalid track at index", validStartIndex, ":", trackToPlay);
+      return;
+    }
+    
+    // 🎨 Enrich track with metadata if not already present
+    const enrichedTrack = await get()._enrichTrackMetadata(trackToPlay);
+    
     set({
       playQueue: tracks,
       originalQueue: tracks,
-      currentIndex: startIndex,
-      currentTrack: trackToPlay,
+      currentIndex: validStartIndex,
+      currentTrack: enrichedTrack,
       sound: null,
       isMiniPlayerVisible: true,
     });
-    get()._loadAndPlayTrack(trackToPlay);
+    get()._loadAndPlayTrack(enrichedTrack);
   },
 
   // Set play queue without starting
   setPlayQueue: async (tracks, startIndex = 0) => {
+    // Validate input
+    if (!tracks || !Array.isArray(tracks) || tracks.length === 0) {
+      console.error("Invalid tracks provided to setPlayQueue:", tracks);
+      return;
+    }
+    
+    // Ensure startIndex is within bounds
+    const validStartIndex = Math.max(0, Math.min(startIndex, tracks.length - 1));
+    
     const { sound } = get();
     if (sound) {
       try {
@@ -85,14 +113,14 @@ const useAudioControl = create(
     set({
       playQueue: tracks,
       originalQueue: tracks,
-      currentIndex: startIndex,
-      currentTrack: tracks[startIndex] || null,
+      currentIndex: validStartIndex,
+      currentTrack: tracks[validStartIndex] || null,
       isPlaying: false,
       sound: null,
       isMiniPlayerVisible: true,
     });
     // Also fetch lyrics for the new track
-    get().fetchLyrics(tracks[startIndex]);
+    get().fetchLyrics(tracks[validStartIndex]);
     get().clearSleepTimer();
   },
 
@@ -317,8 +345,12 @@ const useAudioControl = create(
       nextIndex = (currentIndex + 1) % playQueue.length;
     }
     const nextTrack = playQueue[nextIndex];
-    set({ currentIndex: nextIndex });
-    get()._loadAndPlayTrack(nextTrack);
+    
+    // 🎨 Enrich track with metadata before playing
+    const enrichedTrack = await get()._enrichTrackMetadata(nextTrack);
+    
+    set({ currentIndex: nextIndex, currentTrack: enrichedTrack });
+    get()._loadAndPlayTrack(enrichedTrack);
   },
 
   // Previous track
@@ -337,8 +369,11 @@ const useAudioControl = create(
       currentIndex === 0 ? playQueue.length - 1 : currentIndex - 1;
     const prevTrack = playQueue[prevIndex];
     
-    set({ currentIndex: prevIndex });
-    get()._loadAndPlayTrack(prevTrack);
+    // 🎨 Enrich track with metadata before playing
+    const enrichedTrack = await get()._enrichTrackMetadata(prevTrack);
+    
+    set({ currentIndex: prevIndex, currentTrack: enrichedTrack });
+    get()._loadAndPlayTrack(enrichedTrack);
   },
 
   // Seek to position
@@ -409,17 +444,17 @@ const useAudioControl = create(
         const data = await response.json();
         if (data.lyrics) {
           // Convert plain text lyrics to .lrc format
-          const lrcLyrics = convertToLrcFormat(data.lyrics, track.title);
+          const lrcLyrics = get().convertToLrcFormat(data.lyrics, track.title);
           set({ lyrics: lrcLyrics, lyricsLoading: false });
           return;
         }
       }
 
       // If no lyrics found, create a placeholder
-      const placeholderLyrics = `[00:0100] ${track.title}
-[00:5 By ${track.artist}
-[00o lyrics available for this track
-[000] Enjoy the music!`;
+      const placeholderLyrics = `[00:01.00] ${track.title}
+[00:05.00] By ${track.artist}
+[00:10.00] No lyrics available for this track
+[00:15.00] Enjoy the music!`;
       
       set({ lyrics: placeholderLyrics, lyricsLoading: false });
     } catch (error) {
@@ -431,13 +466,13 @@ const useAudioControl = create(
   // Helper function to convert plain text to .lrc format
   convertToLrcFormat: (plainText, title) => {
     const lines = plainText.split('\n').filter(line => line.trim());
-    let lrcContent = `[00:010${title}\n`;
+    let lrcContent = `[00:01.00] ${title}\n`;
     
     lines.forEach((line, index) => {
       const timeInSeconds = (index + 2) * 5; // 5 seconds per line
       const minutes = Math.floor(timeInSeconds / 60);
       const seconds = timeInSeconds % 60;
-      const timeStamp = `[${minutes.toString().padStart(2,0)}${seconds.toString().padStart(2,0)}.00]`;
+      const timeStamp = `[${minutes.toString().padStart(2,'0')}:${seconds.toString().padStart(2,'0')}.00]`;
       lrcContent += `${timeStamp} ${line}\n`;
     });
     
@@ -473,6 +508,50 @@ const useAudioControl = create(
   },
 
   hideMiniPlayer: () => set({ isMiniPlayerVisible: false }),
+
+  // 🎨 Enrich track with metadata including artwork
+  _enrichTrackMetadata: async (track) => {
+    // If track already has artwork and complete metadata, return as is
+    if (track.artwork && track.title && track.artist) {
+      return track;
+    }
+
+    try {
+      // Import getAudioMetadata dynamically to avoid circular dependencies
+      const { getAudioMetadata } = await import('@missingcore/audio-metadata');
+      
+      const data = await getAudioMetadata(track.uri, ["album", "artist", "name", "year", "artwork"]);
+      const metadata = data.metadata || {};
+      
+      let artworkUri = null;
+      if (metadata.artwork) {
+        if (metadata.artwork.startsWith('data:image')) {
+          artworkUri = metadata.artwork;
+        } else if (/^[A-Za-z0-9+/=]+$/.test(metadata.artwork)) {
+          artworkUri = `data:image/png;base64,${metadata.artwork}`;
+        } else {
+          artworkUri = metadata.artwork;
+        }
+      }
+
+      // Return enriched track with metadata
+      const enrichedTrack = {
+        ...track,
+        title: metadata.name || track.title || track.filename?.replace(/\.[^/.]+$/, "") || 'Unknown Track',
+        artist: metadata.artist || track.artist || 'Unknown Artist',
+        album: metadata.album || track.album || 'Unknown Album',
+        year: metadata.year || track.year || null,
+        artwork: artworkUri || track.artwork || null,
+      };
+      
+      console.log('🎨 Enriched track:', enrichedTrack.title, 'with artwork:', !!enrichedTrack.artwork);
+      return enrichedTrack;
+    } catch (error) {
+      console.log('Failed to enrich track metadata for:', track.filename || track.title, error);
+      // Return original track if metadata fetching fails
+      return track;
+    }
+  },
 }))
 );
 

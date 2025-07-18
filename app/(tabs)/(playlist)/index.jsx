@@ -49,8 +49,8 @@ const PlaylistCard = React.memo(({ playlist, onPress, onOptions, onPlay, onShuff
   const artwork = getPlaylistArtwork(playlist);
 
   return (
-    <TouchableOpacity 
-      style={[styles.playlistCard, { backgroundColor: themeColors.card, shadowColor: themeColors.shadow }]} 
+    <TouchableOpacity
+      style={[styles.playlistCard, { backgroundColor: themeColors.card, shadowColor: themeColors.shadow }]}
       onPress={onPress}
     >
       <View style={styles.playlistArtwork}>
@@ -66,26 +66,26 @@ const PlaylistCard = React.memo(({ playlist, onPress, onOptions, onPlay, onShuff
         <Text style={[styles.playlistName, { color: themeColors.text }]} numberOfLines={1}>
           {playlist.name}
         </Text>
-        <Text style={[styles.trackCount, { color: themeColors.textSecondary }]}> 
+        <Text style={[styles.trackCount, { color: themeColors.textSecondary }]}>
           {playlist.tracks.length} {playlist.tracks.length === 1 ? 'track' : 'tracks'}
           {playlist.type === 'audio' ? ' • Audio' : ' • Video'}
         </Text>
       </View>
       <View style={styles.playlistActions}>
-        <TouchableOpacity 
-          style={[styles.actionButton, { backgroundColor: themeColors.primary + '20' }]} 
+        <TouchableOpacity
+          style={[styles.actionButton, { backgroundColor: themeColors.primary + '20' }]}
           onPress={onPlay}
         >
           <Play size={16} color={themeColors.primary} />
         </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.actionButton, { backgroundColor: themeColors.primary + '20' }]} 
+        <TouchableOpacity
+          style={[styles.actionButton, { backgroundColor: themeColors.primary + '20' }]}
           onPress={onShuffle}
         >
           <Shuffle size={16} color={themeColors.primary} />
         </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.actionButton, { backgroundColor: themeColors.card }]} 
+        <TouchableOpacity
+          style={[styles.actionButton, { backgroundColor: themeColors.card }]}
           onPress={onOptions}
         >
           <MoreVertical size={16} color={themeColors.textSecondary} />
@@ -115,7 +115,7 @@ const TrackSelectItem = ({ item, meta, selected, onToggle, themeColors, fetchMet
         </Text>
       </View>
       {selected && (
-        <View style={[styles.checkmark, { backgroundColor: themeColors.primary }]}> 
+        <View style={[styles.checkmark, { backgroundColor: themeColors.primary }]}>
           <Text style={{ color: themeColors.background, fontSize: 12 }}>✓</Text>
         </View>
       )}
@@ -128,7 +128,7 @@ const PlaylistScreen = () => {
   const { playlists, createPlaylist, deletePlaylist, addTrackToPlaylist, removeTrackFromPlaylist, clearPlaylists } = usePlaylistStore();
   const audioControl = useAudioControl();
   const router = useRouter();
-  
+
   // State
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
@@ -224,7 +224,7 @@ const PlaylistScreen = () => {
           artwork: artworkUri,
         }
       }));
-    } catch {}
+    } catch { }
   };
 
   // Handlers
@@ -349,8 +349,8 @@ const PlaylistScreen = () => {
 
   const renderTrack = useCallback(({ item, index }) => (
     <View style={[styles.trackCard, { backgroundColor: themeColors.card, shadowColor: themeColors.shadow }]}>
-      <TouchableOpacity 
-        style={styles.trackInfo} 
+      <TouchableOpacity
+        style={styles.trackInfo}
         onPress={() => handlePlayTrack(item)}
       >
         <View style={styles.trackArtwork}>
@@ -371,8 +371,8 @@ const PlaylistScreen = () => {
           </Text>
         </View>
       </TouchableOpacity>
-      <TouchableOpacity 
-        onPress={() => handleRemoveTrack(selectedPlaylist.id, item.id)} 
+      <TouchableOpacity
+        onPress={() => handleRemoveTrack(selectedPlaylist.id, item.id)}
         style={styles.removeButton}
       >
         <Trash2 size={18} color={themeColors.error || '#EF4444'} />
@@ -397,8 +397,8 @@ const PlaylistScreen = () => {
         <Text style={[styles.headerTitle, { color: themeColors.text }]}>Playlists</Text>
         <View style={styles.headerActions}>
           {playlists.length > 0 && (
-            <TouchableOpacity 
-              style={[styles.headerButton, { backgroundColor: themeColors.card }]} 
+            <TouchableOpacity
+              style={[styles.headerButton, { backgroundColor: themeColors.card }]}
               onPress={handleClearAllPlaylists}
             >
               <Trash2 size={18} color={themeColors.primary} />
@@ -430,8 +430,8 @@ const PlaylistScreen = () => {
           <View style={styles.emptyState}>
             <ListMusic size={48} color={themeColors.primary} />
             <Text style={[styles.emptyText, { color: themeColors.textSecondary }]}>No playlists yet. Create your first playlist!</Text>
-            <TouchableOpacity 
-              style={[styles.createButton, { backgroundColor: themeColors.primary }]} 
+            <TouchableOpacity
+              style={[styles.createButton, { backgroundColor: themeColors.primary }]}
               onPress={() => setCreateModal(true)}
             >
               <Plus size={20} color={themeColors.background} />
@@ -469,7 +469,7 @@ const PlaylistScreen = () => {
         presentationStyle="pageSheet"
         onRequestClose={() => setCreateModal(false)}
       >
-        <View style={[styles.modalContainer, { backgroundColor: themeColors.background }]}> 
+        <View style={[styles.modalContainer, { backgroundColor: themeColors.background }]}>
           <View style={styles.modalHeader}>
             <Text style={[styles.modalTitle, { color: themeColors.text }]}>Create Playlist</Text>
             <TouchableOpacity onPress={() => setCreateModal(false)}>
@@ -481,10 +481,10 @@ const PlaylistScreen = () => {
           <SegmentedControl value={playlistType} onChange={setPlaylistType} />
 
           <TextInput
-            style={[styles.input, { 
-              backgroundColor: themeColors.card, 
+            style={[styles.input, {
+              backgroundColor: themeColors.card,
               color: themeColors.text,
-              borderColor: themeColors.border 
+              borderColor: themeColors.border
             }]}
             placeholder="Playlist name"
             placeholderTextColor={themeColors.textSecondary}
@@ -494,7 +494,7 @@ const PlaylistScreen = () => {
           />
 
           <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Select {playlistType === 'audio' ? 'Audio' : 'Video'} Tracks</Text>
-          
+
           {loadingTracks ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={themeColors.primary} />
@@ -526,10 +526,10 @@ const PlaylistScreen = () => {
           <TouchableOpacity
             style={[
               styles.createPlaylistButton,
-              { 
-                backgroundColor: newPlaylistName.trim() && selectedTracks.length > 0 
-                  ? themeColors.primary 
-                  : themeColors.card 
+              {
+                backgroundColor: newPlaylistName.trim() && selectedTracks.length > 0
+                  ? themeColors.primary
+                  : themeColors.card
               }
             ]}
             onPress={handleCreatePlaylist}
@@ -537,10 +537,10 @@ const PlaylistScreen = () => {
           >
             <Text style={[
               styles.createPlaylistButtonText,
-              { 
-                color: newPlaylistName.trim() && selectedTracks.length > 0 
-                  ? themeColors.background 
-                  : themeColors.textSecondary 
+              {
+                color: newPlaylistName.trim() && selectedTracks.length > 0
+                  ? themeColors.background
+                  : themeColors.textSecondary
               }
             ]}>
               Create Playlist ({selectedTracks.length} tracks)
@@ -556,7 +556,7 @@ const PlaylistScreen = () => {
         presentationStyle="pageSheet"
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={[styles.modalContainer, { backgroundColor: themeColors.background }]}> 
+        <View style={[styles.modalContainer, { backgroundColor: themeColors.background }]}>
           <View style={styles.modalHeader}>
             <Text style={[styles.modalTitle, { color: themeColors.text }]} numberOfLines={1}>{selectedPlaylist?.name}</Text>
             <TouchableOpacity onPress={() => setModalVisible(false)}>
@@ -589,7 +589,7 @@ const PlaylistScreen = () => {
         onRequestClose={handleCloseOptions}
       >
         <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={handleCloseOptions}>
-          <View style={[styles.optionsContainer, { backgroundColor: themeColors.card }]}> 
+          <View style={[styles.optionsContainer, { backgroundColor: themeColors.card }]}>
             <Text style={[styles.optionText, { color: themeColors.text, fontWeight: 'bold', fontSize: 18, marginBottom: 12 }]}>Playlist Options</Text>
             <TouchableOpacity style={styles.optionItem} onPress={handleRenamePlaylist}>
               <Edit3 size={20} color={themeColors.text} />
