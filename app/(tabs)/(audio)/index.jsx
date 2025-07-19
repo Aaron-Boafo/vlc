@@ -160,46 +160,86 @@ const AudioTabScreen = () => {
     setShowSearch 
   }), [showSearch, searchQuery, setSearchQuery, setShowSearch]);
 
-  const renderMainContent = useCallback(() => {
-    switch (activeTab) {
-      case "all":
-        return (
-          <LazyScreen preload={true} delay={0}>
-            <AllScreen {...sharedProps} />
-          </LazyScreen>
-        );
-      case "playlist":
-        return (
-          <LazyScreen delay={50}>
-            <PlaylistScreen {...sharedProps} />
-          </LazyScreen>
-        );
-      case "album":
-        return (
-          <LazyScreen delay={50}>
-            <AlbumsScreen {...sharedProps} />
-          </LazyScreen>
-        );
-      case "artist":
-        return (
-          <LazyScreen delay={50}>
-            <ArtistScreen {...sharedProps} />
-          </LazyScreen>
-        );
-      case "favourite":
-        return (
-          <LazyScreen delay={50}>
-            <FavouriteScreen {...sharedProps} />
-          </LazyScreen>
-        );
-      default:
-        return (
-          <LazyScreen preload={true} delay={0}>
-            <AllScreen {...sharedProps} />
-          </LazyScreen>
-        );
+  // ScrollView ref for programmatic scrolling
+  const scrollViewRef = React.useRef(null);
+  const [screenWidth, setScreenWidth] = React.useState(0);
+  const [currentIndex, setCurrentIndex] = React.useState(0);
+
+  // Tab configuration
+  const tabs = [
+    { name: "all", component: AllScreen, preload: true },
+    { name: "playlist", component: PlaylistScreen, preload: false },
+    { name: "album", component: AlbumsScreen, preload: false },
+    { name: "artist", component: ArtistScreen, preload: false },
+    { name: "favourite", component: FavouriteScreen, preload: false },
+  ];
+
+  // Get current tab index
+  const getCurrentTabIndex = useCallback(() => {
+    return tabs.findIndex(tab => tab.name === activeTab);
+  }, [activeTab]);
+
+  // Update current index when activeTab changes
+  React.useEffect(() => {
+    const newIndex = getCurrentTabIndex();
+    if (newIndex !== -1 && newIndex !== currentIndex) {
+      setCurrentIndex(newIndex);
+      // Scroll to the new tab
+      if (scrollViewRef.current && screenWidth > 0) {
+        scrollViewRef.current.scrollTo({
+          x: newIndex * screenWidth,
+          animated: true
+        });
+      }
     }
-  }, [activeTab, sharedProps]);
+  }, [activeTab, getCurrentTabIndex, currentIndex, screenWidth]);
+
+  // Handle scroll end to update active tab
+  const handleScrollEnd = useCallback((event) => {
+    const contentOffsetX = event.nativeEvent.contentOffset.x;
+    const newIndex = Math.round(contentOffsetX / screenWidth);
+    
+    if (newIndex !== currentIndex && newIndex >= 0 && newIndex < tabs.length) {
+      setCurrentIndex(newIndex);
+      toggleTabs(tabs[newIndex].name);
+    }
+  }, [screenWidth, currentIndex, toggleTabs]);
+
+  // Handle layout to get screen width
+  const handleLayout = useCallback((event) => {
+    const { width } = event.nativeEvent.layout;
+    setScreenWidth(width);
+  }, []);
+
+  const renderScrollableContent = useCallback(() => {
+    return (
+      <ScrollView
+        ref={scrollViewRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={handleScrollEnd}
+        onLayout={handleLayout}
+        scrollEventThrottle={16}
+        style={styles.scrollContainer}
+      >
+        {tabs.map((tab, index) => {
+          const TabComponent = tab.component;
+          return (
+            <View key={tab.name} style={[styles.tabScreen, { width: screenWidth }]}>
+              {tab.preload ? (
+                <TabComponent {...sharedProps} />
+              ) : (
+                <LazyScreen delay={index === currentIndex ? 0 : 50}>
+                  <TabComponent {...sharedProps} />
+                </LazyScreen>
+              )}
+            </View>
+          );
+        })}
+      </ScrollView>
+    );
+  }, [sharedProps, screenWidth, currentIndex, handleScrollEnd, handleLayout]);
 
   const renderContent = () => {
     // Show progressive loading indicator during initial load
@@ -227,7 +267,7 @@ const AudioTabScreen = () => {
             mediaType="audio files"
           />
           {/* Show loaded files while still loading */}
-          {audioFiles.length > 0 && renderMainContent()}
+          {audioFiles.length > 0 && renderScrollableContent()}
         </>
       );
     }
@@ -250,7 +290,7 @@ const AudioTabScreen = () => {
     }
 
     // Show main content when loading is complete
-    return renderMainContent();
+    return renderScrollableContent();
   };
 
   return (
@@ -353,7 +393,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
-  }
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  tabScreen: {
+    flex: 1,
+  },
 });
 
 export default AudioTabScreen;

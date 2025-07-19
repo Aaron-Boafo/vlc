@@ -1,5 +1,5 @@
 import useThemeStore from "../../../store/theme";
-import { View, Text, StyleSheet, Platform, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, Platform, TouchableOpacity, ScrollView } from "react-native";
 import AudioHeader from "../../../AudioComponents/title";
 import VideoToggleBar from "../../../VideoComponents/toggleButton";
 import useOptimizedVideoStore from "../../../store/optimizedVideoStore";
@@ -91,47 +91,94 @@ export default function VideoTabScreen() {
     }
   }, [videoFiles]);
 
-  const renderMainContent = () => {
-    const sharedSearchProps = {
-      showSearch,
-      setShowSearch,
-      searchQuery,
-      setSearchQuery,
-    };
-    
-    switch (activeTab) {
-      case "all":
-        return (
-          <LazyScreen preload={true} delay={0}>
-            <VideoAllScreen {...sharedSearchProps} onCloseSearch={() => setShowSearch(false)} />
-          </LazyScreen>
-        );
-      case "playlist":
-        return (
-          <LazyScreen delay={50}>
-            <VideoPlaylistScreen {...sharedSearchProps} />
-          </LazyScreen>
-        );
-      case "favourite":
-        return (
-          <LazyScreen delay={50}>
-            <VideoFavouriteScreen {...sharedSearchProps} />
-          </LazyScreen>
-        );
-      case "history":
-        return (
-          <LazyScreen delay={50}>
-            <VideoHistoryScreen {...sharedSearchProps} />
-          </LazyScreen>
-        );
-      default:
-        return (
-          <LazyScreen preload={true} delay={0}>
-            <VideoAllScreen {...sharedSearchProps} onCloseSearch={() => setShowSearch(false)} />
-          </LazyScreen>
-        );
+  // ScrollView ref for programmatic scrolling
+  const scrollViewRef = React.useRef(null);
+  const [screenWidth, setScreenWidth] = React.useState(0);
+  const [currentIndex, setCurrentIndex] = React.useState(0);
+
+  // Tab configuration
+  const tabs = [
+    { name: "all", component: VideoAllScreen, preload: true },
+    { name: "playlist", component: VideoPlaylistScreen, preload: false },
+    { name: "favourite", component: VideoFavouriteScreen, preload: false },
+    { name: "history", component: VideoHistoryScreen, preload: false },
+  ];
+
+  // Shared props for all screens
+  const sharedSearchProps = React.useMemo(() => ({
+    showSearch,
+    setShowSearch,
+    searchQuery,
+    setSearchQuery,
+    onCloseSearch: () => setShowSearch(false)
+  }), [showSearch, setShowSearch, searchQuery, setSearchQuery]);
+
+  // Get current tab index
+  const getCurrentTabIndex = useCallback(() => {
+    return tabs.findIndex(tab => tab.name === activeTab);
+  }, [activeTab]);
+
+  // Update current index when activeTab changes
+  React.useEffect(() => {
+    const newIndex = getCurrentTabIndex();
+    if (newIndex !== -1 && newIndex !== currentIndex) {
+      setCurrentIndex(newIndex);
+      // Scroll to the new tab
+      if (scrollViewRef.current && screenWidth > 0) {
+        scrollViewRef.current.scrollTo({
+          x: newIndex * screenWidth,
+          animated: true
+        });
+      }
     }
-  };
+  }, [activeTab, getCurrentTabIndex, currentIndex, screenWidth]);
+
+  // Handle scroll end to update active tab
+  const handleScrollEnd = useCallback((event) => {
+    const contentOffsetX = event.nativeEvent.contentOffset.x;
+    const newIndex = Math.round(contentOffsetX / screenWidth);
+    
+    if (newIndex !== currentIndex && newIndex >= 0 && newIndex < tabs.length) {
+      setCurrentIndex(newIndex);
+      toggleTabs(tabs[newIndex].name);
+    }
+  }, [screenWidth, currentIndex, toggleTabs]);
+
+  // Handle layout to get screen width
+  const handleLayout = useCallback((event) => {
+    const { width } = event.nativeEvent.layout;
+    setScreenWidth(width);
+  }, []);
+
+  const renderScrollableContent = useCallback(() => {
+    return (
+      <ScrollView
+        ref={scrollViewRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={handleScrollEnd}
+        onLayout={handleLayout}
+        scrollEventThrottle={16}
+        style={styles.scrollContainer}
+      >
+        {tabs.map((tab, index) => {
+          const TabComponent = tab.component;
+          return (
+            <View key={tab.name} style={[styles.tabScreen, { width: screenWidth }]}>
+              {tab.preload ? (
+                <TabComponent {...sharedSearchProps} />
+              ) : (
+                <LazyScreen delay={index === currentIndex ? 0 : 50}>
+                  <TabComponent {...sharedSearchProps} />
+                </LazyScreen>
+              )}
+            </View>
+          );
+        })}
+      </ScrollView>
+    );
+  }, [sharedSearchProps, screenWidth, currentIndex, handleScrollEnd, handleLayout]);
 
   const renderContent = () => {
     // Show progressive loading indicator during initial load
@@ -147,8 +194,8 @@ export default function VideoTabScreen() {
       );
     }
 
-    // Show progressive loading with content
-    if (isLoading || !isInitialLoadComplete) {
+    // Show progressive loading with content only if actually loading
+    if (isLoading && !isInitialLoadComplete) {
       return (
         <>
           <ProgressiveLoadingIndicator
@@ -159,13 +206,13 @@ export default function VideoTabScreen() {
             mediaType="video files"
           />
           {/* Show loaded files while still loading */}
-          {videoFiles.length > 0 && renderMainContent()}
+          {videoFiles.length > 0 && renderScrollableContent()}
         </>
       );
     }
 
     // Show main content when loading is complete
-    return renderMainContent();
+    return renderScrollableContent();
   };
 
   return (
@@ -221,5 +268,11 @@ const styles = StyleSheet.create({
   contentArea: {
     flex: 1,
     paddingBottom: Platform.OS === 'ios' ? 0 : 20, // Extra padding for Android
-  }
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  tabScreen: {
+    flex: 1,
+  },
 });
