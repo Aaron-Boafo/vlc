@@ -215,8 +215,8 @@ const AudioTabScreen = () => {
       );
     }
 
-    // Show progressive loading with content
-    if (isLoading || !isInitialLoadComplete) {
+    // Show progressive loading with content only if actually loading
+    if (isLoading && !isInitialLoadComplete) {
       return (
         <>
           <ProgressiveLoadingIndicator
@@ -226,24 +226,13 @@ const AudioTabScreen = () => {
             isComplete={isInitialLoadComplete}
             mediaType="audio files"
           />
-          {/* Show metadata loading indicator when files are loaded but metadata is processing */}
-          {isInitialLoadComplete && audioFiles.length > 0 && (
-            <MetadataLoadingIndicator
-              visible={showMetadataLoading}
-              totalFiles={audioFiles.length}
-              onStatsUpdate={(stats) => {
-                // Hide metadata loading when complete
-                if (stats.total > 0 && (stats.successful + stats.fallback + stats.failed) >= stats.total) {
-                  setShowMetadataLoading(false);
-                }
-              }}
-            />
-          )}
           {/* Show loaded files while still loading */}
           {audioFiles.length > 0 && renderMainContent()}
         </>
       );
     }
+
+    // Metadata loading happens in background - no UI needed
   
     if (!isLoading && audioFiles.length === 0) {
       return (
