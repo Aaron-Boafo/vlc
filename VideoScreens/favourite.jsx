@@ -113,17 +113,36 @@ const VideoFavouriteScreen = ({ showSearch, setShowSearch, searchQuery, setSearc
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <MaterialIcons 
-              name="favorite-border" 
-              size={64} 
-              color={themeColors.textSecondary} 
-            />
-            <Text style={[styles.emptyText, { color: themeColors.text }]}>
-              No favourite videos found
+          <View style={[styles.emptyContainer, { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+            <View style={[styles.emptyIconContainer, { 
+              backgroundColor: themeColors.primary + '15', 
+              width: 96, 
+              height: 96, 
+              borderRadius: 48, 
+              justifyContent: 'center', 
+              alignItems: 'center' 
+            }]}>
+              <MaterialIcons name="favorite-border" size={48} color={themeColors.primary} />
+            </View>
+            <Text style={[styles.emptyTitle, { 
+              color: themeColors.text, 
+              fontSize: 20, 
+              fontWeight: '600', 
+              marginTop: 16, 
+              textAlign: 'center' 
+            }]}>
+              {searchQuery ? 'No matching favorites' : 'No favorite videos yet'}
             </Text>
-            <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
-              Try adjusting your search
+            <Text style={[styles.emptySubtitle, { 
+              color: themeColors.textSecondary, 
+              textAlign: 'center', 
+              marginTop: 8, 
+              fontSize: 15, 
+              maxWidth: 280 
+            }]}>
+              {searchQuery 
+                ? 'Try a different search term' 
+                : 'Mark videos as favorite to see them here'}
             </Text>
           </View>
         }

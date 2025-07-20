@@ -24,8 +24,7 @@ import FileBrowser from '../../../components/FileBrowser';
 import * as DocumentPicker from 'expo-document-picker';
 import StreamModal from '../../../components/StreamModal';
 
-const BrowseTab = () => {
-  const { themeColors } = useThemeStore();
+const BrowseTab = ({ styles, themeColors }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [recentFiles, setRecentFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -386,6 +385,7 @@ const BrowseTab = () => {
       <AudioHeader
         onSearch={() => setShowSearch(s => !s)}
         onMore={() => setShowMore(true)}
+        showIcons={false}
       />
       {/* Search Bar */}
       {showSearch && (
@@ -405,24 +405,39 @@ const BrowseTab = () => {
           )}
         </View>
       )}
-      <ScrollView style={[styles.content, { paddingTop: 0, marginTop: 0 }]} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Categories */}
-        <View style={styles.section}>
+        <View style={styles.sectionCard}>
           <Text style={[styles.sectionTitle, { color: themeColors.primary }]}>
             Categories
           </Text>
-          <FlatList
-            data={categories}
-            renderItem={renderCategoryItem}
-            keyExtractor={(item) => item.id}
-            horizontal
+          <ScrollView 
+            horizontal 
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.categoriesList}
-          />
+          >
+            {categories.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={[
+                  styles.categoryCard,
+                  selectedCategory === item.id && styles.selectedCategoryCard
+                ]}
+                onPress={() => setSelectedCategory(item.id)}
+              >
+                <View style={[styles.categoryIcon, { backgroundColor: item.color + '20' }]}>
+                  <MaterialCommunityIcons name={item.icon} size={24} color={item.color} />
+                </View>
+                <Text style={styles.categoryName}>
+                  {item.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
 
         {/* Quick Actions */}
-        <View style={styles.section}>
+        <View style={styles.sectionCard}>
           <Text style={[styles.sectionTitle, { color: themeColors.primary }]}>
             Quick Actions
           </Text>
@@ -430,12 +445,12 @@ const BrowseTab = () => {
             {quickActions.map((action) => (
               <TouchableOpacity
                 key={action.id}
-                style={[styles.quickActionCard, { backgroundColor: themeColors.card }]}
+                style={styles.quickActionCard}
                 onPress={action.action}
               >
                 <MaterialCommunityIcons 
                   name={action.icon} 
-                  size={28} 
+                  size={24} 
                   color={themeColors.primary} 
                 />
                 <Text style={[styles.quickActionText, { color: themeColors.text }]}>
@@ -447,7 +462,7 @@ const BrowseTab = () => {
         </View>
 
         {/* Recent Files */}
-        <View style={styles.section}>
+        <View style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: themeColors.primary }]}>
               Recent Files
@@ -458,74 +473,113 @@ const BrowseTab = () => {
               </Text>
             </TouchableOpacity>
           </View>
+          
           {(selectedCategory === 'images' || selectedCategory === 'documents') ? (
-            <View style={{ alignItems: 'center', marginVertical: 24 }}>
-              <Text style={{ color: themeColors.textSecondary, fontSize: 16, fontWeight: '500' }}>
+            <View style={{ alignItems: 'center', paddingVertical: 16 }}>
+              <Text style={{ 
+                color: themeColors.textSecondary, 
+                fontSize: 15, 
+                fontWeight: '500',
+                textAlign: 'center',
+                marginBottom: 16
+              }}>
                 {selectedCategory === 'images' ? 'Image browsing' : 'Document browsing'} is now available!
               </Text>
               <TouchableOpacity 
-                style={[styles.retryButton, { backgroundColor: themeColors.primary, marginTop: 16 }]}
+                style={[{
+                  backgroundColor: themeColors.primary,
+                  paddingHorizontal: 20,
+                  paddingVertical: 10,
+                  borderRadius: 8,
+                  alignSelf: 'center'
+                }]}
                 onPress={() => scanFiles()}
               >
-                <Text style={styles.retryButtonText}>Scan Files</Text>
+                <Text style={{
+                  color: '#fff',
+                  fontSize: 14,
+                  fontWeight: '600',
+                  fontFamily: 'System',
+                }}>Scan Files</Text>
               </TouchableOpacity>
             </View>
           ) : (
-            <FlatList
-              data={
-                selectedCategory === 'all'
-                  ? recentFiles
-                  : recentFiles.filter(f => f.type === selectedCategory)
-              }
-              renderItem={renderRecentFile}
-              keyExtractor={(item) => item.id}
-              scrollEnabled={false}
-            />
+            <View style={styles.recentFilesList}>
+              {(selectedCategory === 'all' ? recentFiles : recentFiles.filter(f => f.type === selectedCategory))
+                .map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={styles.recentFileCard}
+                    onPress={() => handleFilePress(item)}
+                  >
+                    <View style={styles.fileIconContainer}>
+                      <MaterialCommunityIcons 
+                        name={getFileIcon(item.type)} 
+                        size={20} 
+                        color={getFileColor(item.type)} 
+                      />
+                    </View>
+                    <View style={styles.fileInfo}>
+                      <Text style={[styles.fileName, { color: themeColors.text }]} numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                      <Text style={[styles.fileMeta, { color: themeColors.textSecondary }]}>
+                        {item.size} • {item.date}
+                      </Text>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={20} color={themeColors.textSecondary} />
+                  </TouchableOpacity>
+                ))}
+            </View>
           )}
         </View>
 
-{/* stream button */}
-        <TouchableOpacity
-  style={{
-    backgroundColor: themeColors.sectionBackground,
-    width: 162,
-    height: 106,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 3,
-    marginRight: 12, // Add some spacing if needed
-  }}
-  onPress={() => setShowStreamModal(true)}
->
-  <Icons.Plus size={24} color={themeColors.primary} />
-  <Text style={[styles.streamButtonText, { color: themeColors.text }]}>
-    New stream
-  </Text>
-</TouchableOpacity>
-        {/* Storage Info */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: themeColors.primary }]}>Storages</Text>
-          <View style={{ flexDirection: 'row', gap: 16 }}>
+        {/* Stream Section */}
+        <View style={styles.sectionCard}>
+          <Text style={[styles.sectionTitle, { color: themeColors.primary }]}>
+            Stream
+          </Text>
+          <TouchableOpacity
+            style={styles.streamCard}
+            onPress={() => setShowStreamModal(true)}
+          >
+            <View style={[styles.streamIcon, { backgroundColor: 'rgba(0,122,255,0.1)' }]}>
+              <Icons.Plus size={24} color={themeColors.primary} />
+            </View>
+            <Text style={[styles.streamCardText, { color: themeColors.text }]}>
+              New stream
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Storage Section */}
+        <View style={styles.sectionCard}>
+          <Text style={[styles.sectionTitle, { color: themeColors.primary }]}>
+            Storage
+          </Text>
+          <View style={styles.storageGrid}>
             {storages.map(storage => (
               <TouchableOpacity
                 key={storage.id}
-                style={[styles.storageCard, { backgroundColor: themeColors.card, flex: 1 }]}
+                style={styles.storageCard}
                 onPress={() => openStorage(storage)}
               >
                 <View style={styles.storageHeader}>
-                  <MaterialIcons name="storage" size={24} color={themeColors.primary} />
-                  <Text style={[styles.storageTitle, { color: themeColors.text }]}>{storage.name}</Text>
+                  <View style={[styles.storageIcon, { backgroundColor: 'rgba(0,122,255,0.1)' }]}>
+                    <MaterialIcons name="storage" size={20} color={themeColors.primary} />
+                  </View>
+                  <Text style={[styles.storageTitle, { color: themeColors.text }]} numberOfLines={1}>
+                    {storage.name}
+                  </Text>
                 </View>
                 <View style={styles.storageBar}>
-                  <View style={[styles.storageProgress, { backgroundColor: themeColors.primary, width: `${Math.round(storageInfo.percent * 100)}%` }]} />
+                  <View style={[styles.storageProgress, { 
+                    backgroundColor: themeColors.primary, 
+                    width: `${Math.round(storageInfo.percent * 100)}%` 
+                  }]} />
                 </View>
-                <Text style={[styles.storageText, { color: themeColors.textSecondary }]}> 
-                  {`${(storageInfo.used / (1024 ** 3)).toFixed(2)} GB of ${(storageInfo.total / (1024 ** 3)).toFixed(2)} GB used`}
+                <Text style={[styles.storageText, { color: themeColors.textSecondary }]} numberOfLines={1}>
+                  {`${(storageInfo.used / (1024 ** 3)).toFixed(1)} GB / ${(storageInfo.total / (1024 ** 3)).toFixed(1)} GB`}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -557,20 +611,76 @@ const BrowseTab = () => {
           animationType="slide"
           onRequestClose={() => setOrganizeModalVisible(false)}
         >
-          <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.3)' }}>
-            <View style={{ backgroundColor: themeColors.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 }}>
-              <Text style={{ fontSize: 20, fontWeight: 'bold', color: themeColors.text, marginBottom: 20, textAlign: 'center' }}>Organize</Text>
-              <TouchableOpacity onPress={handleSortByName} style={{ paddingVertical: 16 }}>
-                <Text style={{ fontSize: 16, color: themeColors.text }}>Sort by Name (A-Z)</Text>
+          <TouchableOpacity 
+            style={styles.overlay} 
+            activeOpacity={1} 
+            onPress={() => setOrganizeModalVisible(false)}
+          />
+          <View style={[styles.sheet, { backgroundColor: themeColors.background }]}>
+            {/* Handle bar */}
+            <View style={styles.handleContainer}>
+              <View style={[styles.handle, { backgroundColor: themeColors.textSecondary + '40' }]} />
+            </View>
+            
+            {/* Title */}
+            <Text style={[styles.title, { 
+              color: themeColors.text,
+              borderBottomWidth: 1,
+              borderBottomColor: themeColors.border || 'rgba(0,0,0,0.1)',
+              paddingBottom: 12,
+              marginBottom: 8,
+            }]}>
+              Organize
+            </Text>
+            
+            {/* Options */}
+            <View style={styles.optionsContainer}>
+              <TouchableOpacity
+                style={styles.option}
+                onPress={() => {
+                  handleSortByName();
+                  setOrganizeModalVisible(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.optionContent}>
+                  <View style={styles.icon}>
+                    <MaterialIcons name="sort-by-alpha" size={22} color={themeColors.textSecondary} />
+                  </View>
+                  <Text style={styles.label}>Name (A-Z)</Text>
+                </View>
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleSortByDate} style={{ paddingVertical: 16 }}>
-                <Text style={{ fontSize: 16, color: themeColors.text }}>Sort by Date (Newest First)</Text>
+              
+              <TouchableOpacity
+                style={styles.option}
+                onPress={() => {
+                  handleSortByDate();
+                  setOrganizeModalVisible(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.optionContent}>
+                  <View style={styles.icon}>
+                    <MaterialIcons name="access-time" size={22} color={themeColors.textSecondary} />
+                  </View>
+                  <Text style={styles.label}>Date (Newest First)</Text>
+                </View>
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleCreateFolder} style={{ paddingVertical: 16 }}>
-                <Text style={{ fontSize: 16, color: themeColors.text }}>Create Folder</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setOrganizeModalVisible(false)} style={{ paddingVertical: 16 }}>
-                <Text style={{ fontSize: 16, color: themeColors.primary, textAlign: 'center' }}>Cancel</Text>
+              
+              <TouchableOpacity
+                style={styles.option}
+                onPress={() => {
+                  handleCreateFolder();
+                  setOrganizeModalVisible(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.optionContent}>
+                  <View style={styles.icon}>
+                    <MaterialIcons name="create-new-folder" size={22} color={themeColors.textSecondary} />
+                  </View>
+                  <Text style={styles.label}>Create New Folder</Text>
+                </View>
               </TouchableOpacity>
             </View>
           </View>
@@ -586,17 +696,22 @@ const BrowseTab = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (themeColors) => StyleSheet.create({
+  // Base screen styles
   screen: {
     flex: 1,
+    backgroundColor: '#f5f5f7',
   },
+  // Search bar
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     margin: 16,
+    marginBottom: 8,
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#fff',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -606,15 +721,36 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    fontFamily: 'System', // Use system font for better readability
+    fontFamily: 'System',
+    color: '#1a1a1a',
+    marginLeft: 10,
+    paddingVertical: 2,
   },
+  // Main content area
   content: {
     flex: 1,
     paddingHorizontal: 16,
-    paddingBottom: 32,
+    paddingBottom: 24,
+    paddingTop: 8,
+    backgroundColor: themeColors.background,
   },
+  // Section styling
   section: {
-    marginTop: 24,
+    marginTop: 20,
+    marginBottom: 16,
+  },
+  sectionCard: {
+    backgroundColor: themeColors.card,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: themeColors.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: themeColors.border,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -623,186 +759,317 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: -0.4,
+    fontSize: 18,
+    fontWeight: '700',
+    color: themeColors.text,
     fontFamily: 'System',
   },
   seeAllText: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#007AFF',
     fontFamily: 'System',
   },
+  // Categories section
   categoriesList: {
+    paddingVertical: 8,
     paddingRight: 16,
-    paddingVertical: 4,
   },
   categoryCard: {
+    width: 100,
     alignItems: 'center',
-    padding: 16,
+    padding: 12,
     marginRight: 12,
-    borderRadius: 16,
-    minWidth: 100,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 2,
+    borderRadius: 12,
+    backgroundColor: themeColors.surfaceVariant,
+  },
+  selectedCategoryCard: {
+    backgroundColor: `${themeColors.primary}15`,
+    borderWidth: 1,
+    borderColor: `${themeColors.primary}30`,
   },
   categoryIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
+    backgroundColor: 'rgba(0,122,255,0.1)',
   },
   categoryName: {
     fontSize: 13,
     fontWeight: '600',
     textAlign: 'center',
+    color: themeColors.text,
     fontFamily: 'System',
+    marginTop: 4,
   },
+  // Quick actions grid
   quickActionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
     marginHorizontal: -4,
+    marginTop: 8,
+    justifyContent: 'space-between',
   },
   quickActionCard: {
-    flex: 1,
-    minWidth: '45%',
+    width: '30%',
     alignItems: 'center',
-    padding: 20,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 2,
+    padding: 12,
+    margin: 4,
+    borderRadius: 12,
+    backgroundColor: themeColors.surfaceVariant,
+    borderWidth: 1,
+    borderColor: themeColors.border,
   },
   quickActionText: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '500',
     textAlign: 'center',
-    marginTop: 4,
+    color: themeColors.text,
+    fontFamily: 'System',
+    marginTop: 6,
+  },
+  // Recent files list
+  recentFilesList: {
+    marginTop: 8,
   },
   recentFileCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    marginBottom: 10,
-    borderRadius: 16,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: themeColors.border + '80',
+  },
+  fileIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   fileInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
     flex: 1,
-  },
-  fileDetails: {
-    marginLeft: 16,
-    flex: 1,
+    marginRight: 8,
   },
   fileName: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '500',
+    color: themeColors.text,
     marginBottom: 2,
     fontFamily: 'System',
   },
   fileMeta: {
-    fontSize: 13,
+    fontSize: 12,
+    color: themeColors.textSecondary,
     fontFamily: 'System',
+    textAlign: 'right',
   },
+  // Bottom Sheet Styles
+  overlay: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  sheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'transparent',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    padding: 16,
+    paddingBottom: 32,
+    maxHeight: '80%',
+  },
+  handleContainer: {
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: themeColors.primary + '80',
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  optionsContainer: {
+    paddingTop: 8,
+  },
+  option: {
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  optionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  icon: {
+    width: 24,
+    marginRight: 16,
+    alignItems: 'center',
+  },
+  label: {
+    fontSize: 16,
+    color: themeColors.text,
+  },
+  // Stream button
   streamButton: {
     width: '100%',
-    aspectRatio: 1.6,
+    aspectRatio: 3, // More narrow aspect ratio
     borderRadius: 16,
-    padding: 16,
+    padding: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    backgroundColor: '#f8f9fa', // Lighter background
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 122, 255, 0.2)', // Subtle border
     overflow: 'hidden',
+    marginTop: 8, // Add top margin for better separation
   },
   streamButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    marginTop: 12,
+  },
+  streamIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+    backgroundColor: `${themeColors.primary}20`,
+  },
+  streamCardText: {
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
     fontFamily: 'System',
   },
-  storageCard: {
+  // Stream Card
+  streamCard: {
+    width: '100%',
     padding: 20,
-    marginTop: 24,
-    marginBottom: 32,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    borderRadius: 12,
+    backgroundColor: themeColors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: themeColors.border,
+  },
+  // Storage Grid
+  storageGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -6,
+    marginTop: 8,
+  },
+  // Storage Card
+  storageCard: {
+    width: '100%',
+    padding: 16,
+    marginBottom: 12,
+    borderRadius: 12,
+    backgroundColor: themeColors.card,
+    borderWidth: 1,
+    borderColor: themeColors.border,
+  },
+  storageIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    backgroundColor: `${themeColors.primary}20`,
   },
   storageHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-    gap: 12,
+    marginBottom: 12,
   },
   storageTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1a1a1a',
     fontFamily: 'System',
   },
   storageBar: {
-    height: 6,
-    borderRadius: 3,
-    marginBottom: 12,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: `${themeColors.background}80`,
+    marginBottom: 6,
     overflow: 'hidden',
   },
   storageProgress: {
     height: '100%',
-    borderRadius: 3,
+    borderRadius: 2,
+    backgroundColor: themeColors.primary,
+    opacity: 0.8,
   },
   storageText: {
-    fontSize: 14,
+    fontSize: 12,
+    color: '#8e8e93',
     fontFamily: 'System',
+    textAlign: 'right',
   },
+  // Utility styles
   cardGradient: {
     position: 'absolute',
     left: 0,
     right: 0,
     top: 0,
     bottom: 0,
-    borderRadius: 16,
+    borderRadius: 18,
   },
   highlight: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 4,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    height: 2, // Thinner highlight
+    backgroundColor: 'rgba(0, 122, 255, 0.5)', // More subtle highlight
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
   },
   retryButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 12,
+    backgroundColor: '#007AFF',
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
   },
   retryButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: 'System',
   },
 });
-export default BrowseTab;
+// Create a wrapper component that provides theme colors to styles
+const BrowseTabWrapper = () => {
+  const { themeColors } = useThemeStore();
+  const styles = getStyles(themeColors);
+  
+  return <BrowseTab styles={styles} themeColors={themeColors} />;
+};
+
+export default BrowseTabWrapper;

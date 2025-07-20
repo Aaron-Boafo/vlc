@@ -4,19 +4,25 @@ import useThemeStore from '../store/theme';
 import * as Icons from "lucide-react-native";
 import * as Haptics from 'expo-haptics';
 
+// Import accent colors from theme store
+const accentColors = {
+  fuchsia: "#F44BF8",  // Original Fuchsia - Modern and energetic
+  gold: "#FFD700",     // Vibrant Gold - Excellent visibility in all modes
+  coral: "#FB6A4A",    // Warm Coral - Better visibility on light UI
+  teal: "#14B8A6",     // Teal 500 - More vibrant and contrast-friendly
+  purple: "#8B5CF6",   // Violet 500 - Pops nicely in dark UI
+  blue: "#2563EB",     // Blue 600 - Calmer and more readable in both themes
+  red: "#DC2626",      // Red 600 - Deeper tone, prevents glare
+  gray: "#6B7280"      // Slate Gray 500 - Better on dark backgrounds
+};
+
 const AccentColorPicker = ({ visible, onClose }) => {
   const { themeColors, setAccentColor, accentColor: currentAccent } = useThemeStore();
 
-  const colors = [
-    { name: 'purple', hex: '#F44BF8' },
-    { name: 'blue', hex: '#00FFFF' },
-    { name: 'orange', hex: '#EA580C' },
-    { name: 'lime', hex: '#32CD32' },
-    { name: 'red', hex: '#EF4444' },
-    { name: 'amber', hex: '#FFBF00' },
-    { name: 'indigo', hex: '#4B0082' },
-    { name: 'gray', hex: '#64748B' },
-  ];
+  const colors = Object.entries(accentColors).map(([name, hex]) => ({
+    name,
+    hex
+  }));
 
   const handleSelectColor = (color) => {
     setAccentColor(color.name);

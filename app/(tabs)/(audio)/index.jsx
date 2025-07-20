@@ -272,7 +272,7 @@ const AudioTabScreen = () => {
       <AudioHeader
         onSearch={() => setShowSearch(s => !s)}
         onFilter={() => setShowSort(true)}
-        onMore={() => setShowMore(true)}
+        showIcons={{ search: true, filter: true }}
       />
       <ToggleBar />
       <View style={styles.contentArea}>

@@ -177,8 +177,8 @@ export default function VideoTabScreen() {
         title="Video"
         onSearch={() => setShowSearch(s => !s)}
         onFilter={() => setShowSort(true)}
-        onMore={() => setShowMore(true)}
         onRefresh={loadVideoFiles}
+        showIcons={{ search: true, filter: true, more: false }}
       />
       
       <VideoToggleBar />

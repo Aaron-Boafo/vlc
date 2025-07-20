@@ -1,50 +1,112 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
+import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import tinycolor from 'tinycolor2';
 
 // Define theme colors first
 const accentColors = {
-  purple: "#F44BF8",
-  blue: "#2196F3",
-  orange: "#EA580C",
-  lime: "#1DB954",
-  red: "#EF4444",
-  amber: "#FFBF00",
-  indigo: "#4B0082",
-  gray: "#64748B"
+  fuchsia: "#F44BF8",  // Original Fuchsia - Modern and energetic
+  gold: "#FFD700",     // Vibrant Gold - Excellent visibility in all modes
+  coral: "#FB6A4A",    // Warm Coral - Better visibility on light UI
+  teal: "#14B8A6",     // Teal 500 - More vibrant and contrast-friendly
+  purple: "#8B5CF6",   // Violet 500 - Pops nicely in dark UI
+  blue: "#2563EB",     // Blue 600 - Calmer and more readable in both themes
+  red: "#DC2626",      // Red 600 - Deeper tone, prevents glare
+  gray: "#6B7280"      // Slate Gray 500 - Better on dark backgrounds
+};
+
+// Typography
+const typography = {
+  h1: { fontSize: 32, fontWeight: '700', lineHeight: 40 },
+  h2: { fontSize: 24, fontWeight: '600', lineHeight: 32 },
+  h3: { fontSize: 20, fontWeight: '600', lineHeight: 28 },
+  body: { fontSize: 16, lineHeight: 24 },
+  bodySmall: { fontSize: 14, lineHeight: 20 },
+  caption: { fontSize: 12, lineHeight: 16 },
+};
+
+// Spacing system (in pixels)
+const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 16,
+  lg: 24,
+  xl: 32,
+  xxl: 48,
 };
 
 // Theme color generator function
-const getThemeColors = (themeType, accentColor = "purple") => {
+const getThemeColors = (themeType, accentColorName) => {
+  // Get the base accent color
+  const accentColor = accentColors[accentColorName] || accentColors.fuchsia;
+  
+  // Create a slightly lighter and darker version for hover/press states
+  const accentLight = tinycolor(accentColor).lighten(15).toString();
+  const accentDark = tinycolor(accentColor).darken(15).toString();
+  
   const baseTheme = {
-    primary: accentColors[accentColor],
-    primaryLight: accentColors[accentColor] + '20',
-    shadow: accentColors[accentColor],
+    // Primary accent colors
+    primary: accentColor,
+    primaryLight: accentLight,
+    primaryDark: accentDark,
+    
+    // Secondary colors (complementary to primary)
+    secondary: tinycolor(accentColor).complement().toString(),
+    
+    // Accent color (same as primary for consistency)
+    accent: accentColor,
+    shadow: accentColor,
     descText: "#8e8e8e",
-    iconBackground: accentColors[accentColor],
-    accentColor: accentColors[accentColor],
+    iconBackground: accentColor,
+    accentColor: accentColor,
   };
 
   return themeType === "light"
     ? {
         ...baseTheme,
-        background: "#fff",
-        sectionBackground: "#f1f5f9",
-        card: "#e5e7eb",
-        tabIconColor: "#000",
-        ribbon: "#2b2138",
-        text: "#000",
-        textSecondary: "#666",
+        // Light theme colors with accent color integration
+        background: "#FFFFFF",
+        sectionBackground: "#F8FAFC",
+        card: "#FFFFFF",
+        cardElevated: "#E2E8F0",
+        tabIconColor: accentColor, // Use accent color for tab icons
+        ribbon: accentDark, // Darker accent for ribbons
+        text: "#0F172A",
+        textSecondary: "#334155",
+        border: "#E2E8F0",
+        inputBackground: "#F8FAFC",
+        inputText: "#0F172A",
+        inputPlaceholder: "#64748B",
+        success: "#0D9488",
+        warning: accentColor, // Use accent for warnings
+        error: "#B91C1C",
+        info: accentColor, // Use accent for info
+        // Typography and spacing
+        ...typography,
+        ...spacing,
       }
     : {
         ...baseTheme,
-        background: "#0A0A0A",
-        sectionBackground: "#18181b",
-        card: "#212121",
-        tabIconColor: "#fff",
-        ribbon: accentColors[accentColor],
-        text: "#fff",
-        textSecondary: "#fff",
+        // Dark theme colors with accent color integration
+        background: "#0F172A",
+        sectionBackground: "#1E293B",
+        card: "#1E293B",
+        cardElevated: "#2D3748",
+        tabIconColor: accentLight, // Lighter accent for dark theme tabs
+        ribbon: accentDark, // Darker accent for ribbons
+        text: "#F8FAFC",
+        textSecondary: "#94A3B8",
+        border: "#2D3748",
+        inputBackground: "#1E293B",
+        inputText: "#F8FAFC",
+        inputPlaceholder: "#94A3B8",
+        success: "#10B981",
+        warning: accentLight, // Lighter accent for warnings in dark mode
+        error: "#EF4444",
+        info: accentLight, // Lighter accent for info in dark mode
+        // Typography and spacing
+        ...typography,
+        ...spacing,
       };
 };
 
@@ -52,8 +114,8 @@ const getThemeColors = (themeType, accentColor = "purple") => {
 const createThemeStore = (set, get) => ({
   // Initial state
   activeTheme: "light",
-  accentColor: "purple",
-  themeColors: getThemeColors("light", "purple"),
+  accentColor: "fuchsia",
+  themeColors: getThemeColors("light", "fuchsia"),
   selectedBackground: null,
   _hasHydrated: false,
   
@@ -92,8 +154,8 @@ const createThemeStore = (set, get) => ({
   resetTheme: () => {
     set({
       activeTheme: "light",
-      accentColor: "purple",
-      themeColors: getThemeColors("light", "purple"),
+      accentColor: "fuchsia",
+      themeColors: getThemeColors("light", "fuchsia"),
       selectedBackground: null,
     });
   }

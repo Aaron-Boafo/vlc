@@ -1,6 +1,7 @@
 import * as FileSystem from 'expo-file-system';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Icons from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import React, { useEffect, useState, useCallback } from 'react';
 import { Alert, Image, Linking, Platform, Pressable, ScrollView, Switch, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,6 +13,7 @@ import AuthForm from '../../components/AuthForm';
 import UserProfileModal from '../../components/UserProfileModal';
 import api from '../../../services/api';
 import * as SecureStore from 'expo-secure-store';
+import ProfileService from '../../../services/profileService';
 
 // Default profile data
 const DEFAULT_PROFILE = {
@@ -55,18 +57,56 @@ export default function MoreTab() {
   const [profile, setProfile] = useState(DEFAULT_PROFILE);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [storageInfo, setStorageInfo] = useState(null);
 
   // Get user profile from the store
   const { userName, userAvatar } = useUserProfileStore();
   const { themeColors, activeTheme, accentColor, toggleTheme } = useThemeStore();
   const [screen, setScreen] = useState('main');
+  
+  const toggleThemeWithHaptics = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    toggleTheme();
+  };
   const [colorPickerVisible, setColorPickerVisible] = useState(false);
   const [moreOptionsVisible, setMoreOptionsVisible] = useState(false);
 
-  // Check if user is already logged in on component mount
+  // Check if user is already logged in on component mount and fetch storage info
   useEffect(() => {
     checkAuthStatus();
+    fetchStorageInfo();
   }, []);
+
+  // Fetch storage information from device
+  const fetchStorageInfo = async () => {
+    try {
+      if (Platform.OS === 'web') {
+        console.log('Storage info not available on web');
+        return;
+      }
+      
+      const [free, total] = await Promise.all([
+        FileSystem.getFreeDiskStorageAsync(),
+        FileSystem.getTotalDiskCapacityAsync()
+      ]);
+      
+      setStorageInfo({
+        free,
+        total,
+        used: total - free
+      });
+    } catch (error) {
+      console.error('Error fetching storage info:', error);
+      // Fallback to mock data in development
+      if (__DEV__) {
+        setStorageInfo({
+          free: 10 * 1e9, // 10GB free
+          total: 64 * 1e9, // 64GB total
+          used: 54 * 1e9 // 54GB used
+        });
+      }
+    }
+  };
 
   // Check authentication status
   const checkAuthStatus = async () => {
@@ -278,16 +318,6 @@ export default function MoreTab() {
   const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [funFactIdx] = useState(Math.floor(Math.random() * FUN_FACTS.length));
 
-  // Diagnostics
-  const [storageInfo, setStorageInfo] = useState(null);
-  useEffect(() => {
-    FileSystem.getFreeDiskStorageAsync().then(free => {
-      FileSystem.getTotalDiskCapacityAsync().then(total => {
-        setStorageInfo({ free, total });
-      });
-    });
-  }, []);
-
   // --- Accessibility/i18n helpers (scaffold) ---
   const t = (str) => str;
 
@@ -428,7 +458,11 @@ export default function MoreTab() {
             <TouchableOpacity
               key={mode}
               onPress={() => {
-                if (activeTheme !== mode) toggleTheme();
+                if (activeTheme !== mode) {
+                  toggleThemeWithHaptics();
+                } else {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }
               }}
               style={{  
                 flexDirection: 'row',
@@ -490,25 +524,120 @@ export default function MoreTab() {
   );
 
   // --- App Info Card ---
-  const AppInfoCard = () => (
-    <View style={{
-      backgroundColor: themeColors.card,
-      borderRadius: 18,
-      marginVertical: 10,
-      padding: 18,
-      shadowColor: themeColors.primary,
-      shadowOpacity: 0.08,
-      shadowRadius: 12,
-      elevation: 4,
-    }}>
-      <Text style={{ color: themeColors.primary, fontWeight: 'bold', fontSize: 16, marginBottom: 8 }}>
-        {t("App Info")}
-      </Text>
-      <Text style={{ color: themeColors.text, fontSize: 14 }}>{t("Version")}: {APP_VERSION}</Text>
-      <Text style={{ color: themeColors.text, fontSize: 14 }}>{t("Build")}: {BUILD_NUMBER}</Text>
-      <Text style={{ color: themeColors.text, fontSize: 14 }}>{t("Device")}: {DEVICE}</Text>
-    </View>
-  );
+  const AppInfoCard = () => {
+    const InfoRow = ({ label, value, isLast = false }) => (
+      <View style={[{
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingVertical: 10,
+        borderBottomWidth: isLast ? 0 : 1,
+        borderBottomColor: themeColors.border + '20',
+      }]}>
+        <Text style={{ 
+          color: themeColors.textSecondary, 
+          fontSize: 14, 
+          flex: 1 
+        }}>
+          {label}
+        </Text>
+        <Text style={{ 
+          color: themeColors.text, 
+          fontSize: 14, 
+          fontWeight: '500',
+          textAlign: 'right',
+        }}>
+          {value}
+        </Text>
+      </View>
+    );
+
+    const StorageMeter = ({ used, total }) => {
+      const percentage = Math.min(100, Math.max(0, (used / total) * 100));
+      return (
+        <View style={{ marginTop: 8, marginBottom: 4 }}>
+          <View style={{
+            height: 6,
+            backgroundColor: themeColors.border + '40',
+            borderRadius: 3,
+            overflow: 'hidden',
+            marginBottom: 8
+          }}>
+            <View style={{
+              width: `${percentage}%`,
+              height: '100%',
+              backgroundColor: themeColors.primary,
+              borderRadius: 3,
+            }} />
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Text style={{ color: themeColors.textSecondary, fontSize: 12 }}>
+              {t("Used")}: {((used) / 1e9).toFixed(1)} GB
+            </Text>
+            <Text style={{ color: themeColors.textSecondary, fontSize: 12 }}>
+              {t("Free")}: {((total - used) / 1e9).toFixed(1)} GB
+            </Text>
+          </View>
+        </View>
+      );
+    };
+
+    return (
+      <View style={{
+        backgroundColor: themeColors.card,
+        borderRadius: 18,
+        marginVertical: 10,
+        padding: 18,
+        shadowColor: themeColors.primary,
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        elevation: 4,
+      }}>
+        <Text style={{ 
+          color: themeColors.primary, 
+          fontWeight: 'bold', 
+          fontSize: 16, 
+          marginBottom: 16 
+        }}>
+          {t("App Information")}
+        </Text>
+        
+        <InfoRow label={t("App Version")} value={`${APP_VERSION} (${BUILD_NUMBER})`} />
+        <InfoRow label={t("Device")} value={DEVICE} />
+        
+        {storageInfo && (
+          <>
+            <View style={{ 
+              height: 1, 
+              backgroundColor: themeColors.border + '20',
+              marginVertical: 12 
+            }} />
+            <View style={{ marginBottom: 8 }}>
+              <View style={{ 
+                flexDirection: 'row', 
+                justifyContent: 'space-between',
+                marginBottom: 4
+              }}>
+                <Text style={{ color: themeColors.textSecondary, fontSize: 14 }}>
+                  {t("Storage")}
+                </Text>
+                <Text style={{ 
+                  color: themeColors.primary, 
+                  fontSize: 13, 
+                  fontWeight: '600' 
+                }}>
+                  {((storageInfo.total - storageInfo.free) / 1e9).toFixed(1)} GB {t("of")} {(storageInfo.total / 1e9).toFixed(1)} GB
+                </Text>
+              </View>
+              <StorageMeter 
+                used={storageInfo.total - storageInfo.free} 
+                total={storageInfo.total} 
+              />
+            </View>
+          </>
+        )}
+      </View>
+    );
+  };
 
   // --- Experimental Features Section ---
   const LabsSection = () => (
@@ -679,16 +808,42 @@ export default function MoreTab() {
                   [field]: value 
                 };
                 
-                // If this is an avatar update, update the avatar URL
+                // If this is an avatar update, update the avatar URL and upload to server
                 if (field === 'avatar' && file) {
-                  // Use the provided value (temp URI) for immediate UI update
-                  updatedProfile.avatar = value || file.uri;
-                  
-                  // If no value provided but we have a file, use the file URI
-                  if (!value && file.uri) {
-                    updatedProfile.avatar = file.uri;
+                  try {
+                    console.log('Processing avatar update with file:', {
+                      file,
+                      hasUri: !!file.uri,
+                      type: file.type,
+                      name: file.name,
+                      size: file.size
+                    });
+                    
+                    // First update the UI with the local file for better UX
+                    updatedProfile.avatar = value || file.uri;
+                    
+                    // If no value provided but we have a file, use the file URI
+                    if (!value && file.uri) {
+                      updatedProfile.avatar = file.uri;
+                    }
+                    
+                    console.log('Calling ProfileService.updateProfilePicture with file:', file);
+                    // Upload the new avatar to the server
+                    const result = await ProfileService.updateProfilePicture(file);
+                    console.log('Profile picture update response:', result);
+                    console.log('Profile picture updated successfully on the server');
+                  } catch (error) {
+                    console.error('Failed to update profile picture on server. Error details:', {
+                      message: error.message,
+                      response: error.response?.data,
+                      status: error.response?.status,
+                      stack: error.stack
+                    });
+                    // Revert to previous avatar if upload fails
+                    updatedProfile.avatar = profile.avatar;
+                    throw new Error('Failed to update profile picture');
                   }
-                } 
+                }
                 // If updating name, update the avatar URL
                 if (field === 'name') {
                   updatedProfile.avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(value)}&background=0D8ABC&color=fff`
@@ -702,10 +857,30 @@ export default function MoreTab() {
                 // Save to secure storage first to ensure we have the latest data locally
                 await SecureStore.setItemAsync('user_data', JSON.stringify(updatedProfile));
                 
-                // If this is just a name update and no file upload, we're done
+                // If this is just a name update and no file upload, update the backend
                 if (field === 'name' && !file) {
-                  console.log('Name updated locally successfully');
-                  return true;
+                  console.log('Updating name on server with value:', value);
+                  try {
+                    console.log('Calling ProfileService.updateProfile with:', { name: value });
+                    const result = await ProfileService.updateProfile({ name: value });
+                    console.log('Name update response from server:', result);
+                    console.log('Name updated successfully on the server');
+                    return true;
+                  } catch (error) {
+                    console.error('Failed to update name on server. Error details:', {
+                      message: error.message,
+                      response: error.response?.data,
+                      status: error.response?.status,
+                      headers: error.response?.headers
+                    });
+                    // Revert local changes if server update fails
+                    setProfile(prev => ({
+                      ...prev,
+                      name: profile.name, // Revert to previous name
+                      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name)}&background=0D8ABC&color=fff`
+                    }));
+                    throw new Error('Failed to update name on server');
+                  }
                 }
                 
                 // Try to update on the server, but don't fail if it doesn't work
@@ -861,7 +1036,6 @@ export default function MoreTab() {
             <ActionButton icon={<Icons.Info size={20} color={themeColors.primary} />} label={t("ABOUT")} onPress={() => setScreen('about')} />
             <ActionButton icon={<Icons.Beaker size={20} color={themeColors.primary} />} label={t("LABS")} onPress={() => setScreen('labs')} />
           </View>
-          <DiagnosticsCard />
           <AppInfoCard />
           <LabsSection />
           <FeedbackSection />

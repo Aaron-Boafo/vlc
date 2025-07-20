@@ -128,13 +128,14 @@ const PlaylistScreen = () => {
   const { playlists, createPlaylist, deletePlaylist, addTrackToPlaylist, removeTrackFromPlaylist, clearPlaylists } = usePlaylistStore();
   const audioControl = useAudioControl();
   const router = useRouter();
+  const { playlistId, tab } = router.params || {};
 
   // State
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
   const [createModal, setCreateModal] = useState(false);
+  const [playlistType, setPlaylistType] = useState(tab === 'video' ? 'video' : 'audio');
   const [newPlaylistName, setNewPlaylistName] = useState("");
-  const [playlistType, setPlaylistType] = useState('audio');
   const [tracks, setTracks] = useState([]); // Only basic info
   const [trackMetadata, setTrackMetadata] = useState({}); // id -> metadata
   const [loadingTracks, setLoadingTracks] = useState(false);
@@ -151,6 +152,17 @@ const PlaylistScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showMore, setShowMore] = useState(false);
   const [sortOrder, setSortOrder] = useState('az'); // 'az', 'za', 'tracks'
+
+  // Handle playlist ID from params
+  useEffect(() => {
+    if (playlistId && playlists.length > 0) {
+      const playlist = playlists.find(p => p.id === playlistId);
+      if (playlist) {
+        setSelectedPlaylist(playlist);
+        setModalVisible(true);
+      }
+    }
+  }, [playlistId, playlists]);
 
   // Load all tracks from device for create modal
   const fetchTracks = async (reset = false) => {
@@ -392,20 +404,8 @@ const PlaylistScreen = () => {
       <AudioHeader
         onSearch={() => setShowSearch(s => !s)}
         onMore={() => setShowMore(true)}
+        showIcons={{ search: true, filter: false, more: false }}
       />
-      <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: themeColors.text }]}>Playlists</Text>
-        <View style={styles.headerActions}>
-          {playlists.length > 0 && (
-            <TouchableOpacity
-              style={[styles.headerButton, { backgroundColor: themeColors.card }]}
-              onPress={handleClearAllPlaylists}
-            >
-              <Trash2 size={18} color={themeColors.primary} />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
 
       {/* Search Bar */}
       {showSearch && (
@@ -617,14 +617,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 32,
+    paddingHorizontal: 16,
+    paddingTop: 8,
     paddingBottom: 12,
+    backgroundColor: 'transparent',
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
+    marginLeft: 8,
   },
   headerActions: {
     flexDirection: 'row',
@@ -637,6 +639,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 8,
+    backgroundColor: 'transparent',
   },
   playlistCard: {
     flexDirection: 'row',
