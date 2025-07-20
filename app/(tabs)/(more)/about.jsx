@@ -133,7 +133,14 @@ const AboutScreen = () => {
           </InfoSection>
 
           <View className="p-4">
-            <Text className="text-sm text-center" style={{ color: activeTheme === "dark" ? "rgba(255, 255, 255, 0.7)" : themeColors.tabIconColor }}>
+            <Text 
+              className="text-sm text-center"
+              style={{ 
+                color: activeTheme === "dark" 
+                  ? "rgba(255, 255, 255, 0.7)" 
+                  : themeColors.tabIconColor 
+              }}
+            >
               © 2025 Visura. All rights reserved.
             </Text>
           </View>

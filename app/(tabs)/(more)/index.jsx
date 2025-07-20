@@ -1,399 +1,370 @@
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  Image,
-  Modal,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-  StyleSheet,
-} from "react-native";
-import { router } from "expo-router";
-import * as Icons from "lucide-react-native";
-import useHistoryStore from "../../../store/historyStore";
-import useAudioControl from "../../../store/useAudioControl";
-import useOptimizedVideoStore from "../../../store/optimizedVideoStore";
-import useThemeStore from "../../../store/theme";
-import MoreOptionsMenu from "../../../components/MoreOptionsMenu";
-import { SafeAreaView } from "react-native-safe-area-context";
-import useOptimizedAudioStore from '../../../store/optimizedAudioStore';
 import * as FileSystem from 'expo-file-system';
-import CustomAlert from '../../../components/CustomAlert';
-import AppLogo from '../../../components/AppLogo';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Icons from 'lucide-react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, Image, Linking, Platform, Pressable, ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import AccentColorPicker from '../../../components/AccentColorPicker';
+import MoreOptionsMenu from '../../../components/MoreOptionsMenu';
+import useThemeStore from '../../../store/theme';
+import AuthForm from '../../components/AuthForm';
+import UserProfileModal from '../../components/UserProfileModal';
 
-// Try to import ytdl, but don't fail if it's not available
-let ytdl = null;
-try {
-  ytdl = require('react-native-ytdl');
-} catch (error) {
-  console.log('react-native-ytdl not available, YouTube streaming disabled');
-}
+// Dummy data for profile
+const PROFILE = {
+  name: "Visura User",
+  avatar: "https://ui-avatars.com/api/?name=Visura+User&background=0D8ABC&color=fff"
+};
 
-const MoreScreen = () => {
-  const { themeColors, activeTheme } = useThemeStore();
+const FUN_FACTS = [
+  " Visura can play almost any media file format!",
+  "Visura stands for VideoLAN Client.",
+  "Visura is open source and free!",
+  "You can stream media over the network with Visura.",
+  "The Visura cone icon comes from a student project!"
+];
+
+// Random username generator
+const generateRandomUsername = (phone) => {
+  const adjectives = ['Happy', 'Sunny', 'Brave', 'Gentle', 'Clever', 'Wild', 'Calm', 'Eager', 'Jolly', 'Kind'];
+  const nouns = ['Tiger', 'Eagle', 'Dolphin', 'Panda', 'Koala', 'Wolf', 'Owl', 'Fox', 'Lion', 'Bear'];
+  const randomAdj = adjectives[Math.floor(Math.random() * adjectives.length)];
+  const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
+  const randomNum = phone ? `_${phone.slice(-4)}` : Math.floor(100 + Math.random() * 900);
+  return `${randomAdj}${randomNoun}${randomNum}`;
+};
+
+const APP_VERSION = "1.0.0";
+const BUILD_NUMBER = "100";
+const DEVICE = Platform.OS + " " + Platform.Version;
+
+export default function MoreTab() {
+  // --- Authentication State (for modal visibility and user profile) ---
+  const [loginVisible, setLoginVisible] = useState(false);
+  const [profile, setProfile] = useState({ name: '', avatar: '' });
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  const { themeColors, activeTheme, accentColor, toggleTheme } = useThemeStore();
+  const [screen, setScreen] = useState('main');
+  const [colorPickerVisible, setColorPickerVisible] = useState(false);
   const [moreOptionsVisible, setMoreOptionsVisible] = useState(false);
-  const [isStreamModalVisible, setStreamModalVisible] = useState(false);
-  const [streamUrl, setStreamUrl] = useState("");
-  const [isStreamLoading, setIsStreamLoading] = useState(false);
-  const [streamError, setStreamError] = useState("");
-  const { history, clearHistory } = useHistoryStore();
-  const audioControl = useAudioControl();
-  const videoControl = useOptimizedVideoStore();
-  const [downloadsModalVisible, setDownloadsModalVisible] = useState(false);
-  const [storageModalVisible, setStorageModalVisible] = useState(false);
-  const audioFiles = useOptimizedAudioStore(state => state.audioFiles);
-  const videoFiles = useOptimizedVideoStore(state => state.videoFiles);
-  const [storageInfo, setStorageInfo] = useState({ totalSize: 0, fileCount: 0, loading: false });
-  const [customAlert, setCustomAlert] = useState({ visible: false, title: '', message: '', buttons: [] });
-  const [userProfile, setUserProfile] = useState({
-    name: 'Visura User',
-    email: 'user@visura.com',
-    isSignedIn: false,
-    avatar: null,
-    preferences: {
-      theme: 'auto',
-      language: 'en',
-      notifications: true
-    }
-  });
-  const [showLoginModal, setShowLoginModal] = useState(false);
-  const [loginForm, setLoginForm] = useState({
-    email: '',
-    password: ''
-  });
 
-  // Load user profile from storage
+  // SETTINGS STATE
+  const [autoplay, setAutoplay] = useState(false);
+  const [backgroundPlay, setBackgroundPlay] = useState(false);
+  const [highQuality, setHighQuality] = useState(true);
+  const [autoScan, setAutoScan] = useState(false);
+  const [backgroundPiP, setBackgroundPiP] = useState(false);
+  const [hardwareAcceleration, setHardwareAcceleration] = useState(true);
+  const [saveHistory, setSaveHistory] = useState(true);
+  const [videoQueueHistory, setVideoQueueHistory] = useState(true);
+  const [audioQueueHistory, setAudioQueueHistory] = useState(true);
+  const [experimentalFeature, setExperimentalFeature] = useState(false);
+
+  // Profile Modal & Fun Fact
+  const [profileModalVisible, setProfileModalVisible] = useState(false);
+  const [funFactIdx] = useState(Math.floor(Math.random() * FUN_FACTS.length));
+
+  // Diagnostics
+  const [storageInfo, setStorageInfo] = useState(null);
   useEffect(() => {
-    loadUserProfile();
+    FileSystem.getFreeDiskStorageAsync().then(free => {
+      FileSystem.getTotalDiskCapacityAsync().then(total => {
+        setStorageInfo({ free, total });
+      });
+    });
   }, []);
 
-  const loadUserProfile = async () => {
+  // --- Accessibility/i18n helpers (scaffold) ---
+  const t = (str) => str;
+
+  // --- Auth Handlers (replace with backend integration) ---
+  const handleLogin = async (phone, password) => {
     try {
-      const savedProfile = await AsyncStorage.getItem('@user_profile');
-      if (savedProfile) {
-        setUserProfile(JSON.parse(savedProfile));
-      }
-    } catch (error) {
-      console.error('Error loading user profile:', error);
-    }
-  };
-
-  const saveUserProfile = async (profile) => {
-    try {
-      await AsyncStorage.setItem('@user_profile', JSON.stringify(profile));
-      setUserProfile(profile);
-    } catch (error) {
-      console.error('Error saving user profile:', error);
-    }
-  };
-
-  const handleLogin = async () => {
-    if (!loginForm.email || !loginForm.password) {
-      Alert.alert('Error', 'Please enter both email and password.');
-      return;
-    }
-
-    // Simple authentication (in a real app, you'd use a proper auth service)
-    if (loginForm.email === 'demo@visura.com' && loginForm.password === 'demo123') {
-      const newProfile = {
-        ...userProfile,
-        name: 'Demo User',
-        email: loginForm.email,
-        isSignedIn: true,
-        avatar: null
-      };
-      await saveUserProfile(newProfile);
-      setShowLoginModal(false);
-      setLoginForm({ email: '', password: '' });
-      Alert.alert('Success', 'Successfully signed in!');
-    } else {
-      Alert.alert('Error', 'Invalid email or password. Try demo@visura.com / demo123');
-    }
-  };
-
-  const handleLogout = async () => {
-    const newProfile = {
-      ...userProfile,
-      isSignedIn: false,
-      name: 'Visura User',
-      email: 'user@visura.com'
-    };
-    await saveUserProfile(newProfile);
-    Alert.alert('Success', 'Successfully signed out!');
-  };
-
-  const validateUrl = (url) => {
-    try {
-      new URL(url);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  const getStreamType = (url) => {
-    const lowerUrl = url.toLowerCase();
-    
-    // Video streams
-    if (lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be')) {
-      return 'youtube';
-    }
-    if (lowerUrl.includes('.mp4') || lowerUrl.includes('.mov') || lowerUrl.includes('.avi') || 
-        lowerUrl.includes('.mkv') || lowerUrl.includes('.webm') || lowerUrl.includes('.m4v')) {
-      return 'video';
-    }
-    if (lowerUrl.includes('rtmp://') || lowerUrl.includes('rtsp://') || lowerUrl.includes('hls://')) {
-      return 'video';
-    }
-    
-    // Audio streams
-    if (lowerUrl.includes('.mp3') || lowerUrl.includes('.wav') || lowerUrl.includes('.aac') || 
-        lowerUrl.includes('.flac') || lowerUrl.includes('.ogg') || lowerUrl.includes('.m4a')) {
-      return 'audio';
-    }
-    if (lowerUrl.includes('icecast://') || lowerUrl.includes('shoutcast://')) {
-      return 'audio';
-    }
-    
-    // Default to video for unknown types
-    return 'video';
-  };
-
-  const handlePlayStream = async () => {
-    if (!streamUrl.trim()) {
-      setStreamError("Please enter a stream URL");
-      return;
-    }
-
-    if (!validateUrl(streamUrl)) {
-      setStreamError("Please enter a valid URL");
-      return;
-    }
-
-    setIsStreamLoading(true);
-    setStreamError("");
-
-    try {
-      const streamType = getStreamType(streamUrl);
-      
-      // For YouTube URLs, test extraction before navigation
-      if (streamType === 'youtube') {
-        if (!ytdl) {
-          setStreamError("YouTube streaming is not available. Please try a different URL or install the required library.");
-          return;
-        }
-        
-        try {
-          let videoInfo;
-          if (typeof ytdl.getInfo === 'function') {
-            videoInfo = await ytdl.getInfo(streamUrl);
-          } else if (typeof ytdl.getBasicInfo === 'function') {
-            videoInfo = await ytdl.getBasicInfo(streamUrl);
-          } else if (ytdl.default && typeof ytdl.default.getInfo === 'function') {
-            videoInfo = await ytdl.default.getInfo(streamUrl);
-          } else {
-            setStreamError("YouTube extraction is not supported by the installed ytdl version.");
-            return;
-          }
-          const format = ytdl.chooseFormat(videoInfo.formats, { quality: 'highest', filter: 'videoandaudio' });
-          if (!format || !format.url) {
-            setStreamError("Could not extract YouTube video. The video might be private, restricted, or unavailable.");
-            return;
-          }
-        } catch (ytdlError) {
-          console.error('YouTube extraction failed:', ytdlError);
-          if (ytdlError && ytdlError.message && ytdlError.message.includes('signature deciphering')) {
-            setCustomAlert({
-              visible: true,
-              title: '⚠️ YouTube Streaming Unavailable',
-              message: 'YouTube streaming is temporarily unavailable due to changes on YouTube. Please try again later or use a direct video/audio link.',
-              buttons: [{ text: 'OK', style: 'primary', onPress: () => setCustomAlert(alert => ({ ...alert, visible: false })) }],
-            });
-          } else {
-            setStreamError("YouTube video extraction failed. This could be due to:\n\n• Private or restricted video\n• Invalid or expired link\n• Network connectivity issues\n• YouTube API changes");
-          }
-          return;
-        }
+      console.log('Login attempt with:', phone);
+      if (!phone || !password) {
+        Alert.alert('Error', 'Please enter both phone and password');
+        return;
       }
       
-      if (streamType === 'youtube' || streamType === 'video') {
-        const videoTrack = {
-          id: `stream-${Date.now()}`,
-          uri: streamUrl,
-          title: streamType === 'youtube' ? "YouTube Video" : "Network Video Stream",
-          filename: streamType === 'youtube' ? "YouTube Stream" : "Network Stream",
-          artist: streamType === 'youtube' ? "YouTube" : "Unknown",
-        };
-        videoControl.setAndPlayVideo(videoTrack);
-        router.push('/player/video');
-      } else {
-        const audioTrack = {
-          id: `stream-${Date.now()}`,
-          uri: streamUrl,
-          title: "Network Audio Stream",
-          artist: "Unknown",
-          artwork: null,
-        };
-        await audioControl.setAndPlayPlaylist([audioTrack]);
-        router.push('/(tabs)/(audio)/player');
-      }
-
-      setStreamModalVisible(false);
-      setStreamUrl("");
+      const username = generateRandomUsername(phone);
+      setIsLoggedIn(true);
+      setProfile({
+        name: username,
+        phone: phone,
+        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=0D8ABC&color=fff&bold=true`
+      });
+      setLoginVisible(false);
     } catch (error) {
-      console.error('Stream error:', error);
-      setStreamError("Failed to start stream. Please check the URL and try again.");
-    } finally {
-      setIsStreamLoading(false);
+      console.error('Login error:', error);
+      Alert.alert('Error', 'Failed to log in. Please try again.');
     }
   };
-
-  const handleStreamModalClose = () => {
-    setStreamModalVisible(false);
-    setStreamUrl("");
-    setStreamError("");
-    setIsStreamLoading(false);
-  };
-
-  const clearAndTryAgain = () => {
-    setStreamUrl("");
-    setStreamError("");
-  };
-
-  const testStreamUrl = async () => {
-    if (!streamUrl.trim()) {
-      setStreamError("Please enter a stream URL");
-      return;
-    }
-
-    if (!validateUrl(streamUrl)) {
-      setStreamError("Please enter a valid URL");
-      return;
-    }
-
-    setIsStreamLoading(true);
-    setStreamError("");
-
+  
+  const handleSignup = async (phone, password) => {
     try {
-      const streamType = getStreamType(streamUrl);
-      const response = await fetch(streamUrl, { method: 'HEAD' });
-      
-      if (response.ok) {
-        setStreamError("URL is accessible and ready to stream!");
-        setTimeout(() => setStreamError(""), 3000);
-      } else {
-        setStreamError("URL might not be accessible. Try streaming anyway.");
+      console.log('Signup attempt with:', phone);
+      if (!phone || !password) {
+        Alert.alert('Error', 'Please enter both phone and password');
+        return;
       }
+      if (password.length < 6) {
+        Alert.alert('Error', 'Password must be at least 6 characters');
+        return;
+      }
+      
+      const username = generateRandomUsername(phone);
+      setIsLoggedIn(true);
+      setProfile({
+        name: username,
+        phone: phone,
+        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=0D8ABC&color=fff&bold=true`
+      });
+      setLoginVisible(false);
     } catch (error) {
-      console.error('URL test error:', error);
-      setStreamError("Could not test URL. You can still try to stream it.");
-    } finally {
-      setIsStreamLoading(false);
+      console.error('Signup error:', error);
+      Alert.alert('Error', 'Failed to create account. Please try again.');
     }
   };
 
-  const ActionButton = ({ icon, label, onPress }) => (
-    <TouchableOpacity
-      onPress={onPress}
-      style={{ 
-        flex: 1,
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        borderRadius: 8,
-        backgroundColor: themeColors.sectionBackground,
-        borderWidth: activeTheme === "dark" ? 1 : 0,
-        borderColor: "rgba(255, 255, 255, 0.1)",
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      {icon}
-      <Text
-        style={{ 
-          marginLeft: 8,
-          fontSize: 14,
-          fontWeight: 'bold',
-          color: themeColors.primary,
+  // --- Profile Section ---
+  const ProfileSection = () => (
+    <TouchableOpacity activeOpacity={0.8} onPress={() => {
+      if (isLoggedIn) setProfileModalVisible(true);
+      else setLoginVisible(true);
+    }}>
+      <LinearGradient
+        colors={[themeColors.sectionBackground + 'BB', themeColors.background + 'F0']}
+        style={{
+          borderRadius: 22,
+          marginBottom: 22,
+          marginTop: 10,
+          padding: 20,
+          flexDirection: 'row',
+          alignItems: 'center',
+          shadowColor: themeColors.primary,
+          shadowOpacity: 0.06,
+          shadowRadius: 16,
+          elevation: 2,
         }}
       >
-        {label}
-      </Text>
+        <Image
+          source={{ uri: isLoggedIn && profile.avatar ? profile.avatar : PROFILE.avatar }}
+          style={{ width: 64, height: 64, borderRadius: 32, marginRight: 18, borderWidth: 2, borderColor: accentColor }}
+          accessibilityLabel={t("User avatar")}
+        />
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 18 }} allowFontScaling>{isLoggedIn && profile.name ? profile.name : PROFILE.name}</Text>
+          <Text style={{ color: themeColors.tabIconColor, fontSize: 13, marginTop: 2 }} allowFontScaling>{isLoggedIn ? t("Experience Visura") : t("Tap to sign in or sign up")}</Text>
+        </View>
+        <Icons.Info size={22} color={themeColors.primary} />
+      </LinearGradient>
     </TouchableOpacity>
   );
 
-  const Section = ({ title, children, showArrow = false }) => (
-    <View className="mb-8">
-      <View className="flex-row justify-between items-center mb-4">
-        <Text
-          style={{ 
-            fontSize: 18,
-            fontWeight: 'semibold',
-            color: themeColors.primary,
-          }}
-        >
-          {title}
-        </Text>
-        {showArrow && (
-          <Icons.ChevronRight size={20} color={themeColors.primary} />
-        )}
+  // --- Theme Picker 
+  const ThemePreview = () => (
+    <View style={{ marginBottom: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 18 }}>
+        {/*Theme Segmented Control */}
+        <View style={{ flexDirection: 'row', backgroundColor: themeColors.sectionBackground + 'DD', borderRadius: 22, padding: 3, shadowColor: themeColors.primary, shadowOpacity: 0.10, shadowRadius: 6, elevation: 2 }}>
+          {['dark', 'light'].map((mode) => (
+            <TouchableOpacity
+              key={mode}
+              onPress={() => {
+                if (activeTheme !== mode) toggleTheme();
+              }}
+              style={{  
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: 18,
+                paddingVertical: 8,
+                borderRadius: 18,
+                backgroundColor: activeTheme === mode ? accentColor : 'transparent',
+                shadowColor: activeTheme === mode ? accentColor : 'transparent',
+                shadowOpacity: activeTheme === mode ? 0.17 : 0,
+                shadowRadius: 8,
+                elevation: activeTheme === mode ? 4 : 0,
+                marginHorizontal: 2
+              }}
+              accessibilityLabel={t(`Switch to ${mode} mode`)}
+              accessibilityState={{ selected: activeTheme === mode }}
+            >
+              {mode === 'light' ? (
+                <Icons.Sun size={18} color={activeTheme === mode ? '#fff' : themeColors.primary} style={{ marginRight: 5 }} />
+              ) : (
+                <Icons.Moon size={18} color={activeTheme === mode ? '#fff' : themeColors.primary} style={{ marginRight: 5 }} />
+              )}
+              <Text style={{ color: activeTheme === mode ? '#fff' : themeColors.primary, fontWeight: 'bold', fontSize: 14, textTransform: 'capitalize' }}>{t(mode)}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
-      {children}
     </View>
   );
 
-  const HistoryItem = ({ title, subtitle, imageUrl }) => (
-    <TouchableOpacity
-      style={{ 
-        width: 100, // Adjust as needed for horizontal scroll
-        marginRight: 12,
-      }}
-      onPress={() => console.log("History item pressed")}
-    >
-      <View
-        style={{ 
-          width: 100,
-          height: 100,
-          borderRadius: 12,
-          marginBottom: 8,
-          backgroundColor: themeColors.sectionBackground,
-          borderWidth: activeTheme === "dark" ? 1 : 0,
-          borderColor: "rgba(255, 255, 255, 0.1)",
-        }}
-      >
-        <Icons.Music
-          size={24}
-          color={themeColors.primary}
-          style={{ margin: 8 }}
+  // --- Diagnostics Card ---
+  const DiagnosticsCard = () => (
+    <View style={{
+      backgroundColor: themeColors.sectionBackground + 'BB',
+      borderRadius: 18,
+      marginVertical: 10,
+      padding: 18,
+      shadowColor: themeColors.primary,
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      elevation: 4,
+    }}>
+      <Text style={{ color: themeColors.primary, fontWeight: 'bold', fontSize: 16, marginBottom: 8 }}>
+        {t("Diagnostics")}
+      </Text>
+      <Text style={{ color: themeColors.text, fontSize: 14 }}>{t("Device")}: {DEVICE}</Text>
+      <Text style={{ color: themeColors.text, fontSize: 14 }}>{t("App Version")}: {APP_VERSION} ({BUILD_NUMBER})</Text>
+      {storageInfo && (
+        <>
+          <Text style={{ color: themeColors.text, fontSize: 14 }}>
+            {t("Storage")}: {((storageInfo.total - storageInfo.free) / 1e9).toFixed(2)} GB used / {(storageInfo.total / 1e9).toFixed(2)} GB total
+          </Text>
+          <Text style={{ color: themeColors.text, fontSize: 14 }}>
+            {t("Free")}: {(storageInfo.free / 1e9).toFixed(2)} GB
+          </Text>
+        </>
+      )}
+    </View>
+  );
+
+  // --- App Info Card ---
+  const AppInfoCard = () => (
+    <View style={{
+      backgroundColor: themeColors.sectionBackground + 'BB',
+      borderRadius: 18,
+      marginVertical: 10,
+      padding: 18,
+      shadowColor: themeColors.primary,
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      elevation: 4,
+    }}>
+      <Text style={{ color: themeColors.primary, fontWeight: 'bold', fontSize: 16, marginBottom: 8 }}>
+        {t("App Info")}
+      </Text>
+      <Text style={{ color: themeColors.text, fontSize: 14 }}>{t("Version")}: {APP_VERSION}</Text>
+      <Text style={{ color: themeColors.text, fontSize: 14 }}>{t("Build")}: {BUILD_NUMBER}</Text>
+      <Text style={{ color: themeColors.text, fontSize: 14 }}>{t("Device")}: {DEVICE}</Text>
+    </View>
+  );
+
+  // --- Experimental Features Section ---
+  const LabsSection = () => (
+    <View style={{
+      backgroundColor: themeColors.sectionBackground + 'BB',
+      borderRadius: 18,
+      marginVertical: 10,
+      padding: 18,
+      shadowColor: themeColors.primary,
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      elevation: 4,
+    }}>
+      <Text style={{ color: themeColors.primary, fontWeight: 'bold', fontSize: 16, marginBottom: 8 }}>
+        {t("Experimental Features")}
+      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <View>
+          <Text style={{ color: themeColors.text }}>{t("Enable Labs Mode")}</Text>
+          <Text style={{ color: themeColors.tabIconColor, fontSize: 13 }}>{t("Try new features before anyone else!")}</Text>
+        </View>
+        <Switch
+          value={experimentalFeature}
+          onValueChange={setExperimentalFeature}
+          accessibilityLabel={t("Enable Labs Mode")}
+          accessibilityHint={t("Try new features before anyone else!")}
+          thumbColor="#fff"
+          trackColor={{ false: themeColors.sectionBackground, true: accentColor }}
         />
       </View>
-      <Text
-        style={{ 
-          fontSize: 12,
-          fontWeight: 'medium',
-          color: themeColors.text,
-          textAlign: 'center',
-        }}
-        numberOfLines={1}
-      >
-        {title}
+    </View>
+  );
+
+  // --- Feedback/Contact Section ---
+  const FeedbackSection = () => (
+    <View style={{
+      backgroundColor: themeColors.sectionBackground + 'BB',
+      borderRadius: 18,
+      marginVertical: 10,
+      padding: 18,
+      shadowColor: themeColors.primary,
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      elevation: 4,
+    }}>
+      <Text style={{ color: themeColors.primary, fontWeight: 'bold', fontSize: 16, marginBottom: 8 }}>
+        {t("Feedback & Support")}
       </Text>
-      <Text
-        style={{ 
-          fontSize: 12,
-          color: activeTheme === "dark" ? "rgba(255, 255, 255, 0.7)" : themeColors.tabIconColor,
-          textAlign: 'center',
-        }}
-        numberOfLines={1}
+      <TouchableOpacity
+        onPress={() => Linking.openURL("mailto:support@videolan.org")}
+        style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}
+        accessibilityLabel={t("Send Feedback")}
+        accessibilityHint={t("Open your email app to send feedback")}
       >
-        {subtitle}
+        <Icons.MessageCircle size={22} color={themeColors.primary} style={{ marginRight: 10 }} />
+        <Text style={{ color: themeColors.text }}>{t("Send Feedback")}</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        onPress={() => Linking.openURL("https://www.videolan.org/support/")}
+        style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}
+        accessibilityLabel={t("Help Center")}
+        accessibilityHint={t("Open the VLC help center website")}
+      >
+        <Icons.HelpCircle size={22} color={themeColors.primary} style={{ marginRight: 10 }} />
+        <Text style={{ color: themeColors.text }}>{t("Help Center")}</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        onPress={() => Linking.openURL("https://github.com/videolan/vlc")}
+        style={{ flexDirection: 'row', alignItems: 'center' }}
+        accessibilityLabel={t("Open Source Credits")}
+        accessibilityHint={t("View open source credits on GitHub")}
+      >
+        <Icons.GitBranch size={22} color={themeColors.primary} style={{ marginRight: 10 }} />
+        <Text style={{ color: themeColors.text }}>{t("Open Source Credits")}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  // --- Legal Section ---
+  const LegalSection = () => (
+    <View style={{
+      backgroundColor: themeColors.sectionBackground + 'BB',
+      borderRadius: 18,
+      marginVertical: 10,
+      padding: 18,
+      shadowColor: themeColors.primary,
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      elevation: 4,
+    }}>
+      <Text style={{ color: themeColors.primary, fontWeight: 'bold', fontSize: 16, marginBottom: 8 }}>
+        {t("Legal")}
       </Text>
-    </TouchableOpacity>
+      <TouchableOpacity
+        onPress={() => Linking.openURL("https://www.videolan.org/legal.html")}
+        style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}
+        accessibilityLabel={t("Privacy Policy")}
+        accessibilityHint={t("View the privacy policy")}
+      >
+        <Icons.FileText size={22} color={themeColors.primary} style={{ marginRight: 10 }} />
+        <Text style={{ color: themeColors.text }}>{t("Privacy Policy")}</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        onPress={() => Linking.openURL("https://www.videolan.org/legal.html")}
+        style={{ flexDirection: 'row', alignItems: 'center' }}
+        accessibilityLabel={t("Terms of Service")}
+        accessibilityHint={t("View the terms of service")}
+      >
+        <Icons.FileTerminal size={22} color={themeColors.primary} style={{ marginRight: 10 }} />
+        <Text style={{ color: themeColors.text }}>{t("Terms of Service")}</Text>
+      </TouchableOpacity>
+    </View>
   );
 
   const openStorageModal = async () => {
@@ -421,529 +392,249 @@ const MoreScreen = () => {
     setStorageModalVisible(true);
   };
 
-  return (
-    <SafeAreaView
-      style={{ 
-        flex: 1,
-        backgroundColor: themeColors.background,
+  // --- Settings Reset ---
+  const ResetSettingsButton = () => (
+    <TouchableOpacity
+      style={{
+        marginTop: 18,
+        alignSelf: 'center',
+        backgroundColor: themeColors.primary + '33',
+        paddingHorizontal: 32,
+        paddingVertical: 10,
+        borderRadius: 18
       }}
-      edges={['top']}
+      onPress={() => {
+        setAutoplay(false);
+        setBackgroundPlay(false);
+        setHighQuality(true);
+        setAutoScan(false);
+        setBackgroundPiP(false);
+        setHardwareAcceleration(true);
+        setSaveHistory(true);
+        setVideoQueueHistory(true);
+        setAudioQueueHistory(true);
+        setExperimentalFeature(false);
+        Alert.alert(t("Settings Reset"), t("All settings have been reset to defaults."));
+      }}
+      accessibilityLabel={t("Reset Settings")}
+      accessibilityHint={t("Restore all settings to their default values")}
     >
-      {/* Header */}
-      <View className="px-4 py-2.5 flex-row items-center justify-between border-b" 
-        style={{ borderColor: "rgba(147, 51, 234, 0.1)" }}>
-        <View className="flex-row items-center">
-          <View className="mr-3">
-            <AppLogo width={40} height={40} />
-          </View>
-          <Text style={{ color: themeColors.text, fontWeight: 'bold', fontSize: 22 }}>
-            Visura
-          </Text>
-        </View>
-        <TouchableOpacity 
-          className="w-10 h-10 rounded-full items-center justify-center"
-          onPress={() => setMoreOptionsVisible(true)}
-        >
-          <Icons.MoreVertical size={24} color={themeColors.text} />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView
-        className="flex-1 px-4"
-        contentContainerStyle={{
-          paddingTop: 20,
-          paddingBottom: 20,
-        }}
-        style={{ backgroundColor: themeColors.background }}
-      >
-        {/* User Info Card - moved inside ScrollView */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, marginHorizontal: 0, marginTop: 0, marginBottom: 10, backgroundColor: themeColors.sectionBackground, borderRadius: 16, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
-          <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#4A90E2', alignItems: 'center', justifyContent: 'center', marginRight: 16, borderWidth: 2, borderColor: themeColors.primary }}>
-            {userProfile.avatar ? (
-              <Image source={{ uri: userProfile.avatar }} style={{ width: 52, height: 52, borderRadius: 26 }} />
-            ) : (
-              <Icons.User size={32} color={'#fff'} />
-            )}
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontWeight: 'bold', fontSize: 18, color: themeColors.text }}>{userProfile.name}</Text>
-            <Text style={{ color: themeColors.textSecondary, fontSize: 14, marginTop: 2 }}>Experience Visura</Text>
-            <Text style={{ color: themeColors.primary, fontSize: 13, marginTop: 2 }}>
-              {userProfile.isSignedIn ? 'Signed in. Cloud services available.' : 'Not signed in. Create an account to use cloud services.'}
-            </Text>
-          </View>
-          <TouchableOpacity 
-            style={{ marginLeft: 8, padding: 6 }}
-            onPress={() => userProfile.isSignedIn ? handleLogout() : setShowLoginModal(true)}
-          >
-            <Icons.Info size={22} color={themeColors.primary} />
-          </TouchableOpacity>
-        </View>
-        {/* Top Actions */}
-        <View className="flex-row gap-3 mb-8">
-          <ActionButton
-            icon={<Icons.Settings size={20} color={themeColors.primary} />}
-            label="SETTINGS"
-            onPress={() => router.push("/(tabs)/(more)/settings")}
-          />
-          <ActionButton
-            icon={<Icons.Info size={20} color={themeColors.primary} />}
-            label="ABOUT"
-            onPress={() => router.push("/(tabs)/(more)/about")}
-          />
-        </View>
-
-        {/* Streams Section */}
-        <Section title="Streams" showArrow>
-          <TouchableOpacity
-            style={{
-              backgroundColor: themeColors.sectionBackground,
-              width: 162,
-              height: 106,
-              borderRadius: 12,
-              justifyContent: 'center',
-              alignItems: 'center',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: 0.2,
-              shadowRadius: 2,
-              elevation: 3,
-            }}
-            onPress={() => setStreamModalVisible(true)}
-          >
-            <Icons.Plus size={24} color={themeColors.primary} />
-            <Text
-              style={{ 
-                marginTop: 8,
-                fontSize: 16,
-                color: themeColors.text,
-              }}
-            >
-              New stream
-            </Text>
-          </TouchableOpacity>
-        </Section>
-
-        {/* History Section */}
-        <Section title="History" showArrow>
-          {history.length > 0 && (
-            <View style={{ marginBottom: 8, alignItems: 'flex-end' }}>
-              <TouchableOpacity onPress={clearHistory} style={{ paddingVertical: 6, paddingHorizontal: 18, borderRadius: 20, backgroundColor: themeColors.primary + '22' }}>
-                <Text style={{ color: themeColors.primary, fontWeight: 'bold', fontSize: 14 }}>Clear</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          {history.length === 0 ? (
-            <Text style={{ color: themeColors.textSecondary, marginLeft: 8 }}>No history yet</Text>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {history.slice(0, 10).map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={{ 
-                    width: 100, // Adjust as needed for horizontal scroll
-                    marginRight: 12,
-                  }}
-                  onPress={async () => {
-                    await audioControl.setAndPlayPlaylist([item]);
-                    router.push('/player/video');
-                  }}
-                >
-                  <View
-                    style={{ 
-                      width: 100,
-                      height: 100,
-                      borderRadius: 12,
-                      marginBottom: 8,
-                      backgroundColor: themeColors.sectionBackground,
-                      borderWidth: activeTheme === "dark" ? 1 : 0,
-                      borderColor: "rgba(255, 255, 255, 0.1)",
-                    }}
-                  >
-                    {item.artwork ? (
-                      <Image source={{ uri: item.artwork }} style={{ width: 48, height: 48, borderRadius: 8, alignSelf: 'center', marginTop: 16 }} />
-                    ) : (
-                      <Icons.Music size={24} color={themeColors.primary} style={{ margin: 8, alignSelf: 'center', marginTop: 16 }} />
-                    )}
-                  </View>
-                  <Text
-                    style={{ 
-                      fontSize: 12,
-                      fontWeight: 'medium',
-                      color: themeColors.text,
-                      textAlign: 'center',
-                    }}
-                    numberOfLines={1}
-                  >
-                    {item.title}
-                  </Text>
-                  <Text
-                    style={{ 
-                      fontSize: 12,
-                      color: activeTheme === "dark" ? "rgba(255, 255, 255, 0.7)" : themeColors.tabIconColor,
-                      textAlign: 'center',
-                    }}
-                    numberOfLines={1}
-                  >
-                    {item.artist}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          )}
-        </Section>
-
-        {/* Additional Features */}
-        <Section title="Features">
-          <View style={{ gap: 16, marginTop: 8 }}>
-            <TouchableOpacity
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: 16,
-                borderRadius: 12,
-                backgroundColor: themeColors.sectionBackground,
-                borderWidth: activeTheme === "dark" ? 1 : 0,
-                borderColor: "rgba(255, 255, 255, 0.1)",
-                width: '100%',
-                minHeight: 64,
-              }}
-              onPress={() => setDownloadsModalVisible(true)}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Icons.Download size={24} color={themeColors.primary} />
-                <Text style={{ marginLeft: 12, fontWeight: '500', color: themeColors.text, fontSize: 16 }}>Downloads</Text>
-              </View>
-              <Icons.ChevronRight size={20} color={themeColors.primary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: 16,
-                borderRadius: 12,
-                backgroundColor: themeColors.sectionBackground,
-                borderWidth: activeTheme === "dark" ? 1 : 0,
-                borderColor: "rgba(255, 255, 255, 0.1)",
-                width: '100%',
-                minHeight: 64,
-              }}
-              onPress={() => setStreamModalVisible(true)}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Icons.Wifi size={24} color={themeColors.primary} />
-                <Text style={{ marginLeft: 12, fontWeight: '500', color: themeColors.text, fontSize: 16 }}>Network</Text>
-              </View>
-              <Icons.ChevronRight size={20} color={themeColors.primary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: 16,
-                borderRadius: 12,
-                backgroundColor: themeColors.sectionBackground,
-                borderWidth: activeTheme === "dark" ? 1 : 0,
-                borderColor: "rgba(255, 255, 255, 0.1)",
-                width: '100%',
-                minHeight: 64,
-              }}
-              onPress={openStorageModal}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Icons.HardDrive size={24} color={themeColors.primary} />
-                <Text style={{ marginLeft: 12, fontWeight: '500', color: themeColors.text, fontSize: 16 }}>Storage</Text>
-              </View>
-              <Icons.ChevronRight size={20} color={themeColors.primary} />
-            </TouchableOpacity>
-          </View>
-        </Section>
-      </ScrollView>
-
-      <MoreOptionsMenu
-        visible={moreOptionsVisible}
-        onClose={() => setMoreOptionsVisible(false)}
-      />
-
-      {/* Stream Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={isStreamModalVisible}
-        onRequestClose={handleStreamModalClose}
-      >
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)' }}
-        >
-          <View style={{ backgroundColor: themeColors.card, borderRadius: 16, padding: 24, width: '90%', elevation: 10 }}>
-            <Text style={{ color: themeColors.text, fontSize: 20, fontWeight: 'bold', marginBottom: 16, textAlign: 'center' }} weight="Bold">Open Network Stream</Text>
-            <Text style={{ color: themeColors.textSecondary, fontSize: 14, marginBottom: 16, textAlign: 'center' }}>Enter a URL to stream video or audio content</Text>
-            <TextInput
-              style={{
-                backgroundColor: themeColors.background,
-                color: themeColors.text,
-                borderRadius: 8,
-                padding: 12,
-                fontSize: 16,
-                marginBottom: 8,
-                borderWidth: 1,
-                borderColor: themeColors.primary,
-              }}
-              placeholder="https://example.com/video.mp4 or YouTube URL"
-              placeholderTextColor={themeColors.textSecondary}
-              value={streamUrl}
-              onChangeText={(text) => {
-                setStreamUrl(text);
-                setStreamError(""); // Clear error when user types
-              }}
-              autoCapitalize="none"
-              keyboardType="url"
-              autoCorrect={false}
-            />
-            <Text style={{ color: themeColors.textSecondary, fontSize: 12, marginBottom: 12 }}>
-              Supported: YouTube, MP4, MP3, RTMP, HLS, and more
-            </Text>
-            {isStreamLoading && (
-              <Text style={{ color: themeColors.textSecondary, fontSize: 12, marginBottom: 12 }}>Loading...</Text>
-            )}
-            {streamError && (
-              <View style={{ 
-                backgroundColor: themeColors.background, 
-                padding: 12, 
-                borderRadius: 8, 
-                marginBottom: 12,
-                borderWidth: 1,
-                borderColor: themeColors.error || '#ff6b6b'
-              }}>
-                <Text 
-                  style={{ 
-                    color: themeColors.error || '#ff6b6b', 
-                    fontSize: 14,
-                    lineHeight: 20
-                  }}>
-                  {streamError}
-                </Text>
-                <TouchableOpacity
-                  onPress={clearAndTryAgain}
-                  style={{
-                    backgroundColor: themeColors.primary,
-                    paddingVertical: 8,
-                    paddingHorizontal: 16,
-                    borderRadius: 6,
-                    alignSelf: 'flex-start',
-                    marginTop: 8
-                  }}
-                >
-                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }} weight="Bold">Try Different URL</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>
-              <TouchableOpacity
-                onPress={handleStreamModalClose}
-                style={{ flex: 1, backgroundColor: themeColors.background, paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
-              >
-                <Text style={{ color: themeColors.textSecondary, fontWeight: 'bold' }}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={testStreamUrl}
-                disabled={isStreamLoading}
-                style={{ 
-                  flex: 1, 
-                  backgroundColor: themeColors.sectionBackground, 
-                  paddingVertical: 12, 
-                  borderRadius: 8, 
-                  alignItems: 'center',
-                  opacity: isStreamLoading ? 0.6 : 1
-                }}
-              >
-                <Text style={{ color: themeColors.primary, fontWeight: 'bold' }}>
-                  {isStreamLoading ? 'Testing...' : 'Test URL'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handlePlayStream}
-                disabled={isStreamLoading}
-                style={{ 
-                  flex: 1, 
-                  backgroundColor: isStreamLoading ? themeColors.textSecondary : themeColors.primary, 
-                  paddingVertical: 12, 
-                  borderRadius: 8, 
-                  alignItems: 'center',
-                  opacity: isStreamLoading ? 0.6 : 1
-                }}
-              >
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>
-                  {isStreamLoading ? 'Processing...' : 'Stream'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      <Modal
-        visible={downloadsModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setDownloadsModalVisible(false)}
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
-          <View style={{ backgroundColor: themeColors.card, borderRadius: 16, padding: 24, width: '80%' }}>
-            <Text style={{ color: themeColors.text, fontSize: 18, fontWeight: 'bold', marginBottom: 12 }}>Downloads</Text>
-            <Text style={{ color: themeColors.textSecondary, fontSize: 15, marginBottom: 20 }}>No downloads yet.</Text>
-            <TouchableOpacity onPress={() => setDownloadsModalVisible(false)} style={{ alignSelf: 'flex-end', marginTop: 8 }}>
-              <Text style={{ color: themeColors.primary, fontWeight: 'bold' }}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal
-        visible={storageModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setStorageModalVisible(false)}
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
-          <View style={{ backgroundColor: themeColors.card, borderRadius: 16, padding: 24, width: '80%' }}>
-            <Text style={{ color: themeColors.text, fontSize: 18, fontWeight: 'bold', marginBottom: 12 }}>Storage</Text>
-            {storageInfo.loading ? (
-              <Text style={{ color: themeColors.textSecondary, fontSize: 15, marginBottom: 20 }}>Calculating storage usage...</Text>
-            ) : (
-              <>
-                <Text style={{ color: themeColors.textSecondary, fontSize: 15, marginBottom: 8 }}>
-                  Audio files: {storageInfo.audioCount || 0}
-                </Text>
-                <Text style={{ color: themeColors.textSecondary, fontSize: 15, marginBottom: 8 }}>
-                  Video files: {storageInfo.videoCount || 0}
-                </Text>
-                <Text style={{ color: themeColors.textSecondary, fontSize: 15, marginBottom: 20 }}>
-                  Total size: {(storageInfo.totalSize / (1024 * 1024)).toFixed(2)} MB
-                </Text>
-              </>
-            )}
-            <TouchableOpacity onPress={() => setStorageModalVisible(false)} style={{ alignSelf: 'flex-end', marginTop: 8 }}>
-              <Text style={{ color: themeColors.primary, fontWeight: 'bold' }}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal
-        visible={showLoginModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowLoginModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: themeColors.background }]}>
-            <Text style={[styles.modalTitle, { color: themeColors.text }]}>Sign In</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: themeColors.card, color: themeColors.text, borderColor: themeColors.primary }]}
-              placeholder="Email"
-              placeholderTextColor={themeColors.textSecondary}
-              value={loginForm.email}
-              onChangeText={(text) => setLoginForm({ ...loginForm, email: text })}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-            <TextInput
-              style={[styles.input, { backgroundColor: themeColors.card, color: themeColors.text, borderColor: themeColors.primary }]}
-              placeholder="Password"
-              placeholderTextColor={themeColors.textSecondary}
-              value={loginForm.password}
-              onChangeText={(text) => setLoginForm({ ...loginForm, password: text })}
-              secureTextEntry
-            />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: themeColors.primary }]}
-                onPress={handleLogin}
-              >
-                <Text style={styles.modalButtonText}>Sign In</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: 'transparent', borderColor: themeColors.primary, borderWidth: 1 }]}
-                onPress={() => setShowLoginModal(false)}
-              >
-                <Text style={[styles.modalButtonText, { color: themeColors.primary }]}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={[styles.demoText, { color: themeColors.textSecondary }]}>
-              Demo: demo@visura.com / demo123            </Text>
-          </View>
-        </View>
-      </Modal>
-
-      <CustomAlert
-        visible={customAlert.visible}
-        title={customAlert.title}
-        message={customAlert.message}
-        buttons={customAlert.buttons}
-        onClose={() => setCustomAlert(alert => ({ ...alert, visible: false }))}
-      />
-    </SafeAreaView>
+      <Text style={{ color: themeColors.primary, fontWeight: 'bold' }}>{t("Reset to Defaults")}</Text>
+    </TouchableOpacity>
   );
-};
 
-const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    width: '80%',
-    padding: 20,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-    fontSize: 16,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginHorizontal: 5,
-    alignItems: 'center',
-  },
-  modalButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 600,
-  },
-  demoText: {
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 16,
-    fontStyle: 'italic',
-  },
-});
+  // --- Main More screen ---
+  if (screen === 'main') {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }}>
+        <ScrollView style={{ flex: 1, paddingHorizontal: 16, backgroundColor: themeColors.background }} contentContainerStyle={{ paddingTop: 20, paddingBottom: 20 }}>
+          <ProfileSection />
+          <UserProfileModal
+            visible={profileModalVisible}
+            onClose={() => setProfileModalVisible(false)}
+            profile={profile}
+            onLogout={() => {
+              setIsLoggedIn(false);
+              setProfile({ name: '', avatar: '' });
+              setProfileModalVisible(false);
+            }}
+            onEdit={() => {
+              // Add edit profile logic here
+              setProfileModalVisible(false);
+            }}
+          />
+          <AuthForm
+            visible={loginVisible}
+            onClose={() => setLoginVisible(false)}
+            onLogin={handleLogin}
+            onSignup={handleSignup}
+            accentColor={accentColor}
+          />
+          <ThemePreview />
+          <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
+            <ActionButton icon={<Icons.Settings size={20} color={themeColors.primary} />} label={t("SETTINGS")} onPress={() => setScreen('settings')} />
+            <ActionButton icon={<Icons.Info size={20} color={themeColors.primary} />} label={t("ABOUT")} onPress={() => setScreen('about')} />
+            <ActionButton icon={<Icons.Beaker size={20} color={themeColors.primary} />} label={t("LABS")} onPress={() => setScreen('labs')} />
+          </View>
+          <DiagnosticsCard />
+          <AppInfoCard />
+          <LabsSection />
+          <FeedbackSection />
+          <LegalSection />
+        </ScrollView>
+        <AccentColorPicker visible={colorPickerVisible} onClose={() => setColorPickerVisible(false)} />
+        <MoreOptionsMenu visible={moreOptionsVisible} onClose={() => setMoreOptionsVisible(false)} />
+      </SafeAreaView>
+    );
+  }
 
-export default MoreScreen;
+  // --- Settings screen ---
+  if (screen === 'settings') {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderColor: "rgba(147, 51, 234, 0.1)" }}>
+          <TouchableOpacity onPress={() => setScreen('main')}>
+            <Icons.ArrowLeft size={24} color={themeColors.primary} />
+          </TouchableOpacity>
+          <Text style={{ color: themeColors.text, fontSize: 18, fontWeight: 'bold', marginLeft: 16 }}>{t("Settings")}</Text>
+        </View>
+        <ScrollView style={{ flex: 1, backgroundColor: themeColors.background }}>
+          <View style={{ marginTop: 16 }}>
+            {/* Appearance */}
+            <Section title={t("APPEARANCE")}>
+              <SettingItem icon={<Icons.Palette size={24} color={themeColors.primary} />} title={t("Theme")} description={t("Switch between light and dark mode")}>
+                <TouchableOpacity style={{ paddingHorizontal: 12, paddingVertical: 4, borderRadius: 16, backgroundColor: themeColors.primaryLight }} onPress={toggleTheme} >
+                  <Text style={{ color: themeColors.primary }}>{t("Change")}</Text>
+                </TouchableOpacity>
+              </SettingItem>
+              <SettingItem icon={<Icons.Droplet size={24} color={themeColors.primary} />} title={t("Accent Color")} description={t("Pick your favorite accent color")}>
+                <TouchableOpacity style={{ paddingHorizontal: 12, paddingVertical: 4, borderRadius: 16, backgroundColor: themeColors.primaryLight }} onPress={() => setColorPickerVisible(true)} >
+                  <Text style={{ color: themeColors.primary }}>{t("Change")}</Text>
+                </TouchableOpacity>
+              </SettingItem>
+            </Section>
+            {/* Video */}
+            <Section title={t("VIDEO")}>
+              <SettingItem icon={<Icons.Minimize2 size={24} color={themeColors.primary} />} title={t("Background/PiP mode")} description={t("Switch to PiP when you switch to another application")}>
+                <Switch value={backgroundPiP} onValueChange={setBackgroundPiP} thumbColor="#fff" trackColor={{ false: themeColors.sectionBackground, true: accentColor }} />
+              </SettingItem>
+              <SettingItem icon={<Icons.Cpu size={24} color={themeColors.primary} />} title={t("Hardware Acceleration")} description={t("Improves video playback performance")}>
+                <Switch value={hardwareAcceleration} onValueChange={setHardwareAcceleration} thumbColor="#fff" trackColor={{ false: themeColors.sectionBackground, true: accentColor }} />
+              </SettingItem>
+              <SettingItem icon={<Icons.Video size={24} color={themeColors.primary} />} title={t("Quality")} description={t("Play videos in highest quality when available")}>
+                <Switch value={highQuality} onValueChange={setHighQuality} thumbColor="#fff" trackColor={{ false: themeColors.sectionBackground, true: accentColor }} />
+              </SettingItem>
+            </Section>
+            {/* Playback */}
+            <Section title={t("PLAYBACK")}>
+              <SettingItem icon={<Icons.Play size={24} color={themeColors.primary} />} title={t("Autoplay")} description={t("Automatically play next item")}>
+                <Switch value={autoplay} onValueChange={setAutoplay} thumbColor="#fff" trackColor={{ false: themeColors.sectionBackground, true: accentColor }} />
+              </SettingItem>
+              <SettingItem icon={<Icons.Minimize2 size={24} color={themeColors.primary} />} title={t("Background Play")} description={t("Continue playing when app is minimized")}>
+                <Switch value={backgroundPlay} onValueChange={setBackgroundPlay} thumbColor="#fff" trackColor={{ false: themeColors.sectionBackground, true: accentColor }} />
+              </SettingItem>
+            </Section>
+            {/* History */}
+            <Section title={t("HISTORY")}>
+              <SettingItem icon={<Icons.History size={24} color={themeColors.primary} />} title={t("Playback history")} description={t("Save all media played in history section")}>
+                <Switch value={saveHistory} onValueChange={setSaveHistory} thumbColor="#fff" trackColor={{ false: themeColors.sectionBackground, true: accentColor }} />
+              </SettingItem>
+              <SettingItem icon={<Icons.ListVideo size={24} color="#767577" />} title={<Text style={{ color: "#767577" }}>{t("Video Play queue history")}</Text>} description={<Text style={{ color: "#767577" }}>{t("Save video play queue between sessions")}</Text>}>
+                <Switch value={videoQueueHistory} disabled={true} thumbColor="#fff" trackColor={{ false: themeColors.sectionBackground, true: accentColor }} />
+              </SettingItem>
+              <SettingItem icon={<Icons.ListMusic size={24} color="#767577" />} title={<Text style={{ color: "#767577" }}>{t("Audio Play queue history")}</Text>} description={<Text style={{ color: "#767577" }}>{t("Save audio play queue between sessions")}</Text>}>
+                <Switch value={audioQueueHistory} disabled={true} thumbColor="#fff" trackColor={{ false: themeColors.sectionBackground, true: accentColor }} />
+              </SettingItem>
+            </Section>
+            {/* Storage */}
+            <Section title={t("STORAGE")}>
+              <SettingItem icon={<Icons.HardDrive size={24} color={themeColors.primary} />} title={t("Clear Cache")} description={t("Free up space by removing temporary files")}>
+                <TouchableOpacity style={{ paddingHorizontal: 12, paddingVertical: 4, borderRadius: 16, backgroundColor: "rgba(147, 51, 234, 0.1)" }} onPress={() => console.log("Clear cache") }>
+                  <Text style={{ color: themeColors.primary }}>{t("Clear")}</Text>
+                </TouchableOpacity>
+              </SettingItem>
+            </Section>
+            {ResetSettingsButton()}
+          </View>
+        </ScrollView>
+        <AccentColorPicker visible={colorPickerVisible} onClose={() => setColorPickerVisible(false)} />
+      </SafeAreaView>
+    );
+  }
+
+  // --- About screen ---
+  if (screen === 'about') {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderColor: "rgba(147, 51, 234, 0.1)" }}>
+          <TouchableOpacity onPress={() => setScreen('main')}>
+            <Icons.ArrowLeft size={24} color={themeColors.primary} />
+          </TouchableOpacity>
+          <Text style={{ color: themeColors.text, fontSize: 18, fontWeight: 'bold', marginLeft: 16 }}>{t("About VLC")}</Text>
+        </View>
+        <ScrollView style={{ flex: 1, backgroundColor: themeColors.background }}>
+          <AppInfoCard />
+          <LegalSection />
+          <FeedbackSection />
+          <View style={{ padding: 16 }}>
+            <Text style={{ color: activeTheme === "dark" ? "rgba(255,255,255,0.7)" : themeColors.tabIconColor, fontSize: 13, textAlign: 'center' }} allowFontScaling>
+              © 2025 VideoLAN. All rights reserved.
+            </Text>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // --- Labs/Experimental screen ---
+  if (screen === 'labs') {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderColor: "rgba(147, 51, 234, 0.1)" }}>
+          <TouchableOpacity onPress={() => setScreen('main')}>
+            <Icons.ArrowLeft size={24} color={themeColors.primary} />
+          </TouchableOpacity>
+          <Text style={{ color: themeColors.text, fontSize: 18, fontWeight: 'bold', marginLeft: 16 }}>{t("Labs & Experimental")}</Text>
+        </View>
+        <ScrollView style={{ flex: 1, backgroundColor: themeColors.background }}>
+          <LabsSection />
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // --- Helper Components ---
+  function Section({ title, children }) {
+    return (
+      <View style={{ marginBottom: 32 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <Text style={{ color: themeColors.primary, fontSize: 18, fontWeight: 'bold' }}>{title}</Text>
+        </View>
+        {children}
+      </View>
+    );
+  }
+
+  function SettingItem({ icon, title, description, children }) {
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderColor: "rgba(147, 51, 234, 0.1)" }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+          <View style={{ width: 40 }}>{icon}</View>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            {typeof title === 'string' ? (
+              <Text style={{ color: themeColors.text, fontWeight: '500' }}>{title}</Text>
+            ) : (
+              title
+            )}
+            {typeof description === 'string' ? (
+              <Text style={{ color: activeTheme === "dark" ? "rgba(255,255,255,0.7)" : themeColors.tabIconColor, fontSize: 13, marginTop: 4 }}>{description}</Text>
+            ) : (
+              description
+            )}
+          </View>
+        </View>
+        {children}
+      </View>
+    );
+  }
+
+  function ActionButton({ icon, label, onPress }) {
+    return (
+      <TouchableOpacity
+        onPress={onPress}
+        style={{
+          flex: 1, paddingVertical: 12, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+          backgroundColor: themeColors.sectionBackground,
+          borderWidth: activeTheme === "dark" ? 1 : 0,
+          borderColor: "rgba(255, 255, 255, 0.1)",
+          marginRight: 8
+        }}
+        accessibilityLabel={label}
+        accessibilityHint={label}
+      >
+        {icon}
+        <Text style={{ color: themeColors.primary, marginLeft: 8, fontWeight: '600' }}>{label}</Text>
+      </TouchableOpacity>
+    );
+  }
+}
