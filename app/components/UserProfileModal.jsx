@@ -640,26 +640,25 @@ export default function UserProfileModal({
                     <TouchableOpacity
                       onPress={onLogout}
                       accessibilityLabel="Log out"
-                      activeOpacity={0.8}
+                      activeOpacity={0.9}
                       style={{
-                        backgroundColor: 'transparent',
-                        borderRadius: 16,
+                        backgroundColor: '#DC2626',
+                        borderRadius: 12,
                         paddingVertical: 16,
-                        borderWidth: 1.5,
-                        borderColor: '#E53935',
+                        borderWidth: 0,
                         flexDirection: 'row',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        shadowColor: '#E53935',
+                        shadowColor: '#DC2626',
                         shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.1,
+                        shadowOpacity: 0.3,
                         shadowRadius: 4,
-                        elevation: 2
+                        elevation: 3
                       }}
                     >
-                      <Icons.LogOut size={18} color="#E53935" style={{ marginRight: 8 }} />
+                      <Icons.LogOut size={18} color="white" style={{ marginRight: 10 }} />
                       <Text style={{ 
-                        color: '#E53935', 
+                        color: 'white', 
                         fontWeight: '600', 
                         fontSize: 16,
                         letterSpacing: 0.5

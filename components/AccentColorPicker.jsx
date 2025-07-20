@@ -49,24 +49,41 @@ const AccentColorPicker = ({ visible, onClose }) => {
           className="mx-4 rounded-2xl p-4"
           style={{ backgroundColor: themeColors.background }}
         >
-          <View className="mb-4">
+          <View className="mb-6">
             <Text 
-              className="text-lg font-semibold mb-2"
-              style={{ color: themeColors.text }}
+              className="text-xl font-bold mb-1"
+              style={{ 
+                color: themeColors.text,
+                textAlign: 'center',
+                fontSize: 20
+              }}
             >
-              Select Accent Color
+              Accent Color
             </Text>
             <Text
-              className="text-sm"
-              style={{ color: themeColors.text }}
+              className="text-sm text-center px-4"
+              style={{ 
+                color: themeColors.textSecondary,
+                fontSize: 14,
+                lineHeight: 20
+              }}
+              numberOfLines={2}
             >
-              Choose your preferred accent color for the app
+              Choose your preferred color
             </Text>
           </View>
 
-          <View className="flex-row flex-wrap gap-4 justify-center mb-4">
+          <View className="mb-4">
             {colorRows.map((row, rowIdx) => (
-              <View key={rowIdx} style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 12 }}>
+              <View 
+                key={rowIdx} 
+                style={{ 
+                  flexDirection: 'row', 
+                  justifyContent: 'space-between',
+                  paddingHorizontal: 12,
+                  marginBottom: 16
+                }}
+              >
                 {row.map((color) => (
                   <TouchableOpacity
                     key={color.name}
@@ -74,17 +91,36 @@ const AccentColorPicker = ({ visible, onClose }) => {
                     style={{ alignItems: 'center', marginHorizontal: 8 }}
                   >
                     <View 
-                      style={{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 6, backgroundColor: color.hex }}
+                      style={{ 
+                        width: 56, 
+                        height: 56, 
+                        borderRadius: 28, 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        backgroundColor: color.hex,
+                        marginBottom: 6,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.2,
+                        shadowRadius: 3,
+                        elevation: 3
+                      }}
                     >
                       {currentAccent === color.name && (
                         <Icons.Check size={20} color="#FFFFFF" />
                       )}
                     </View>
-                    <Text
+                    <Text 
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
                       style={{ 
                         color: currentAccent === color.name ? color.hex : themeColors.text,
                         opacity: currentAccent === color.name ? 1 : 0.7,
-                        fontSize: 14
+                        fontSize: 12,
+                        fontWeight: '500',
+                        maxWidth: 60,
+                        textAlign: 'center',
+                        textTransform: 'capitalize'
                       }}
                     >
                       {color.name}
@@ -98,10 +134,17 @@ const AccentColorPicker = ({ visible, onClose }) => {
           <TouchableOpacity
             onPress={onClose}
             className="py-3 rounded-xl items-center"
-            style={{ backgroundColor: themeColors.primaryLight }}
+            style={{ 
+              backgroundColor: themeColors.card,
+              borderWidth: 1,
+              borderColor: themeColors.border
+            }}
           >
-            <Text style={{ color: themeColors.primary }}>
-              Close
+            <Text style={{ 
+              color: themeColors.text,
+              fontWeight: '500'
+            }}>
+              Done
             </Text>
           </TouchableOpacity>
         </Pressable>

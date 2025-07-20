@@ -39,8 +39,9 @@ export default function TabLayouts() {
           tabBarInactiveTintColor: themeColors.textSecondary,
           tabBarStyle: {
             backgroundColor: themeColors.background,
-            borderTopColor: themeColors.card + '60',
-            borderTopWidth: 0.5,
+            borderTopWidth: 0,
+            elevation: 0,
+            shadowOpacity: 0,
           },
           // Optimize animations based on device capability
           animation: canHandleAnimations ? 'shift' : 'none',
