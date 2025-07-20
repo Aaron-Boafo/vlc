@@ -4,4 +4,4 @@ const AudioLayout = () => {
   return <Stack screenOptions={{ headerShown: false }} />;
 };
 
-export default BrowseLayout;
+export default AudioLayout;

@@ -136,8 +136,14 @@ const MediaBrowserScreen = () => {
   const [recentFiles, setRecentFiles] = useState([]);
   React.useEffect(() => {
     (async () => {
-      const stored = await AsyncStorage.getItem('vlc_recent_files');
-      if (stored) setRecentFiles(JSON.parse(stored));
+      try {
+        const stored = await AsyncStorage.getItem('vlc_recent_files');
+        if (stored) setRecentFiles(JSON.parse(stored));
+      } catch (e) {
+        setRecentFiles([]);
+        await AsyncStorage.removeItem('vlc_recent_files');
+        console.error('Failed to load recent files:', e);
+      }
     })();
   }, []);
   const addToRecents = async (file) => {
@@ -159,7 +165,6 @@ const MediaBrowserScreen = () => {
     setRecentFiles(newRecents);
     await AsyncStorage.setItem('vlc_recent_files', JSON.stringify(newRecents));
   };
-
 
   // Local file picker
   const pickDocument = useCallback(async () => {
@@ -206,8 +211,7 @@ const MediaBrowserScreen = () => {
           }}
         />
         <View style={{ height: 22 }} />
-        <ScrollView contentContainerStyle={[styles.scrollContainer, { backgroundColor: themeColors.background, paddingTop: 0, paddingBottom: 28 }]}>
-          {/* Local Section */}
+        <ScrollView contentContainerStyle={[styles.scrollContainer, { backgroundColor: themeColors.background, paddingTop: 0, paddingBottom: 28 }]}> 
           {[{
             icon: 'folder-outline',
             label: 'Local Files',
@@ -248,7 +252,6 @@ const MediaBrowserScreen = () => {
                 elevation: 1,
                 paddingVertical: 0,
                 paddingHorizontal: 0,
-
               }}
             >
               <View style={{

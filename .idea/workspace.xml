@@ -5,7 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="9db4fd3f-f98f-4439-8024-fcff77de74df" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/store/theme.js" beforeDir="false" afterPath="$PROJECT_DIR$/store/theme.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/(tabs)/(browse)/_layout.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(tabs)/(browse)/_layout.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/(tabs)/(browse)/index.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(tabs)/(browse)/index.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/package-lock.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/package.json" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -15,6 +19,7 @@
   <component name="ClangdSettings">
     <option name="formatViaClangd" value="false" />
   </component>
+  <component name="ExecutionTargetManager" SELECTED_TARGET="device_and_snapshot_combo_box_target[]" />
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
@@ -36,7 +41,7 @@
     "ScreenRecorder.SavePath": "C:\\Users\\drmid\\Desktop",
     "cf.first.check.clang-format": "false",
     "cidr.known.project.marker": "true",
-    "git-widget-placeholder": "kyeku",
+    "git-widget-placeholder": "Samuel",
     "kotlin-language-version-configured": "true",
     "last_opened_file_path": "C:/Users/drmid/Desktop",
     "settings.editor.selected.configurable": "preferences.keymap"
