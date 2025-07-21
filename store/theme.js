@@ -4,7 +4,7 @@ import {persist, createJSONStorage} from "zustand/middleware";
 
 const getThemeColors = (themeType, accentColor = accentColors) => {
   const accentColors = {
-    purple: "#F44BF8",
+    purple: "#8B5CF6",
     blue: "#2196F3",
     orange: "#EA580C",
     lime: "#1DB954",
@@ -35,13 +35,15 @@ const getThemeColors = (themeType, accentColor = accentColors) => {
       }
     : {
         ...baseTheme,
-        background: "#0A0A0A",
-        sectionBackground: "#18181b",
-        card: "#212121",
-        tabIconColor: "#fff",
+        background: "#0F0F23",
+        sectionBackground: "#1A1A2E",
+        card: "#16213E",
+        tabIconColor: "#B8BCC8",
         ribbon: accentColors[accentColor],
-        text: "#fff",
-        textSecondary: "#fff",
+        text: "#FFFFFF",
+        textSecondary: "#B8BCC8",
+        border: "#2A2D47",
+        surface: "#16213E",
       };
 };
 

@@ -13,7 +13,9 @@ import Animated, {
   withSpring,
   interpolate,
   Extrapolate,
-  withSequence
+  withSequence,
+  withDelay,
+  Easing
 } from 'react-native-reanimated';
 import { PanGestureHandler } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -36,6 +38,9 @@ const VideoMiniPlayer = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [isInDeleteZone, setIsInDeleteZone] = useState(false);
   const [hasTriggeredHaptic, setHasTriggeredHaptic] = useState(false);
+  
+  // Add video opacity for smooth content transitions
+  const videoOpacity = useSharedValue(0);
 
   const miniPlayerWidth = (width - 48) / 2;
   const miniPlayerHeight = (miniPlayerWidth * 9) / 16;
@@ -53,14 +58,39 @@ const VideoMiniPlayer = () => {
   const DELETE_THRESHOLD = height - DELETE_ZONE_HEIGHT;
 
   useEffect(() => {
-    // Reset position and animations when mini player is shown
+    // Enhanced smooth entrance/exit animations
     if (isMiniPlayerVisible) {
-      translateX.value = 0;
-      translateY.value = 0;
-      scale.value = 1;
-      rotation.value = 0;
+      // Smooth entrance animation from bottom-right
+      translateX.value = withSpring(0, { 
+        damping: 20, 
+        stiffness: 150,
+        mass: 1
+      });
+      translateY.value = withSpring(0, { 
+        damping: 20, 
+        stiffness: 150,
+        mass: 1
+      });
+      scale.value = withSequence(
+        withTiming(0.8, { duration: 0 }),
+        withSpring(1, { 
+          damping: 15, 
+          stiffness: 200 
+        })
+      );
+      rotation.value = withSpring(0, { damping: 20 });
       deleteZoneOpacity.value = 0;
       deleteZoneScale.value = 0.8;
+    } else {
+      // Smooth exit animation
+      scale.value = withTiming(0.8, { 
+        duration: 200,
+        easing: Easing.out(Easing.cubic)
+      });
+      translateY.value = withTiming(100, { 
+        duration: 250,
+        easing: Easing.out(Easing.cubic)
+      });
     }
   }, [isMiniPlayerVisible, width, height]);
 
@@ -191,9 +221,14 @@ const VideoMiniPlayer = () => {
         { scale: scale.value },
         { rotate: `${rotation.value}deg` }
       ],
-      opacity: withTiming(isMiniPlayerVisible ? 1 : 0, { duration: 250 }),
-      shadowOpacity: isDragging ? 0.3 : 0.1,
+      opacity: withTiming(isMiniPlayerVisible ? 1 : 0, { 
+        duration: 300,
+        easing: Easing.bezier(0.25, 0.1, 0.25, 1) // Smooth easing curve
+      }),
+      shadowOpacity: withTiming(isDragging ? 0.3 : 0.15, { duration: 200 }),
       elevation: isDragging ? 15 : 10,
+      // Prevent flickering during transitions
+      zIndex: isMiniPlayerVisible ? 1000 : -1,
     };
   });
 

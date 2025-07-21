@@ -29,15 +29,22 @@ const useOptimizedVideoStore = create(
                 miniPlayerPosition: 0,
                 miniPlayerVideo: null,
 
-                // Fast loading with progressive updates
+                // Fast loading with progressive updates - Enhanced caching
                 loadVideoFiles: async (forceRefresh = false) => {
                     const state = get();
 
-                    // Skip if recently loaded and not forcing refresh
-                    if (!forceRefresh && state.videoFiles.length > 0 && state.lastLoadTime) {
-                        const timeSinceLoad = Date.now() - state.lastLoadTime;
-                        if (timeSinceLoad < 5 * 60 * 1000) { // 5 minutes
-                            console.log('⚡ Video files already loaded, skipping');
+                    // Enhanced caching: Skip if files exist and not forcing refresh
+                    if (!forceRefresh && state.videoFiles.length > 0) {
+                        // Only reload if files are very old (30 minutes) or explicitly forced
+                        if (state.lastLoadTime) {
+                            const timeSinceLoad = Date.now() - state.lastLoadTime;
+                            if (timeSinceLoad < 30 * 60 * 1000) { // 30 minutes instead of 5
+                                console.log('⚡ Video files cached, skipping reload');
+                                return state.videoFiles;
+                            }
+                        } else {
+                            // If we have files but no timestamp, assume they're fresh
+                            console.log('⚡ Video files exist, skipping reload');
                             return state.videoFiles;
                         }
                     }

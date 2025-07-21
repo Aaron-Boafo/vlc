@@ -86,7 +86,7 @@ export default function MoreTab() {
         Alert.alert('Error', 'Please enter both phone and password');
         return;
       }
-      
+
       const username = generateRandomUsername(phone);
       setIsLoggedIn(true);
       setProfile({
@@ -100,7 +100,7 @@ export default function MoreTab() {
       Alert.alert('Error', 'Failed to log in. Please try again.');
     }
   };
-  
+
   const handleSignup = async (phone, password) => {
     try {
       console.log('Signup attempt with:', phone);
@@ -112,7 +112,7 @@ export default function MoreTab() {
         Alert.alert('Error', 'Password must be at least 6 characters');
         return;
       }
-      
+
       const username = generateRandomUsername(phone);
       setIsLoggedIn(true);
       setProfile({
@@ -134,7 +134,10 @@ export default function MoreTab() {
       else setLoginVisible(true);
     }}>
       <LinearGradient
-        colors={[themeColors.sectionBackground + 'BB', themeColors.background + 'F0']}
+        colors={activeTheme === 'light'
+          ? ['rgba(255, 255, 255, 0.9)', 'rgba(248, 250, 252, 0.95)']
+          : [themeColors.sectionBackground + 'BB', themeColors.background + 'F0']
+        }
         style={{
           borderRadius: 22,
           marginBottom: 22,
@@ -146,6 +149,8 @@ export default function MoreTab() {
           shadowOpacity: 0.06,
           shadowRadius: 16,
           elevation: 2,
+          borderWidth: activeTheme === 'light' ? 1 : 0,
+          borderColor: activeTheme === 'light' ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
         }}
       >
         <Image
@@ -174,7 +179,7 @@ export default function MoreTab() {
               onPress={() => {
                 if (activeTheme !== mode) toggleTheme();
               }}
-              style={{  
+              style={{
                 flexDirection: 'row',
                 alignItems: 'center',
                 paddingHorizontal: 18,
@@ -206,14 +211,18 @@ export default function MoreTab() {
   // --- Diagnostics Card ---
   const DiagnosticsCard = () => (
     <View style={{
-      backgroundColor: themeColors.sectionBackground + 'BB',
+      backgroundColor: activeTheme === 'light'
+        ? 'rgba(255, 255, 255, 0.95)'
+        : themeColors.sectionBackground + 'DD',
       borderRadius: 18,
       marginVertical: 10,
       padding: 18,
       shadowColor: themeColors.primary,
-      shadowOpacity: 0.08,
+      shadowOpacity: activeTheme === 'light' ? 0.12 : 0.08,
       shadowRadius: 12,
       elevation: 4,
+      borderWidth: activeTheme === 'light' ? 1 : 0,
+      borderColor: activeTheme === 'light' ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
     }}>
       <Text style={{ color: themeColors.primary, fontWeight: 'bold', fontSize: 16, marginBottom: 8 }}>
         {t("Diagnostics")}
@@ -236,14 +245,18 @@ export default function MoreTab() {
   // --- App Info Card ---
   const AppInfoCard = () => (
     <View style={{
-      backgroundColor: themeColors.sectionBackground + 'BB',
+      backgroundColor: activeTheme === 'light'
+        ? 'rgba(255, 255, 255, 0.95)'
+        : themeColors.sectionBackground + 'DD',
       borderRadius: 18,
       marginVertical: 10,
       padding: 18,
       shadowColor: themeColors.primary,
-      shadowOpacity: 0.08,
+      shadowOpacity: activeTheme === 'light' ? 0.12 : 0.08,
       shadowRadius: 12,
       elevation: 4,
+      borderWidth: activeTheme === 'light' ? 1 : 0,
+      borderColor: activeTheme === 'light' ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
     }}>
       <Text style={{ color: themeColors.primary, fontWeight: 'bold', fontSize: 16, marginBottom: 8 }}>
         {t("App Info")}
@@ -257,14 +270,18 @@ export default function MoreTab() {
   // --- Experimental Features Section ---
   const LabsSection = () => (
     <View style={{
-      backgroundColor: themeColors.sectionBackground + 'BB',
+      backgroundColor: activeTheme === 'light'
+        ? 'rgba(255, 255, 255, 0.95)'
+        : themeColors.sectionBackground + 'DD',
       borderRadius: 18,
       marginVertical: 10,
       padding: 18,
       shadowColor: themeColors.primary,
-      shadowOpacity: 0.08,
+      shadowOpacity: activeTheme === 'light' ? 0.12 : 0.08,
       shadowRadius: 12,
       elevation: 4,
+      borderWidth: activeTheme === 'light' ? 1 : 0,
+      borderColor: activeTheme === 'light' ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
     }}>
       <Text style={{ color: themeColors.primary, fontWeight: 'bold', fontSize: 16, marginBottom: 8 }}>
         {t("Experimental Features")}
@@ -289,14 +306,18 @@ export default function MoreTab() {
   // --- Feedback/Contact Section ---
   const FeedbackSection = () => (
     <View style={{
-      backgroundColor: themeColors.sectionBackground + 'BB',
+      backgroundColor: activeTheme === 'light'
+        ? 'rgba(255, 255, 255, 0.95)'
+        : themeColors.sectionBackground + 'DD',
       borderRadius: 18,
       marginVertical: 10,
       padding: 18,
       shadowColor: themeColors.primary,
-      shadowOpacity: 0.08,
+      shadowOpacity: activeTheme === 'light' ? 0.12 : 0.08,
       shadowRadius: 12,
       elevation: 4,
+      borderWidth: activeTheme === 'light' ? 1 : 0,
+      borderColor: activeTheme === 'light' ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
     }}>
       <Text style={{ color: themeColors.primary, fontWeight: 'bold', fontSize: 16, marginBottom: 8 }}>
         {t("Feedback & Support")}
@@ -334,14 +355,18 @@ export default function MoreTab() {
   // --- Legal Section ---
   const LegalSection = () => (
     <View style={{
-      backgroundColor: themeColors.sectionBackground + 'BB',
+      backgroundColor: activeTheme === 'light'
+        ? 'rgba(255, 255, 255, 0.95)'
+        : themeColors.sectionBackground + 'DD',
       borderRadius: 18,
       marginVertical: 10,
       padding: 18,
       shadowColor: themeColors.primary,
-      shadowOpacity: 0.08,
+      shadowOpacity: activeTheme === 'light' ? 0.12 : 0.08,
       shadowRadius: 12,
       elevation: 4,
+      borderWidth: activeTheme === 'light' ? 1 : 0,
+      borderColor: activeTheme === 'light' ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
     }}>
       <Text style={{ color: themeColors.primary, fontWeight: 'bold', fontSize: 16, marginBottom: 8 }}>
         {t("Legal")}
@@ -378,7 +403,7 @@ export default function MoreTab() {
         if (info.exists && info.size) {
           totalSize += info.size;
         }
-      } catch {}
+      } catch { }
     }
     for (const file of videoFiles) {
       try {
@@ -386,7 +411,7 @@ export default function MoreTab() {
         if (info.exists && info.size) {
           totalSize += info.size;
         }
-      } catch {}
+      } catch { }
     }
     setStorageInfo({ totalSize, fileCount: audioCount + videoCount, audioCount, videoCount, loading: false });
     setStorageModalVisible(true);
@@ -529,7 +554,7 @@ export default function MoreTab() {
             {/* Storage */}
             <Section title={t("STORAGE")}>
               <SettingItem icon={<Icons.HardDrive size={24} color={themeColors.primary} />} title={t("Clear Cache")} description={t("Free up space by removing temporary files")}>
-                <TouchableOpacity style={{ paddingHorizontal: 12, paddingVertical: 4, borderRadius: 16, backgroundColor: "rgba(147, 51, 234, 0.1)" }} onPress={() => console.log("Clear cache") }>
+                <TouchableOpacity style={{ paddingHorizontal: 12, paddingVertical: 4, borderRadius: 16, backgroundColor: "rgba(147, 51, 234, 0.1)" }} onPress={() => console.log("Clear cache")}>
                   <Text style={{ color: themeColors.primary }}>{t("Clear")}</Text>
                 </TouchableOpacity>
               </SettingItem>

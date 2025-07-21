@@ -40,6 +40,7 @@ export default function VideoTabScreen() {
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [migrationComplete, setMigrationComplete] = useState(false);
+  const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
   const router = useRouter();
 
   // Run migration on first load
@@ -65,20 +66,21 @@ export default function VideoTabScreen() {
     { label: 'Date Added (Oldest)', key: 'modificationTime', direction: 'asc', icon: Icons.CalendarClock },
   ];
 
-  // Fast loading with the new optimized system
+  // Optimized loading - prevent unnecessary reloads on tab switches
   useFocusEffect(
     useCallback(() => {
-      // Only load if migration is complete and we don't have data
-      if (migrationComplete && videoFiles.length === 0) {
+      // Only load if migration is complete and we haven't loaded yet
+      if (migrationComplete && !hasInitiallyLoaded && videoFiles.length === 0) {
         console.log('🚀 Loading video files with fast loader...');
         const startTime = Date.now();
+        setHasInitiallyLoaded(true);
         loadVideoFiles().then(() => {
           PerformanceAnalytics.trackLoadTime('VideoFiles', startTime, Date.now(), videoFiles.length);
           // 🖼️ Preload video thumbnails for better performance
           ImageOptimizer.preloadArtwork(videoFiles.slice(0, 10));
         });
       }
-    }, [migrationComplete, videoFiles.length, loadVideoFiles])
+    }, [migrationComplete, hasInitiallyLoaded, videoFiles.length, loadVideoFiles])
   );
 
   // 🔍 Build search index when video files change

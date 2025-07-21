@@ -46,6 +46,9 @@ const AudioTabScreen = () => {
   const [migrationComplete, setMigrationComplete] = useState(false);
   const [showMetadataLoading, setShowMetadataLoading] = useState(false);
 
+  // Prevent unnecessary reloading on tab switches
+  const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
+
   // Run migration on first load
   useEffect(() => {
     const runMigration = async () => {
@@ -71,13 +74,14 @@ const AudioTabScreen = () => {
     { label: 'Date Added (Oldest)', key: 'modificationTime', direction: 'asc', icon: Icons.CalendarClock },
   ];
 
-  // Fast loading with the new optimized system
+  // Optimized loading - prevent unnecessary reloads on tab switches
   useFocusEffect(
     useCallback(() => {
-      // Only load if migration is complete and we don't have data
-      if (migrationComplete && audioFiles.length === 0) {
+      // Only load if migration is complete and we haven't loaded yet
+      if (migrationComplete && !hasInitiallyLoaded && audioFiles.length === 0) {
         console.log('🚀 Loading audio files with fast loader...');
         const startTime = Date.now();
+        setHasInitiallyLoaded(true);
         loadAudioFiles().then(() => {
           PerformanceAnalytics.trackLoadTime('AudioFiles', startTime, Date.now(), audioFiles.length);
           // Show metadata loading indicator when files are loaded
@@ -86,7 +90,7 @@ const AudioTabScreen = () => {
           }
         });
       }
-    }, [migrationComplete, audioFiles.length, loadAudioFiles])
+    }, [migrationComplete, hasInitiallyLoaded, audioFiles.length, loadAudioFiles])
   );
 
   // Show metadata loading when files are initially loaded

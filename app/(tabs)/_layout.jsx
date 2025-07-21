@@ -10,11 +10,15 @@ import DeviceOptimizer from "../../utils/deviceOptimizer";
 export default function TabLayouts() {
   const { themeColors } = useThemeStore();
   const [currentTab, setCurrentTab] = React.useState('(audio)');
+  const [tabsInitialized, setTabsInitialized] = React.useState(false);
 
-  // Initialize navigation optimizer
+  // Initialize navigation optimizer and prevent reloading
   useEffect(() => {
     NavigationOptimizer.clearCache(); // Clear any old cache
     DeviceOptimizer.logDeviceInfo(); // Log device info for debugging
+    
+    // Mark tabs as initialized to prevent unnecessary reloads
+    setTabsInitialized(true);
   }, []);
 
   // Optimized tab press handler
@@ -45,13 +49,14 @@ export default function TabLayouts() {
           // Optimize animations based on device capability
           animation: canHandleAnimations ? 'shift' : 'none',
           animationDuration: canHandleAnimations ? 150 : 0,
-          // Keep critical screens alive, detach less important ones
+          // CRITICAL: Keep screens alive to prevent reloading
           lazy: false,
           detachInactiveScreens: false,
+          unmountOnBlur: false, // Prevent unmounting when switching tabs
           // Optimize gestures based on device
           gestureEnabled: canHandleAnimations,
           // Add performance optimizations
-          freezeOnBlur: !canHandleAnimations, // Freeze background screens on low-end devices
+          freezeOnBlur: false, // Don't freeze to maintain state
         }}
         screenListeners={{
           tabPress: (e) => {

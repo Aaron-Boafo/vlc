@@ -16,15 +16,22 @@ const useOptimizedAudioStore = create(
         activeTab: 'all',
         sortOrder: { key: 'title', direction: 'asc' },
 
-        // Fast loading with progressive updates
+        // Fast loading with progressive updates - Enhanced caching
         loadAudioFiles: async (forceRefresh = false) => {
           const state = get();
           
-          // Skip if recently loaded and not forcing refresh
-          if (!forceRefresh && state.audioFiles.length > 0 && state.lastLoadTime) {
-            const timeSinceLoad = Date.now() - state.lastLoadTime;
-            if (timeSinceLoad < 5 * 60 * 1000) { // 5 minutes
-              console.log('⚡ Audio files already loaded, skipping');
+          // Enhanced caching: Skip if files exist and not forcing refresh
+          if (!forceRefresh && state.audioFiles.length > 0) {
+            // Only reload if files are very old (30 minutes) or explicitly forced
+            if (state.lastLoadTime) {
+              const timeSinceLoad = Date.now() - state.lastLoadTime;
+              if (timeSinceLoad < 30 * 60 * 1000) { // 30 minutes instead of 5
+                console.log('⚡ Audio files cached, skipping reload');
+                return state.audioFiles;
+              }
+            } else {
+              // If we have files but no timestamp, assume they're fresh
+              console.log('⚡ Audio files exist, skipping reload');
               return state.audioFiles;
             }
           }

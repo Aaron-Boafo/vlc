@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, TouchableOpacity, StyleSheet, SafeAreaView, Text, TouchableWithoutFeedback } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, SafeAreaView, Text, TouchableWithoutFeedback, Dimensions } from 'react-native';
 import { Video } from 'expo-av';
 import { MaterialIcons, Entypo } from '@expo/vector-icons';
 import { ChevronDown } from 'lucide-react-native';
@@ -8,6 +8,14 @@ import useOptimizedVideoStore from '../../store/optimizedVideoStore';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import BottomSheet from '../../components/BottomSheet';
 import { useRouter } from 'expo-router';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withSpring,
+  Easing,
+  runOnJS
+} from 'react-native-reanimated';
 
 const MinimalVideoPlayer = () => {
   const { currentVideo, playlist, currentVideoIndex, videoFiles, setCurrentVideo, setAndPlayVideo, showMiniPlayer } = useOptimizedVideoStore();
@@ -23,7 +31,38 @@ const MinimalVideoPlayer = () => {
   const [moreOptionsVisible, setMoreOptionsVisible] = useState(false);
   const [autoplay, setAutoplay] = useState(false);
   const [loop, setLoop] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [dimensions, setDimensions] = useState(Dimensions.get('window'));
   const router = useRouter();
+
+  // Animation values for smooth orientation transitions
+  const containerOpacity = useSharedValue(1);
+  const containerScale = useSharedValue(1);
+  const controlsOpacity = useSharedValue(1);
+
+  // Enhanced orientation change listener for smooth transitions
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setIsTransitioning(true);
+
+      // Smooth transition animation during orientation change
+      containerOpacity.value = withTiming(0.95, {
+        duration: 100,
+        easing: Easing.out(Easing.quad)
+      });
+
+      setTimeout(() => {
+        setDimensions(window);
+        containerOpacity.value = withSpring(1, {
+          damping: 20,
+          stiffness: 150
+        });
+        setIsTransitioning(false);
+      }, 150);
+    });
+
+    return () => subscription?.remove();
+  }, []);
 
   // Auto-hide controls after 3 seconds
   useEffect(() => {
@@ -113,13 +152,37 @@ const MinimalVideoPlayer = () => {
   };
 
   const handleFullscreen = async () => {
-    if (!isFullscreen) {
-      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
-    } else {
-      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
+    setIsTransitioning(true);
+
+    // Smooth pre-transition animation
+    containerOpacity.value = withTiming(0.9, {
+      duration: 100,
+      easing: Easing.out(Easing.quad)
+    });
+
+    try {
+      if (!isFullscreen) {
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+      } else {
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
+      }
+
+      // Smooth post-transition animation
+      setTimeout(() => {
+        containerOpacity.value = withSpring(1, {
+          damping: 20,
+          stiffness: 150
+        });
+        setIsTransitioning(false);
+      }, 200);
+
+      setIsFullscreen(f => !f);
+      setControlsVisible(true);
+    } catch (error) {
+      console.log('Orientation change error:', error);
+      containerOpacity.value = withSpring(1);
+      setIsTransitioning(false);
     }
-    setIsFullscreen(f => !f);
-    setControlsVisible(true);
   };
 
   const handleLock = () => {
@@ -132,12 +195,18 @@ const MinimalVideoPlayer = () => {
   };
 
   const handleBack = () => {
-    // Show mini player with current video and hide fullscreen player
+    // Enhanced smooth transition to mini player
     if (showMiniPlayer && currentVideo) {
+      // First show mini player with current state
       showMiniPlayer(currentVideo, status.positionMillis, isPlaying);
+
+      // Add a small delay to ensure mini player is ready before navigation
+      setTimeout(() => {
+        router.back();
+      }, 100);
+    } else {
+      router.back();
     }
-    // Use expo-router to navigate back
-    router.back();
   };
 
   // Previous/Next logic
@@ -181,10 +250,20 @@ const MinimalVideoPlayer = () => {
     alert(`Filename: ${currentVideo.filename || ''}\nDuration: ${formatTime(status.durationMillis)}\nResolution: ${status.naturalSize?.width || ''}x${status.naturalSize?.height || ''}`);
   };
 
+  // Animated style for smooth orientation transitions
+  const animatedContainerStyle = useAnimatedStyle(() => {
+    return {
+      opacity: containerOpacity.value,
+      transform: [
+        { scale: containerScale.value }
+      ],
+    };
+  });
+
   return (
     <SafeAreaView style={styles.container}>
       <TouchableWithoutFeedback onPress={handleScreenPress}>
-        <View style={styles.videoContainer}>
+        <Animated.View style={[styles.videoContainer, animatedContainerStyle]}>
           <Video
             ref={videoRef}
             source={{ uri: currentVideo.uri }}
@@ -202,10 +281,25 @@ const MinimalVideoPlayer = () => {
               }
             }}
             isLooping={loop}
+            // Enhanced video rendering for smooth transitions
+            useNativeControls={false}
+            progressUpdateIntervalMillis={100}
+            positionMillis={status.positionMillis}
           />
           {/* Controls Overlay */}
           {(controlsVisible || isLocked) && (
-            <View style={styles.controlsOverlay} pointerEvents="box-none">
+            <Animated.View
+              style={[
+                styles.controlsOverlay,
+                {
+                  opacity: withTiming(isTransitioning ? 0.8 : 1, {
+                    duration: 150,
+                    easing: Easing.out(Easing.quad)
+                  })
+                }
+              ]}
+              pointerEvents="box-none"
+            >
               {/* Top overlay row: Back, Title, More */}
               {controlsVisible && !isLocked && (
                 <View style={styles.topOverlay}>
@@ -268,7 +362,7 @@ const MinimalVideoPlayer = () => {
                   )}
                 </View>
               </View>
-            </View>
+            </Animated.View>
           )}
           {/* More Options BottomSheet */}
           <BottomSheet
@@ -298,7 +392,7 @@ const MinimalVideoPlayer = () => {
               },
             ]}
           />
-        </View>
+        </Animated.View>
       </TouchableWithoutFeedback>
     </SafeAreaView>
   );
