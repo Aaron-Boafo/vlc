@@ -60,8 +60,6 @@ const BottomSheet = ({ visible, title, options = [], onClose, selectedOption }) 
                   styles.option,
                   isSelected && { 
                     backgroundColor: themeColors.primary + '15',
-                    borderLeftWidth: 3,
-                    borderLeftColor: themeColors.primary,
                   },
                 ]}
                 onPress={() => {
@@ -84,13 +82,11 @@ const BottomSheet = ({ visible, title, options = [], onClose, selectedOption }) 
                     {opt.label}
                   </Text>
                 </View>
-                {isSelected && (
-                  <MaterialCommunityIcons 
-                    name="check" 
-                    size={22} 
-                    color={themeColors.primary} 
-                  />
-                )}
+                <View style={[styles.radioOuter, { borderColor: isSelected ? themeColors.primary : themeColors.textSecondary + '80' }]}>
+                  {isSelected && (
+                    <View style={[styles.radioInner, { backgroundColor: themeColors.primary }]} />
+                  )}
+                </View>
               </TouchableOpacity>
             );
           })}
@@ -162,6 +158,20 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     flex: 1,
+  },
+  radioOuter: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  radioInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
   },
 });
 

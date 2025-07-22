@@ -5,6 +5,8 @@ import useHistoryStore from './historyStore';
 import usePlaybackStore from "./playbackStore";
 import AudioOptimizer from '../utils/audioOptimizations';
 import * as FileSystem from 'expo-file-system';
+import { setupMusicControls, updateNotification } from '../services/musicControlService';
+import * as Notifications from 'expo-notifications';
 
 const useAudioControl = create(
   subscribeWithSelector((set, get) => ({
@@ -39,6 +41,20 @@ const useAudioControl = create(
         shouldDuckAndroid: true,
         playThroughEarpieceAndroid: false,
       });
+      
+      // Setup music controls
+      const cleanup = setupMusicControls({
+        play: () => get().play(),
+        pause: () => get().pause(),
+        next: () => get().next(),
+        previous: () => get().previous(),
+        seek: (position) => get().seek(position)
+      });
+      
+      // Store cleanup function
+      set({ _cleanupMusicControls: cleanup });
+      
+      return cleanup;
     } catch (error) {
       console.error("Error initializing audio:", error);
     }
@@ -216,15 +232,20 @@ const useAudioControl = create(
         rate: playbackRate,
       });
       
-      // Set up status callback
-      newSound.setOnPlaybackStatusUpdate((status) => onPlaybackStatusUpdate(status, set, get));
+      // Set up status callback using the getStatusUpdateHandler method
+      const statusUpdateHandler = get().getStatusUpdateHandler();
+      newSound.setOnPlaybackStatusUpdate(statusUpdateHandler);
 
+      // Update state with the new track and sound
       set({
-          sound: newSound,
-          isPlaying: true,
-          isLoading: false,
-          currentTrack: track,
+        sound: newSound,
+        isPlaying: true,
+        isLoading: false,
+        currentTrack: track,
       });
+      
+      // Update notification for the new track
+      updateNotification(track, true);
 
       // 🚀 Start preloading next tracks in background
       setTimeout(() => {
@@ -246,6 +267,10 @@ const useAudioControl = create(
     if (sound) {
       set({ isPlaying: true });
       await sound.playAsync();
+      // Update notification state to playing
+      if (currentTrack) {
+        updateNotification(currentTrack, true);
+      }
     } else if (currentTrack) {
       get()._loadAndPlayTrack(currentTrack);
     }
@@ -253,7 +278,7 @@ const useAudioControl = create(
 
   // Pause current track
   pause: async () => {
-    const {sound, isLoading} = get();
+    const {sound, isLoading, currentTrack} = get();
     if (isLoading) return;
     if (sound) {
       const status = await sound.getStatusAsync();
@@ -261,7 +286,11 @@ const useAudioControl = create(
         try {
           set({isLoading: true, isPlaying: false }); // Immediately update UI to show paused state
           await sound.pauseAsync();
-          set({ isLoading: false});
+          set({ isLoading: false });
+          // Update notification state to paused
+          if (currentTrack) {
+            updateNotification(currentTrack, false);
+          }
         } catch (error) {
           set({isLoading: false, isPlaying: true }); // Revert playing state on error
         }
@@ -273,26 +302,13 @@ const useAudioControl = create(
   // Stop current track
   stop: async () => {
     const {sound} = get();
-    if (sound) {
-      try {
-        await sound.stopAsync();
-        await sound.unloadAsync();
-      } catch (error) {
-        console.error("Error stopping audio:", error);
-      }
-    }
-    // Also clear the track info to reset the UI
     set({
       sound: null,
+      currentTrack: null,
       isPlaying: false,
       position: 0,
       duration: 0,
-      currentTrack: null,
-      playQueue: [],
-      currentIndex: 0,
-      lyrics: null, // Clear lyrics on stop
     });
-     // Also clear any active sleep timer
     get().clearSleepTimer();
   },
 
@@ -485,7 +501,9 @@ const useAudioControl = create(
 
   // Cleanup
   cleanup: async () => {
-    const {sound} = get();
+    const { sound, _cleanupMusicControls } = get();
+    
+    // Clean up the sound
     if (sound) {
       try {
         await sound.unloadAsync();
@@ -493,6 +511,23 @@ const useAudioControl = create(
         console.error("Error cleaning up audio:", error);
       }
     }
+    
+    // Clean up music controls
+    if (_cleanupMusicControls) {
+      _cleanupMusicControls();
+    }
+    
+    // Clear notification
+    MusicControl.stopControl();
+    
+    // Reset state
+    set({
+      sound: null,
+      currentTrack: null,
+      isPlaying: false,
+      position: 0,
+      duration: 0,
+    });
   },
 
   setPlaybackSpeed: async (rate) => {
@@ -552,31 +587,84 @@ const useAudioControl = create(
       return track;
     }
   },
-}))
-);
-
-const onPlaybackStatusUpdate = (status, set, get) => {
-  if (!status.isLoaded) {
-    if (status.error) {
-      console.error(`Playback Error: ${status.error}`);
+  // Playback status update handler
+  _onPlaybackStatusUpdate: function(status) {
+    const { currentTrack } = useAudioControl.getState();
+    
+    if (!status.isLoaded) {
+      if (status.error) {
+        console.error(`Playback Error: ${status.error}`);
+      }
+      return;
     }
-    return;
-  }
 
-  set({
-    position: status.positionMillis || 0,
-    duration: status.durationMillis || 0,
-    isPlaying: status.isPlaying,
-  });
+    // Update state using Zustand's set function
+    useAudioControl.setState({
+      position: status.positionMillis || 0,
+      duration: status.durationMillis || 0,
+      isPlaying: status.isPlaying,
+    });
 
-  if (status.didJustFinish) {
-    const { autoplay } = usePlaybackStore.getState();
-    if (autoplay) {
-      get().next();
-    } else {
-      set({ isPlaying: false });
+    // Update notification with current position
+    if (currentTrack) {
+      updateNotification(
+        { 
+          ...currentTrack, 
+          position: status.positionMillis,
+          duration: status.durationMillis
+        },
+        status.isPlaying
+      );
+    }
+
+    // Handle end of track
+    if (status.didJustFinish) {
+      const { autoplay } = usePlaybackStore.getState();
+      if (autoplay) {
+        useAudioControl.getState().next();
+      } else {
+        useAudioControl.setState({ isPlaying: false });
+        // Clear notification when playback stops
+        // Note: MusicControl is no longer used, but keeping this for reference
+        // You might want to clear notifications using expo-notifications if needed
+      }
+    }
+  },
+
+  // Add a method to get the status update handler
+  getStatusUpdateHandler: function() {
+    return (status) => {
+      const state = useAudioControl.getState();
+      if (state._onPlaybackStatusUpdate) {
+        state._onPlaybackStatusUpdate(status);
+      }
+      
+      // Update notification when track changes or playback state changes
+      if (status.isLoaded && (status.didJustFinish || status.isPlaying !== state.isPlaying)) {
+        updateNotification(state.currentTrack, status.isPlaying);
+      }
+    };
+  },
+  
+  // Initialize the audio and notifications
+  initializeAudio: async function() {
+    try {
+      // Request notification permissions
+      await Notifications.requestPermissionsAsync();
+      
+      // Set up audio mode
+      await Audio.setAudioModeAsync({
+        staysActiveInBackground: true,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+      });
+      
+      console.log('Audio initialized successfully');
+    } catch (error) {
+      console.warn('Error initializing audio:', error);
     }
   }
-};
+})));
 
-export default useAudioControl; 
+export default useAudioControl;

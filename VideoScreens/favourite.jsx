@@ -113,33 +113,21 @@ const VideoFavouriteScreen = ({ showSearch, setShowSearch, searchQuery, setSearc
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <View style={[styles.emptyContainer, { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
-            <View style={[styles.emptyIconContainer, { 
-              backgroundColor: themeColors.primary + '15', 
-              width: 96, 
-              height: 96, 
-              borderRadius: 48, 
-              justifyContent: 'center', 
-              alignItems: 'center' 
-            }]}>
-              <MaterialIcons name="favorite-border" size={48} color={themeColors.primary} />
+          <View style={styles.emptyContainer}>
+            <View style={[styles.iconContainer, { backgroundColor: `${themeColors.primary}20` }]}>
+              <View style={styles.iconGlow(themeColors)}>
+                <MaterialIcons 
+                  name="favorite-border" 
+                  size={64} 
+                  color={themeColors.primary} 
+                  style={styles.emptyIcon}
+                />
+              </View>
             </View>
-            <Text style={[styles.emptyTitle, { 
-              color: themeColors.text, 
-              fontSize: 20, 
-              fontWeight: '600', 
-              marginTop: 16, 
-              textAlign: 'center' 
-            }]}>
+            <Text style={[styles.emptyText, { color: themeColors.text }]}>
               {searchQuery ? 'No matching favorites' : 'No favorite videos yet'}
             </Text>
-            <Text style={[styles.emptySubtitle, { 
-              color: themeColors.textSecondary, 
-              textAlign: 'center', 
-              marginTop: 8, 
-              fontSize: 15, 
-              maxWidth: 280 
-            }]}>
+            <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
               {searchQuery 
                 ? 'Try a different search term' 
                 : 'Mark videos as favorite to see them here'}
@@ -154,6 +142,45 @@ const VideoFavouriteScreen = ({ showSearch, setShowSearch, searchQuery, setSearc
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  iconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    position: 'relative',
+  },
+  emptyIcon: {
+    opacity: 0.9,
+  },
+  iconGlow: (themeColors) => ({
+    shadowColor: themeColors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 15,
+    elevation: 5,
+  }),
+  emptyText: {
+    fontSize: 20,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 15,
+    textAlign: 'center',
+    paddingHorizontal: 32,
+    lineHeight: 20,
+    opacity: 0.9,
+    maxWidth: 280,
   },
   listContainer: {
     padding: 16,

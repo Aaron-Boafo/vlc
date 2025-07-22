@@ -64,23 +64,23 @@ const getThemeColors = (themeType, accentColorName) => {
   return themeType === "light"
     ? {
         ...baseTheme,
-        // Light theme colors with accent color integration
-        background: "#FFFFFF",
-        sectionBackground: "#F8FAFC",
-        card: "#FFFFFF",
-        cardElevated: "#E2E8F0",
-        tabIconColor: accentColor, // Use accent color for tab icons
-        ribbon: accentDark, // Darker accent for ribbons
-        text: "#0F172A",
-        textSecondary: "#334155",
-        border: "#E2E8F0",
-        inputBackground: "#F8FAFC",
-        inputText: "#0F172A",
-        inputPlaceholder: "#64748B",
-        success: "#0D9488",
-        warning: accentColor, // Use accent for warnings
-        error: "#B91C1C",
-        info: accentColor, // Use accent for info
+        // Warmer, darker white theme for better eye comfort
+        background: "#F5F5F5",
+        sectionBackground: "#EEEEEE",
+        card: "#FAFAFA",
+        cardElevated: "#E0E0E0",
+        tabIconColor: accentColor,
+        ribbon: accentDark,
+        text: "#212121",
+        textSecondary: "#424242",
+        border: "#BDBDBD",
+        inputBackground: "#EEEEEE",
+        inputText: "#212121",
+        inputPlaceholder: "#757575",
+        success: "#059669",
+        warning: "#D97706",
+        error: "#DC2626",
+        info: "#2563EB",
         // Typography and spacing
         ...typography,
         ...spacing,

@@ -62,13 +62,9 @@ const AudioTabScreen = () => {
 
   const audioSortOptions = [
     { label: 'Title (A-Z)', key: 'title', direction: 'asc', icon: Icons.ArrowDownAZ },
-    { label: 'Title (Z-A)', key: 'title', direction: 'desc', icon: Icons.ArrowUpAZ },
     { label: 'Artist (A-Z)', key: 'artist', direction: 'asc', icon: Icons.Users },
-    { label: 'Artist (Z-A)', key: 'artist', direction: 'desc', icon: Icons.Users },
-    { label: 'Duration (Shortest)', key: 'duration', direction: 'asc', icon: Icons.Clock },
-    { label: 'Duration (Longest)', key: 'duration', direction: 'desc', icon: Icons.Clock },
-    { label: 'Date Added (Newest)', key: 'modificationTime', direction: 'desc', icon: Icons.CalendarClock },
-    { label: 'Date Added (Oldest)', key: 'modificationTime', direction: 'asc', icon: Icons.CalendarClock },
+    { label: 'Duration (Shortest first)', key: 'duration', direction: 'asc', icon: Icons.Clock },
+    { label: 'Date Added (Newest first)', key: 'modificationTime', direction: 'desc', icon: Icons.CalendarClock },
   ];
 
   // Fast loading with the new optimized system
@@ -247,14 +243,27 @@ const AudioTabScreen = () => {
   
     if (!isLoading && audioFiles.length === 0) {
       return (
-        <View style={styles.centered}>
-          <Music size={64} color={themeColors.textSecondary} />
-          <Text style={[styles.emptyText, { color: themeColors.text }]}>No music found</Text>
-          <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
-            Make sure you have granted storage permissions and have music on your device.
+        <View style={styles.emptyContainer}>
+          <View style={[styles.iconContainer, { backgroundColor: `${themeColors.primary}20` }]}>
+            <View style={[styles.iconGlow(themeColors)]}>
+              <Music 
+                size={64} 
+                color={themeColors.primary} 
+                style={styles.emptyIcon}
+              />
+            </View>
+          </View>
+          <Text style={[styles.emptyText, { color: themeColors.text }]}>
+            {searchQuery ? 'No songs found' : 'No music in your library'}
           </Text>
-          <TouchableOpacity onPress={loadAudioFiles} style={[styles.retryButton, { backgroundColor: themeColors.primary }]}>
-            <Text style={styles.retryButtonText}>Retry Scan</Text>
+          <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
+            {searchQuery ? 'Try adjusting your search' : 'Add some music to get started'}
+          </Text>
+          <TouchableOpacity 
+            onPress={loadAudioFiles} 
+            style={[styles.retryButton, { backgroundColor: themeColors.primary }]}
+          >
+            <Text style={styles.retryButtonText}>Refresh Library</Text>
           </TouchableOpacity>
         </View>
       );
@@ -304,11 +313,31 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingBottom: Platform.OS === 'ios' ? 0 : 20,
   },
-  centered: {
+  emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
+  iconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    position: 'relative',
+  },
+  emptyIcon: {
+    opacity: 0.9,
+  },
+  iconGlow: (themeColors) => ({
+    shadowColor: themeColors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 15,
+    elevation: 5,
+  }),
   trackItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -347,23 +376,35 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginTop: 16,
+    textAlign: 'center',
   },
   emptySubtext: {
     fontSize: 14,
     marginTop: 8,
     textAlign: 'center',
     paddingHorizontal: 32,
+    lineHeight: 20,
+    opacity: 0.9,
   },
   retryButton: {
-    marginTop: 24,
+    marginTop: 32,
     paddingVertical: 12,
     paddingHorizontal: 32,
-    borderRadius: 25,
+    borderRadius: 24,
+    minWidth: 180,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
   },
   retryButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+    letterSpacing: 0.5,
   }
 });
 

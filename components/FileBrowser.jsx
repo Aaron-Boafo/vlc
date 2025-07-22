@@ -17,7 +17,7 @@ import useThemeStore from '../store/theme';
 
 const { width } = Dimensions.get('window');
 
-const FileBrowser = ({ onFileSelect, onBack, hideHeader }) => {
+const FileBrowser = ({ onFileSelect, onBack, hideHeader, filterTypes }) => {
   const { themeColors } = useThemeStore();
   const [currentPath, setCurrentPath] = useState(FileSystem.documentDirectory);
   const [files, setFiles] = useState([]);
@@ -37,21 +37,67 @@ const FileBrowser = ({ onFileSelect, onBack, hideHeader }) => {
   const loadDirectoryContents = async () => {
     setIsLoading(true);
     try {
+      console.log('Loading directory:', currentPath);
       const contents = await FileSystem.readDirectoryAsync(currentPath);
+      console.log('Found items:', contents);
+      
       const filePromises = contents.map(async (item) => {
+        // Skip system folders but be less aggressive
+        if (item.startsWith('.') && item !== '.') {
+          console.log('Skipping hidden item:', item);
+          return null;
+        }
+        
         const fullPath = `${currentPath}${item}`;
         const info = await FileSystem.getInfoAsync(fullPath);
+        
+        // Skip if we can't read the file info
+        if (!info.exists) {
+          console.log('Skipping non-existent item:', item);
+          return null;
+        }
+        
+        const fileType = getFileType(item);
+        console.log('File info:', { name: item, type: fileType, isDir: info.isDirectory });
+        
+        // If it's a directory, always include it
+        if (info.isDirectory) {
+          return {
+            name: item,
+            path: fullPath,
+            isDirectory: true,
+            size: info.size,
+            modificationTime: info.modificationTime,
+            type: 'directory',
+          };
+        }
+        
+        // For files, check if they match our media types
+        const isMediaFile = ['audio', 'video'].includes(fileType);
+        if (!isMediaFile) {
+          console.log('Skipping non-media file:', item);
+          return null;
+        }
+        
         return {
           name: item,
           path: fullPath,
-          isDirectory: info.isDirectory,
+          isDirectory: false,
           size: info.size,
           modificationTime: info.modificationTime,
-          type: getFileType(item),
+          type: fileType,
         };
       });
       
-      let fileList = await Promise.all(filePromises);
+      // Filter out null entries and sort directories first
+      let fileList = (await Promise.all(filePromises))
+        .filter(Boolean)
+        .sort((a, b) => {
+          // Sort directories first, then by name
+          if (a.isDirectory && !b.isDirectory) return -1;
+          if (!a.isDirectory && b.isDirectory) return 1;
+          return a.name.localeCompare(b.name);
+        });
       
       // Apply sorting
       fileList.sort((a, b) => {
@@ -73,6 +119,13 @@ const FileBrowser = ({ onFileSelect, onBack, hideHeader }) => {
         return sortOrder === 'asc' ? comparison : -comparison;
       });
       
+      // Apply file type filtering if filterTypes is provided
+      if (filterTypes && filterTypes.length > 0) {
+        fileList = fileList.filter(file => 
+          file.isDirectory || filterTypes.includes(file.type)
+        );
+      }
+      
       setFiles(fileList);
     } catch (error) {
       console.error('Error loading directory contents:', error);
@@ -86,15 +139,23 @@ const FileBrowser = ({ onFileSelect, onBack, hideHeader }) => {
     const ext = filename.split('.').pop()?.toLowerCase();
     if (!ext) return 'unknown';
     
-    const videoExts = ['mp4', 'avi', 'mov', 'mkv', 'wmv', 'flv', 'webm'];
-    const audioExts = ['mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a'];
-    const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'];
-    const docExts = ['pdf', 'doc', 'docx', 'txt', 'rtf', 'odt'];
+    // Add more file extensions to support
+    const videoExts = ['mp4', 'avi', 'mov', 'mkv', 'wmv', 'flv', 'webm', '3gp', 'm4v', 'ts'];
+    const audioExts = ['mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a', 'wma', 'opus', 'aiff', 'alac'];
+    const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'heic', 'heif', 'tiff'];
+    const docExts = ['pdf', 'doc', 'docx', 'txt', 'rtf', 'odt', 'xls', 'xlsx', 'ppt', 'pptx'];
     
     if (videoExts.includes(ext)) return 'video';
     if (audioExts.includes(ext)) return 'audio';
     if (imageExts.includes(ext)) return 'image';
     if (docExts.includes(ext)) return 'document';
+    
+    // If we don't recognize the extension but it's a media folder, return 'directory'
+    const mediaFolders = ['music', 'songs', 'videos', 'movies', 'pictures', 'dcim', 'downloads'];
+    if (mediaFolders.some(folder => filename.toLowerCase().includes(folder))) {
+      return 'directory';
+    }
+    
     return 'unknown';
   };
 

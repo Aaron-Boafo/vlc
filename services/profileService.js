@@ -113,17 +113,20 @@ const ProfileService = {
         throw new Error('Either name or profileImage must be provided.');
       }
 
-      const response = await axios.post(
-        `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.UPDATE_PROFILE}`,
-        formData,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            // Let axios set the Content-Type with boundary
-            'Content-Type': 'multipart/form-data',
-          },
+      const response = await axios({
+        method: 'post',
+        url: `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.UPDATE_PROFILE}`,
+        data: formData,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          ...(API_CONFIG.HEADERS || {})
+        },
+        // This prevents axios from setting Content-Type
+        transformRequest: (data, headers) => {
+          delete headers.common['Content-Type'];
+          return data;
         }
-      );
+      });
 
       return response.data;
     } catch (error) {

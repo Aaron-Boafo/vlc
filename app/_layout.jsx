@@ -4,10 +4,12 @@ import { StatusBar } from 'expo-status-bar';
 import "../global.css";
 import { View } from 'react-native';
 import { useFonts } from 'expo-font';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Audio } from 'expo-av';
+import * as Notifications from 'expo-notifications';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import usePlaybackStore from '../store/playbackStore';
+import useAudioControl from '../store/useAudioControl';
 import AppThemeProvider from '../components/ThemeProvider';
 
 SplashScreen.preventAutoHideAsync();
@@ -21,16 +23,39 @@ function RootLayoutContent() {
   });
   const { backgroundPlay } = usePlaybackStore();
 
-  // Set up audio mode
+  const { initializeAudio } = useAudioControl();
+
+  // Set up audio mode and notifications
   useEffect(() => {
-    Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: backgroundPlay,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
-    });
-  }, [backgroundPlay]);
+    const setupAudio = async () => {
+      try {
+        // Configure notifications
+        await Notifications.setNotificationHandler({
+          handleNotification: async () => ({
+            shouldShowAlert: true,
+            shouldPlaySound: false,
+            shouldSetBadge: false,
+          }),
+        });
+
+        // Initialize audio
+        await initializeAudio();
+        
+        // Set audio mode
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: backgroundPlay,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+        });
+      } catch (error) {
+        console.warn('Error setting up audio:', error);
+      }
+    };
+
+    setupAudio();
+  }, [backgroundPlay, initializeAudio]);
 
   // Hide splash screen when fonts are loaded
   useEffect(() => {

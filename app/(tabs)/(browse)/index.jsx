@@ -12,19 +12,23 @@ import {
   SafeAreaView,
   Modal as RNModal,
 } from 'react-native';
+import * as MediaLibrary from 'expo-media-library';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Icons from 'lucide-react-native';
 import useThemeStore from '../../../store/theme';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import * as FileSystem from 'expo-file-system';
-import * as MediaLibrary from 'expo-media-library';
+import * as SecureStore from 'expo-secure-store';
 import AudioHeader from '../../../AudioComponents/title';
 import { SafeAreaView as SafeAreaViewRN } from 'react-native-safe-area-context';
 import FileBrowser from '../../../components/FileBrowser';
 import * as DocumentPicker from 'expo-document-picker';
 import StreamModal from '../../../components/StreamModal';
+import api from '../../../services/api';
+import axios from 'axios';
 
 const BrowseTab = ({ styles, themeColors }) => {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [recentFiles, setRecentFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -35,11 +39,203 @@ const BrowseTab = ({ styles, themeColors }) => {
   const [storageRoot, setStorageRoot] = useState(null);
   const [storageTitle, setStorageTitle] = useState('');
   const [showStreamModal, setShowStreamModal] = useState(false);
+  
+  // Function to manually refresh storage access
+  const handleRefreshStorage = async () => {
+    try {
+      console.log('Manually refreshing storage access...');
+      // Clear current storage state
+      setStorages([{ id: 'internal', name: 'App Storage', icon: 'folder', root: FileSystem.documentDirectory }]);
+      setStorageRoot(null);
+      setStorageTitle('');
+      
+      // Re-initialize storage
+      const availableStorages = await getStoragePaths();
+      console.log('Refreshed storage paths:', availableStorages);
+      
+      if (availableStorages.length > 0) {
+        setStorages(availableStorages);
+        const defaultStorage = availableStorages[0];
+        setStorageRoot(defaultStorage.root);
+        setStorageTitle(defaultStorage.name);
+        Alert.alert('Success', 'Storage access refreshed successfully!');
+      } else {
+        Alert.alert('No Storage Found', 'Could not find any accessible storage locations.');
+      }
+    } catch (error) {
+      console.error('Error refreshing storage:', error);
+      Alert.alert('Error', 'Failed to refresh storage access. Please check console for details.');
+    }
+  };
+
+  // Function to get accessible storage paths on Android
+  const getStoragePaths = async () => {
+    const paths = [];
+    
+    // Always include the app's document directory
+    paths.push({
+      id: 'internal',
+      name: 'App Storage',
+      icon: 'folder',
+      root: FileSystem.documentDirectory
+    });
+
+    try {
+      // Try to access common media directories
+      const mediaDirs = [
+        { id: 'downloads', name: 'Downloads', icon: 'folder-download', path: 'Download' },
+        { id: 'music', name: 'Music', icon: 'folder-music', path: 'Music' },
+        { id: 'dcim', name: 'Pictures', icon: 'folder-image', path: 'DCIM' },
+        { id: 'movies', name: 'Movies', icon: 'folder-video', path: 'Movies' },
+      ];
+
+      // Check each media directory
+      for (const dir of mediaDirs) {
+        try {
+          const fullPath = `${FileSystem.documentDirectory}../${dir.path}/`;
+          const info = await FileSystem.getInfoAsync(fullPath);
+          if (info.exists && info.isDirectory) {
+            paths.push({
+              id: dir.id,
+              name: dir.name,
+              icon: dir.icon,
+              root: fullPath
+            });
+          }
+        } catch (error) {
+          console.log(`Could not access ${dir.name}:`, error.message);
+        }
+      }
+
+      // Try to access external storage
+      const externalDirs = [
+        { id: 'storage_emulated', name: 'Internal Storage', icon: 'sd', path: '/storage/emulated/0' },
+        { id: 'storage_self', name: 'Primary Storage', icon: 'sd', path: '/storage/self/primary' },
+      ];
+
+      for (const dir of externalDirs) {
+        try {
+          const info = await FileSystem.getInfoAsync(dir.path);
+          if (info.exists && info.isDirectory) {
+            paths.push({
+              id: dir.id,
+              name: dir.name,
+              icon: dir.icon,
+              root: dir.path + '/'
+            });
+          }
+        } catch (error) {
+          console.log(`Could not access ${dir.path}:`, error.message);
+        }
+      }
+    } catch (error) {
+      console.error('Error getting storage paths:', error);
+    }
+
+    console.log('Available storage paths:', paths);
+    return paths;
+  };
+
   const [storages, setStorages] = useState([
     { id: 'internal', name: 'Internal Storage', icon: 'folder', root: FileSystem.documentDirectory }
   ]);
   const [storageInfo, setStorageInfo] = useState({ used: 0, total: 1, percent: 0 });
   const [organizeModalVisible, setOrganizeModalVisible] = useState(false);
+  const [hasPermission, setHasPermission] = useState(false);
+
+  // Check and log storage access
+  const checkStorageAccess = async () => {
+    try {
+      console.log('Checking storage access...');
+      
+      // List all available storage directories
+      const documentDir = FileSystem.documentDirectory;
+      const cacheDir = FileSystem.cacheDirectory;
+      const bundleDir = FileSystem.bundleDirectory;
+      
+      console.log('Document directory:', documentDir);
+      console.log('Cache directory:', cacheDir);
+      console.log('Bundle directory:', bundleDir);
+      
+      // Try to list files in the root directory
+      try {
+        const rootContents = await FileSystem.readDirectoryAsync('/');
+        console.log('Root directory contents:', rootContents);
+      } catch (error) {
+        console.log('Cannot access root directory:', error.message);
+      }
+      
+      // Try to list files in the storage directory
+      try {
+        const storageContents = await FileSystem.readDirectoryAsync('/storage/');
+        console.log('Storage directory contents:', storageContents);
+      } catch (error) {
+        console.log('Cannot access storage directory:', error.message);
+      }
+      
+      // Try to list files in the external storage directory
+      try {
+        const externalContents = await FileSystem.readDirectoryAsync('/storage/emulated/0/');
+        console.log('External storage contents:', externalContents);
+      } catch (error) {
+        console.log('Cannot access external storage:', error.message);
+      }
+      
+    } catch (error) {
+      console.error('Error checking storage access:', error);
+    }
+  };
+
+  // Request storage permission and initialize storage paths on mount
+  useEffect(() => {
+    const initializeStorage = async () => {
+      try {
+        console.log('Initializing storage...');
+        
+        // First, request media library permissions
+        try {
+          console.log('Requesting media library permission...');
+          const { status, canAskAgain, granted } = await MediaLibrary.requestPermissionsAsync();
+          console.log('Media library permission status:', { status, canAskAgain, granted });
+          setHasPermission(status === 'granted');
+        } catch (error) {
+          console.warn('Error requesting media library permission:', error);
+        }
+        
+        // Check storage access and log available paths
+        await checkStorageAccess();
+        
+        // Initialize available storage paths
+        try {
+          console.log('Getting storage paths...');
+          const availableStorages = await getStoragePaths();
+          
+          // Always update the storages with whatever we found
+          if (availableStorages.length > 0) {
+            console.log('Updating available storages:', availableStorages);
+            setStorages(availableStorages);
+            
+            // Set the first available storage as the default if not already set
+            if (!storageRoot) {
+              const defaultStorage = availableStorages[0];
+              console.log('Setting default storage:', defaultStorage);
+              setStorageRoot(defaultStorage.root);
+              setStorageTitle(defaultStorage.name);
+            }
+          } else {
+            console.warn('No accessible storage paths found');
+          }
+        } catch (error) {
+          console.error('Error initializing storage paths:', error);
+        }
+        
+      } catch (error) {
+        console.error('Error initializing storage:', error);
+      }
+    };
+    
+    initializeStorage();
+  }, []); // Empty dependency array means this runs once on mount
 
   const categories = [
     { id: 'all', name: 'All Files', icon: 'folder-multiple', color: '#4CAF50' },
@@ -53,8 +249,493 @@ const BrowseTab = ({ styles, themeColors }) => {
     { id: 'scan', name: 'Scan Files', icon: 'folder-search', action: () => scanFiles() },
     { id: 'import', name: 'Import Media', icon: 'import', action: () => importMedia() },
     { id: 'organize', name: 'Organize', icon: 'folder-multiple-outline', action: () => setOrganizeModalVisible(true) },
-    { id: 'cloud', name: 'Cloud Services', icon: 'cloud-outline', action: () => cloudServices() },
+    { 
+      id: 'cloud', 
+      name: 'Cloud Storage', 
+      icon: 'cloud-upload', 
+      action: async () => {
+        try {
+          // Check if user is authenticated
+          const token = await SecureStore.getItemAsync('auth_token');
+          if (!token) {
+            Alert.alert(
+              'Authentication Required',
+              'Please log in to access cloud storage',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Go to Login', onPress: () => router.push('/(auth)/login') }
+              ]
+            );
+            return;
+          }
+          
+          // Show cloud storage options
+          Alert.alert(
+            'Cloud Storage',
+            'Choose an action',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Upload to Cloud', onPress: () => uploadToCloud() },
+              { text: 'View Cloud Files', onPress: () => viewCloudFiles() }
+            ]
+          );
+        } catch (error) {
+          console.error('Cloud storage error:', error);
+          Alert.alert('Error', 'Failed to access cloud storage');
+        }
+      } 
+    },
   ];
+
+  // Function to handle file upload to cloud using media library
+  const uploadToCloud = async () => {
+    try {
+      // Request media library permissions
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Please grant media library access to upload files');
+        return;
+      }
+
+      // Show loading indicator
+      Alert.alert(
+        'Loading Media',
+        'Preparing your media files...',
+        [],
+        { cancelable: false }
+      );
+
+      try {
+        // Get media files (videos and audio)
+        const media = await MediaLibrary.getAssetsAsync({
+          mediaType: ['video', 'audio'],
+          sortBy: ['creationTime'],
+          first: 50, // Get first 50 files
+        });
+
+        // Map media items
+        const mediaItems = media.assets.map(asset => ({
+          id: asset.id,
+          name: asset.filename,
+          uri: asset.uri,
+          type: asset.mediaType === 'video' ? 'video/mp4' : 'audio/mpeg',
+          size: asset.fileSize,
+          duration: asset.duration,
+        }));
+
+        // Dismiss the loading alert by showing a new one with empty content
+        Alert.alert(
+          '',
+          '',
+          [],
+          { cancelable: false }
+        );
+
+        // Show media selection dialog
+        Alert.alert(
+          'Select Media to Upload',
+          'Choose a video or audio file to upload',
+          mediaItems.map(item => ({
+            text: `${item.name} (${(item.size / (1024 * 1024)).toFixed(2)} MB)`,
+            onPress: () => handleMediaSelect(item)
+          })).concat([
+            { 
+              text: 'Cancel',
+              style: 'cancel'
+            }
+          ])
+        );
+      } catch (error) {
+        console.error('Error loading media:', error);
+        Alert.alert(
+          'Error',
+          'Failed to load media files. Please try again.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Error accessing media library:', error);
+      Alert.alert('Error', 'Failed to access media library');
+    }
+  };
+
+// ...
+  // Handle media file selection and upload
+  const handleMediaSelect = async (mediaItem) => {
+    try {
+      const fileSizeMB = mediaItem.size / (1024 * 1024);
+      
+      if (fileSizeMB > 100) {
+        Alert.alert('Error', 'File size exceeds 100MB limit');
+        return;
+      }
+
+      // Show upload confirmation
+      Alert.alert(
+        'Upload to Cloud',
+        `Upload ${mediaItem.name} (${fileSizeMB.toFixed(2)} MB) to cloud storage?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Upload',
+            onPress: async () => {
+              // Show uploading indicator
+              Alert.alert(
+                'Uploading...',
+                `Please wait while we upload ${mediaItem.name}`,
+                [],
+                { cancelable: false }
+              );
+
+              try {
+                // Upload the selected media file
+                const token = await SecureStore.getItemAsync('auth_token');
+                if (!token) {
+                  throw new Error('Authentication required');
+                }
+
+                const formData = new FormData();
+                formData.append('file', {
+                  uri: mediaItem.uri,
+                  name: mediaItem.name,
+                  type: mediaItem.type,
+                });
+
+                // Show initial upload alert
+                let uploadAlert = {
+                  title: 'Uploading...',
+                  message: `Starting upload of ${mediaItem.name}`,
+                };
+                
+                // Show the first alert
+                Alert.alert(uploadAlert.title, uploadAlert.message, [], { cancelable: false });
+                
+                // Function to update the upload alert
+                const updateUploadAlert = (title, message) => {
+                  uploadAlert = { title, message };
+                  Alert.alert(title, message, [], { cancelable: false });
+                };
+
+                try {
+                  // Using XMLHttpRequest for better progress tracking
+                  const xhr = new XMLHttpRequest();
+                  
+                  // Set up progress tracking
+                  xhr.upload.onprogress = (event) => {
+                    if (event.lengthComputable) {
+                      const percentComplete = Math.round((event.loaded / event.total) * 100);
+                      updateUploadAlert(
+                        'Uploading...',
+                        `Uploading ${mediaItem.name}: ${percentComplete}%`
+                      );
+                    }
+                  };
+
+                  // Set up completion handler
+                  xhr.onload = () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                      const result = JSON.parse(xhr.responseText);
+                      updateUploadAlert(
+                        'Upload Complete',
+                        `${mediaItem.name} has been uploaded successfully!`
+                      );
+                      // Refresh the media list or update UI as needed
+                      // refreshMediaList();
+                    } else {
+                      throw new Error(`Upload failed with status ${xhr.status}`);
+                    }
+                  };
+
+                  // Set up error handler
+                  xhr.onerror = () => {
+                    throw new Error('Network error during upload');
+                  };
+
+                  // Open and send the request
+                  xhr.open('POST', 'YOUR_UPLOAD_ENDPOINT');
+                  xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+                  xhr.send(formData);
+                  
+                } catch (error) {
+                  console.error('Upload error:', error);
+                  updateUploadAlert(
+                    'Upload Failed',
+                    `Failed to upload ${mediaItem.name}. Please try again.\n\nError: ${error.message}`
+                  );
+                }
+                
+                formData.append('metadata', JSON.stringify(metadata));
+
+                // Upload using fetch with progress
+                const response = await fetch('https://vlc-spring-boot.onrender.com/storage/add', {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/json',
+                    'Content-Type': 'multipart/form-data',
+                  },
+                  body: formData
+                });
+
+                if (!response.ok) {
+                  throw new Error('Upload failed');
+                }
+
+                const result = await response.json();
+                Alert.alert('Success', 'File uploaded successfully!');
+                
+              } catch (error) {
+                console.error('Upload error:', error);
+                Alert.alert('Upload Failed', error.message || 'Failed to upload file');
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error handling media selection:', error);
+      Alert.alert('Error', 'Failed to process the selected media');
+    }
+  };
+
+  // Handle file selection from the file browser
+  const handleFileSelect = async (file) => {
+    try {
+      if (file.isDirectory) {
+        // If a directory is selected, navigate into it
+        setStorageRoot(file.path);
+        return;
+      }
+
+      const fileInfo = await FileSystem.getInfoAsync(file.path);
+      const fileSizeMB = fileInfo.size / (1024 * 1024);
+      
+      if (fileSizeMB > 100) { // 100MB limit
+        Alert.alert('Error', 'File size exceeds 100MB limit');
+        return;
+      }
+
+      // Show upload confirmation
+      Alert.alert(
+        'Upload to Cloud',
+        `Upload ${file.name} (${fileSizeMB.toFixed(2)} MB) to cloud storage?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Upload',
+            onPress: async () => {
+              try {
+                // Create a more user-friendly upload progress indicator
+                let uploadAlert = Alert.alert(
+                  'Uploading...',
+                  `Preparing to upload ${file.name}\n\n0% complete`,
+                  [],
+                  { cancelable: false }
+                );
+
+                // Update progress
+                const updateProgress = (progress) => {
+                  const percent = Math.round((progress.loaded / progress.total) * 100);
+                  Alert.alert(
+                    'Uploading...',
+                    `Uploading ${file.name}\n\n${percent}% complete`,
+                    [],
+                    { cancelable: false }
+                  );
+                };
+
+                // Determine file type
+                const fileExt = file.name.split('.').pop().toLowerCase();
+                let mimeType = 'application/octet-stream';
+                
+                // Map common file extensions to MIME types
+                const mimeTypes = {
+                  // Images
+                  jpg: 'image/jpeg',
+                  jpeg: 'image/jpeg',
+                  png: 'image/png',
+                  gif: 'image/gif',
+                  
+                  // Audio
+                  mp3: 'audio/mpeg',
+                  wav: 'audio/wav',
+                  ogg: 'audio/ogg',
+                  
+                  // Video
+                  mp4: 'video/mp4',
+                  m4v: 'video/x-m4v',
+                  mpg: 'video/mpeg',
+                  
+                  // Documents
+                  pdf: 'application/pdf',
+                  doc: 'application/msword',
+                  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                  xls: 'application/vnd.ms-excel',
+                  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                  ppt: 'application/vnd.ms-powerpoint',
+                  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                  
+                  // Text
+                  txt: 'text/plain',
+                  json: 'application/json',
+                  
+                  // Archives
+                  zip: 'application/zip',
+                  rar: 'application/x-rar-compressed',
+                };
+                
+                if (mimeTypes[fileExt]) {
+                  mimeType = mimeTypes[fileExt];
+                }
+                
+                // Create form data for the upload
+                const formData = new FormData();
+                
+                // Create a file object that React Native's FormData can handle
+                const fileObject = {
+                  uri: file.path,
+                  name: file.name,
+                  type: mimeType,
+                };
+                
+                // Add the file to form data
+                formData.append('file', fileObject);
+                
+                // Create and add metadata as a string
+                const metadata = {
+                  fileName: file.name,
+                  fileType: mimeType,
+                  description: `Uploaded from mobile app on ${new Date().toISOString()}`
+                };
+                formData.append('metadata', JSON.stringify(metadata));
+                
+                // For debugging
+                console.log('FormData contents:', {
+                  file: fileObject,
+                  metadata: JSON.stringify(metadata)
+                });
+
+                // Get auth token
+                const token = await SecureStore.getItemAsync('auth_token');
+                if (!token) {
+                  throw new Error('Authentication required');
+                }
+
+                try {
+                  // Upload file to cloud using XMLHttpRequest for better progress tracking
+                  const xhr = new XMLHttpRequest();
+                  
+                  // Set up progress tracking
+                  xhr.upload.onprogress = (event) => {
+                    if (event.lengthComputable) {
+                      updateProgress({
+                        loaded: event.loaded,
+                        total: event.total
+                      });
+                    }
+                  };
+                  
+                  // Create a promise to handle the upload
+                  const uploadPromise = new Promise((resolve, reject) => {
+                    xhr.onload = () => {
+                      if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                          resolve(JSON.parse(xhr.responseText));
+                        } catch (e) {
+                          resolve(xhr.responseText);
+                        }
+                      } else {
+                        reject(new Error(xhr.statusText || 'Upload failed'));
+                      }
+                    };
+                    xhr.onerror = () => {
+                      reject(new Error('Network Error'));
+                    };
+                  });
+                  
+                  // Open and send the request
+                  xhr.open('POST', 'https://vlc-spring-boot.onrender.com/storage/add');
+                  xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+                  xhr.setRequestHeader('Accept', 'application/json');
+                  xhr.send(formData);
+                  
+                  // Wait for the upload to complete
+                  const responseData = await uploadPromise;
+                  
+                  // Show success message
+                  Alert.alert(
+                    'Success',
+                    `${file.name} uploaded successfully!`,
+                    [
+                      { 
+                        text: 'OK',
+                        onPress: () => setShowStorageSheet(false)
+                      }
+                    ]
+                  );
+                  
+                  return { data: responseData };
+                } catch (error) {
+                  console.error('Upload error:', error);
+                  throw error; // Re-throw to be caught by the outer catch block
+                }
+              } catch (error) {
+                console.error('Upload error:', error);
+                let errorMessage = 'Failed to upload file';
+                
+                if (error.message === 'Network Error') {
+                  errorMessage = 'Unable to connect to the server. Please check your internet connection.';
+                } else if (error.response) {
+                  // Server responded with an error status code
+                  if (error.response.status === 401) {
+                    errorMessage = 'Session expired. Please log in again.';
+                    // Optionally redirect to login
+                    router.push('/(auth)/login');
+                  } else if (error.response.data && error.response.data.message) {
+                    errorMessage = error.response.data.message;
+                  }
+                }
+                
+                Alert.alert('Upload Failed', errorMessage);
+              }
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('File selection error:', error);
+      Alert.alert(
+        'Error', 
+        error.message || 'Failed to process the selected file. Please try again.'
+      );
+    }
+  };
+
+  // Function to view cloud files
+  const viewCloudFiles = async () => {
+    try {
+      const response = await api.storage.getAll();
+      if (response.data.status && response.data.data) {
+        // Navigate to cloud files screen or show in a modal
+        Alert.alert(
+          'Cloud Files',
+          `Found ${response.data.data.length} files in your cloud storage`,
+          [
+            { text: 'OK', onPress: () => {
+              // Here you would typically navigate to a cloud files screen
+              // router.push('/(cloud)/files');
+            }}
+          ]
+        );
+      } else {
+        Alert.alert('Cloud Storage', 'No files found in your cloud storage');
+      }
+    } catch (error) {
+      console.error('Error fetching cloud files:', error);
+      Alert.alert('Error', 'Failed to load cloud files');
+    }
+  };
 
   useEffect(() => {
     loadRecentFiles();
@@ -377,16 +1058,26 @@ const BrowseTab = ({ styles, themeColors }) => {
     }
   };
 
+
+
   return (
     <SafeAreaViewRN
       style={{ flex: 1, backgroundColor: themeColors.background }}
       edges={['top']}
     >
-      <AudioHeader
-        onSearch={() => setShowSearch(s => !s)}
-        onMore={() => setShowMore(true)}
-        showIcons={false}
-      />
+      <View style={styles.headerContainer}>
+        <AudioHeader
+          onSearch={() => setShowSearch(s => !s)}
+          onMore={() => setShowMore(true)}
+          showIcons={false}
+        />
+        <TouchableOpacity 
+          style={styles.refreshButton}
+          onPress={handleRefreshStorage}
+        >
+          <MaterialCommunityIcons name="reload" size={24} color={themeColors.primary} />
+        </TouchableOpacity>
+      </View>
       {/* Search Bar */}
       {showSearch && (
         <View style={[styles.searchContainer, { backgroundColor: themeColors.card }]}>
@@ -599,7 +1290,12 @@ const BrowseTab = ({ styles, themeColors }) => {
               <Text style={{ fontSize: 20, fontWeight: 'bold', marginLeft: 16, color: themeColors.text }}>{storageTitle}</Text>
             </View>
             {storageRoot && (
-              <FileBrowser rootPath={storageRoot} filterTypes={['audio', 'video']} hideHeader={true} />
+              <FileBrowser 
+                rootPath={storageRoot} 
+                filterTypes={['audio', 'video']} 
+                hideHeader={true} 
+                onFileSelect={handleFileSelect}
+              />
             )}
           </SafeAreaView>
         </RNModal>
@@ -697,6 +1393,18 @@ const BrowseTab = ({ styles, themeColors }) => {
 };
 
 const getStyles = (themeColors) => StyleSheet.create({
+  headerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: 15,
+  },
+  refreshButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: themeColors.card,
+    marginLeft: 10,
+  },
   // Base screen styles
   screen: {
     flex: 1,
@@ -749,8 +1457,7 @@ const getStyles = (themeColors) => StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
-    borderWidth: 1,
-    borderColor: themeColors.border,
+    borderWidth: 0, // Remove border
   },
   sectionHeader: {
     flexDirection: 'row',
