@@ -74,12 +74,16 @@ const AuthService = {
   // Logout user
   logout: async () => {
     try {
+      const { resetProfile } = useUserProfileStore.getState();
+      resetProfile();
+      
+      // Then make the API call to logout
       const response = await api.get(API_CONFIG.ENDPOINTS.LOGOUT);
-      // Clear the token from secure storage
-      await SecureStore.deleteItemAsync('auth_token');
       return response.data;
     } catch (error) {
-      // Even if the API call fails, we still want to clear the token
+      // Clear the token and profile data
+      const { resetProfile } = useUserProfileStore.getState();
+      resetProfile();
       await SecureStore.deleteItemAsync('auth_token');
       throw error.response?.data || error.message;
     }

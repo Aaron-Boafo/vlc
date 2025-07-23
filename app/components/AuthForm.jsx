@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import useUserProfileStore from '../../store/userProfile';
 import {
   View,
   Text,
@@ -120,34 +121,35 @@ export default function AuthForm({
         const token = loginResponse.data.data.jwt;
         const userData = loginResponse.data.data.user || {}; // Get user data from login response if available
         
-        // Create initial user profile with login data
+        // Get username from response or generate a default one
         const username = userData.username || `User_${trimmedPhone.slice(-4)}`;
-        let userProfile = {
-          name: username,
-          phone: trimmedPhone,
-          email: userData.email || '',
-          avatar: userData.profilePicture || `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=0D8ABC&color=fff`,
-          storageUsed: userData.storageUsed || 0
-        };
-        
-        console.log('Saving initial profile:', userProfile);
+        const profilePicture = userData.profilePicture || `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=0D8ABC&color=fff`;
         
         // Save the JWT token to secure storage
         await SecureStore.setItemAsync('auth_token', token);
         
-        // Save initial user data
-        await SecureStore.setItemAsync('user_data', JSON.stringify(userProfile));
+        // Update the profile store
+        useUserProfileStore.getState().setUserName(username);
+        useUserProfileStore.getState().setUserAvatar(profilePicture);
         
-        // Call the onLogin callback with initial user data
+        // Prepare user profile data
+        const userProfile = {
+          name: username,
+          phone: trimmedPhone,
+          email: userData.email || '',
+          avatar: profilePicture,
+          storageUsed: userData.storageUsed || 0,
+          token: token
+        };
+        
+        console.log('User logged in with profile:', userProfile);
+        
+        // Call the onLogin callback with user data if provided
         if (onLogin) {
-          console.log('Calling onLogin with:', userProfile);
-          onLogin({
-            ...userProfile,
-            token: token,
-          });
+          onLogin(userProfile);
         }
         
-        // Try to fetch the latest profile data
+        // Fetch the latest profile data to ensure we have the most up-to-date information
         try {
           console.log('Fetching updated profile...');
           const profileResponse = await api.profile.get();
@@ -155,26 +157,27 @@ export default function AuthForm({
           
           if (profileResponse.data?.status === true && profileResponse.data?.data) {
             const profileData = profileResponse.data.data;
+            const updatedName = profileData.username || profileData.phoneNumber || username;
+            const updatedAvatar = profileData.profilePicture || profilePicture;
+            
+            // Update the profile store with the latest data
+            useUserProfileStore.getState().setUserName(updatedName);
+            useUserProfileStore.getState().setUserAvatar(updatedAvatar);
+            
             const updatedProfile = {
-              name: profileData.username || profileData.phoneNumber || username,
+              name: updatedName,
               phone: profileData.phoneNumber || trimmedPhone,
               email: profileData.email || userProfile.email,
-              avatar: profileData.profilePicture || userProfile.avatar,
-              storageUsed: profileData.storageUsed || 0
+              avatar: updatedAvatar,
+              storageUsed: profileData.storageUsed || 0,
+              token: token
             };
             
-            console.log('Updating profile with:', updatedProfile);
+            console.log('Updated profile with latest data:', updatedProfile);
             
-            // Update user data in secure storage
-            await SecureStore.setItemAsync('user_data', JSON.stringify(updatedProfile));
-            
-            // Update the UI with the latest profile data
+            // Call the onLogin callback with the updated profile if needed
             if (onLogin) {
-              console.log('Calling onLogin with updated profile:', updatedProfile);
-              onLogin({
-                ...updatedProfile,
-                token: token,
-              });
+              onLogin(updatedProfile);
             }
           }
         } catch (profileError) {

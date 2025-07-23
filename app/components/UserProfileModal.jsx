@@ -26,13 +26,14 @@ import * as FileSystem from 'expo-file-system';
 import useThemeStore from '../../store/theme';
 import useUserProfileStore from '../../store/userProfile';
 import api from '../../services/api';
+import ProfileService from '../../services/profileService';
 
 const FUN_FACTS = [
   "Visura can play almost any media file format!",
   "Visura means sight and sound in latin.",
   "Visura is open source and free!",
   "You can stream media over the network with Visura.",
-  "The Visura was created by a 7 brillant student !"
+  "The Visura was created by 7 brillant student !"
 ];
 
 const FUN_FACT_ICONS = [
@@ -183,41 +184,87 @@ export default function UserProfileModal({
           { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
         );
         
-        // Convert the image to base64
+        // Create a file object for upload
+        const file = {
+          uri: manipResult.uri,
+          type: 'image/jpeg',
+          name: `profile-${Date.now()}.jpg`
+        };
+        
+        // Upload the profile picture
+        await ProfileService.updateProfilePicture(file);
+        
+        // Update local state with the new image
         const base64Image = await FileSystem.readAsStringAsync(manipResult.uri, {
           encoding: FileSystem.EncodingType.Base64,
         });
-        
-        // Create a data URL
         const dataUrl = `data:image/jpeg;base64,${base64Image}`;
         
         // Save the avatar to the store
         setUserAvatar(dataUrl);
-        
-        // Update the local state
         setAvatarUri(dataUrl);
         
         // Call the onUpdateAvatar callback if provided
         if (onUpdateAvatar) {
-          try {
-            await onUpdateAvatar(dataUrl);
-            Alert.alert('Success', 'Profile picture updated successfully');
-          } catch (error) {
-            console.error('Error updating avatar on server:', error);
-            // Still keep the local changes even if server update fails
-            Alert.alert('Success', 'Profile picture updated locally. There was an issue syncing with the server.');
-          }
+          onUpdateAvatar(dataUrl);
         }
+        
+        Alert.alert('Success', 'Profile picture updated successfully');
       }
     } catch (error) {
       console.error('Error updating avatar:', error);
-      const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name || 'U')}&background=222&color=fff&bold=true`;
+      const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'U')}&background=222&color=fff&bold=true`;
       setAvatarUri(defaultAvatar);
-      Alert.alert('Error', 'Failed to update profile picture. Please try again.');
+      Alert.alert('Error', error.message || 'Failed to update profile picture. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
+  
+
+  const handleSaveName = async () => {
+    const trimmedName = name.trim();
+    
+    // Validate the name
+    if (!trimmedName) {
+      Alert.alert('Error', 'Name cannot be empty');
+      return;
+    }
+    
+    try {
+      setIsLoading(true);
+      
+      // Update the username using the profile service
+      await ProfileService.updateUsername(trimmedName);
+      
+      // Update local state
+      setUserName(trimmedName);
+      
+      // Update the avatar with the new name if no custom avatar is set
+      if (!userAvatar || userAvatar.startsWith('https://ui-avatars.com/')) {
+        const newAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(trimmedName)}&background=0D8ABC&color=fff`;
+        setUserAvatar(newAvatar);
+        setAvatarUri(newAvatar);
+      }
+      
+      // Call the onEditField callback if provided
+      if (onEditField) {
+        await onEditField('name', trimmedName);
+      }
+      
+      // Close the editing mode
+      setIsEditingName(false);
+      
+      // Show success message
+      Alert.alert('Success', 'Name updated successfully');
+    } catch (error) {
+      console.error('Error updating name:', error);
+      Alert.alert('Error', error.message || 'Failed to update name. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
 
   const handleNextFunFact = useCallback(() => {
     if (isAnimating) return;
@@ -342,46 +389,6 @@ export default function UserProfileModal({
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
     elevation: 4,
-  };
-
-  const handleSaveName = async () => {
-    const trimmedName = name.trim();
-    
-    // Validate the name
-    if (!trimmedName) {
-      Alert.alert('Error', 'Name cannot be empty');
-      return;
-    }
-    
-    try {
-      setIsLoading(true);
-      
-      // Save the name to the store
-      setUserName(trimmedName);
-      
-      // Update the avatar with the new name if no custom avatar is set
-      if (!userAvatar || userAvatar.startsWith('https://ui-avatars.com/')) {
-        const newAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(trimmedName)}&background=0D8ABC&color=fff`;
-        setUserAvatar(newAvatar);
-        setAvatarUri(newAvatar);
-      }
-      
-      // Call the onEditField callback if provided
-      if (onEditField) {
-        await onEditField('name', trimmedName);
-      }
-      
-      // Close the editing mode
-      setIsEditingName(false);
-      
-      // Show success message
-      Alert.alert('Success', 'Name updated successfully');
-    } catch (error) {
-      console.error('Error updating name:', error);
-      Alert.alert('Error', 'Failed to update name. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   return (

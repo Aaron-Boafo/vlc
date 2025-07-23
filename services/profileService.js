@@ -59,16 +59,25 @@ const ProfileService = {
   getProfile: async () => {
     try {
       const token = await SecureStore.getItemAsync('auth_token');
+      if (!token) {
+        console.log('No auth_token found in SecureStore');
+        throw new Error('No authentication token found');
+      }
+      
+      console.log('Fetching profile with token:', token.substring(0, 10) + '...');
       const response = await axios.get(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PROFILE}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
-          ...API_CONFIG.HEADERS
         }
       });
       return response.data;
     } catch (error) {
-      console.error('Error fetching user profile:', error);
-      throw error.response?.data || error.message;
+      console.error('Error fetching user profile:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+      throw error.response?.data?.message || error.message;
     }
   },
 
@@ -82,66 +91,94 @@ const ProfileService = {
    * @param {string} [params.profileImage.name] - File name
    * @returns {Promise<Object>} Updated profile data
    */
-  updateProfile: async ({ name, profileImage }) => {
+  updateProfile: async (params) => {
     try {
       const token = await SecureStore.getItemAsync('auth_token');
-      const formData = new FormData();
-
-      // Only append name if provided
-      if (name) {
-        formData.append(
-          'data',
-          new Blob([JSON.stringify({ username: name })], {
-            type: 'application/json',
-          })
-        );
+      if (!token) {
+        console.log('No auth_token found in SecureStore during update');
+        throw new Error('No authentication token found');
       }
+      
+      console.log('Using token for update:', token.substring(0, 10) + '...');
+      console.log('API Base URL:', API_CONFIG.BASE_URL);
 
-      // Only append profileImage if provided
-      if (profileImage) {
-        // Create a file object from the image URI
-        const file = {
-          uri: profileImage.uri,
-          type: profileImage.type || 'image/jpeg',
-          name: profileImage.name || 'profile.jpg',
-        };
-        formData.append('profileImage', file);
-      }
-
-      // Ensure at least one field is provided
-      if (!name && !profileImage) {
-        throw new Error('Either name or profileImage must be provided.');
-      }
-
-      const response = await axios({
-        method: 'post',
-        url: `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.UPDATE_PROFILE}`,
-        data: formData,
-        headers: {
+      let response;
+      if (params.name) {
+        console.log('Updating username to:', params.name);
+        const url = `${API_CONFIG.BASE_URL}/profile/update/username`;
+        console.log('Request URL:', url);
+        
+        // Match the exact DTO structure expected by the backend
+        const requestData = { username: params.name };
+        console.log('Request data:', JSON.stringify(requestData, null, 2));
+        
+        // Add detailed logging of the full request
+        console.log('Sending request to:', url);
+        console.log('Request method: POST');
+        console.log('Request headers:', {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
-          ...(API_CONFIG.HEADERS || {})
-        },
-        // This prevents axios from setting Content-Type
-        transformRequest: (data, headers) => {
-          delete headers.common['Content-Type'];
-          return data;
-        }
-      });
+          'Accept': 'application/json'
+        });
+        
+        response = await axios({
+          method: 'post',
+          url: url,
+          data: requestData,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json'
+          },
+          timeout: 15000,  // Increased timeout
+          validateStatus: status => status < 500  // Don't throw for 4xx errors
+        });
+        
+        console.log('Response status:', response.status);
+        console.log('Response data:', response.data);
+      } else if (params.profileImage) {
+        console.log('Uploading profile image:', {
+          uri: params.profileImage.uri,
+          type: params.profileImage.type,
+          name: params.profileImage.name
+        });
 
+        const formData = new FormData();
+        formData.append('profileImage', {
+          uri: params.profileImage.uri,
+          type: params.profileImage.type || 'image/jpeg',
+          name: params.profileImage.name || `profile-${Date.now()}.jpg`,
+          filename: `profile-${Date.now()}.jpg`
+        });
+
+        const url = `${API_CONFIG.BASE_URL}/profile/update/image`;
+        console.log('Upload URL:', url);
+        
+        response = await axios({
+          method: 'post',
+          url: url,
+          data: formData,
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json'
+          },
+          timeout: 30000
+        });
+      } else {
+        throw new Error('No update parameters provided');
+      }
+
+      console.log('Profile update successful:', response.data);
       return response.data;
     } catch (error) {
-      console.error('Error updating user profile:', error);
-      throw error.response?.data || error.message;
+      console.error('Error updating profile:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+      throw error.response?.data || { message: error.message };
     }
-  },
-
-  /**
-   * Update user's profile picture
-   * @param {Object} file - File object with uri, type, and name
-   * @returns {Promise<Object>} Updated profile data
-   */
-  updateProfilePicture: async (file) => {
-    return ProfileService.updateProfile({ profileImage: file });
   },
 
   /**
@@ -152,6 +189,15 @@ const ProfileService = {
   updateUsername: async (username) => {
     return ProfileService.updateProfile({ name: username });
   },
+
+  /**
+   * Update user's profile picture
+   * @param {Object} file - File object with uri, type, and name
+   * @returns {Promise<Object>} Updated profile data
+   */
+  updateProfilePicture: async (file) => {
+    return ProfileService.updateProfile({ profileImage: file });
+  }
 };
 
 export default ProfileService;
