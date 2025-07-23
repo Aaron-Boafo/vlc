@@ -183,7 +183,7 @@ export default function VideoTabScreen() {
   }, [sharedSearchProps, screenWidth, currentIndex, handleScrollEnd, handleLayout]);
 
   const renderContent = () => {
-    // Show progressive loading indicator during initial load
+    // Show progressive loading indicator only during initial load with no files
     if (isLoading && videoFiles.length === 0) {
       return (
         <ProgressiveLoadingIndicator
@@ -196,24 +196,17 @@ export default function VideoTabScreen() {
       );
     }
 
-    // Show progressive loading with content only if actually loading
-    if (isLoading && !isInitialLoadComplete) {
-      return (
-        <>
-          <ProgressiveLoadingIndicator
-            isLoading={isLoading}
-            totalFiles={videoFiles.length}
-            loadedFiles={videoFiles.length}
-            isComplete={isInitialLoadComplete}
-            mediaType="video files"
-          />
-          {/* Show loaded files while still loading */}
-          {videoFiles.length > 0 && renderScrollableContent()}
-        </>
-      );
+    // If we have files, show them (even if still loading in background)
+    if (videoFiles.length > 0) {
+      return renderScrollableContent();
     }
 
-    // Show main content when loading is complete
+    // Show empty state only when not loading and no files
+    if (!isLoading && videoFiles.length === 0) {
+      return renderScrollableContent(); // This will show the empty state in VideoAllScreen
+    }
+
+    // Default fallback - show main content
     return renderScrollableContent();
   };
 

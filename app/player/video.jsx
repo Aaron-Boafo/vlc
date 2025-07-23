@@ -1,6 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { View, TouchableOpacity, StyleSheet, SafeAreaView, Text, TouchableWithoutFeedback, Dimensions } from 'react-native';
-import { Video } from 'expo-av';
 import { MaterialIcons, Entypo } from '@expo/vector-icons';
 import { ChevronDown } from 'lucide-react-native';
 import Slider from '@react-native-community/slider';
@@ -8,23 +7,29 @@ import useOptimizedVideoStore from '../../store/optimizedVideoStore';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import BottomSheet from '../../components/BottomSheet';
 import { useRouter } from 'expo-router';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withSpring,
-  Easing,
-  runOnJS
-} from 'react-native-reanimated';
+import VideoPlayerFallback from '../../components/VideoPlayerFallback';
+// Removed reanimated imports to fix casting error
+
+// Try to import expo-video with fallback
+let VideoView, useVideoPlayer;
+try {
+  const expoVideo = require('expo-video');
+  VideoView = expoVideo.VideoView;
+  useVideoPlayer = expoVideo.useVideoPlayer;
+} catch (error) {
+  console.warn('expo-video not available, using fallback');
+  VideoView = null;
+  useVideoPlayer = null;
+}
 
 const MinimalVideoPlayer = () => {
-  const { currentVideo, playlist, currentVideoIndex, videoFiles, setCurrentVideo, setAndPlayVideo, showMiniPlayer } = useOptimizedVideoStore();
-  const videoRef = useRef(null);
+  const { currentVideo, playlist, videoFiles, setAndPlayVideo, showMiniPlayer } = useOptimizedVideoStore();
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1.0);
-  const [status, setStatus] = useState({});
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isLocked, setIsLocked] = useState(false);
   const hideTimeout = useRef(null);
@@ -32,37 +37,70 @@ const MinimalVideoPlayer = () => {
   const [autoplay, setAutoplay] = useState(false);
   const [loop, setLoop] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [dimensions, setDimensions] = useState(Dimensions.get('window'));
   const router = useRouter();
 
-  // Animation values for smooth orientation transitions
-  const containerOpacity = useSharedValue(1);
-  const containerScale = useSharedValue(1);
-  const controlsOpacity = useSharedValue(1);
+  // Create video player instance (with fallback handling)
+  const player = useVideoPlayer ? useVideoPlayer(currentVideo?.uri || '', (player) => {
+    player.loop = loop;
+    player.muted = isMuted;
+    player.playbackRate = playbackRate;
+    player.play();
+  }) : null;
+
+  // Removed animation values to fix casting error
 
   // Enhanced orientation change listener for smooth transitions
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
       setIsTransitioning(true);
-
-      // Smooth transition animation during orientation change
-      containerOpacity.value = withTiming(0.95, {
-        duration: 100,
-        easing: Easing.out(Easing.quad)
-      });
-
+      
+      // Simple transition without complex animations
       setTimeout(() => {
-        setDimensions(window);
-        containerOpacity.value = withSpring(1, {
-          damping: 20,
-          stiffness: 150
-        });
         setIsTransitioning(false);
-      }, 150);
+      }, 300);
     });
 
     return () => subscription?.remove();
   }, []);
+
+  // Video player event listeners
+  useEffect(() => {
+    if (!player) return;
+
+    const timeUpdateListener = player.addListener('timeUpdate', (payload) => {
+      setCurrentTime(payload.currentTime);
+      setIsPlaying(player.playing);
+    });
+
+    const statusChangeListener = player.addListener('statusChange', (status) => {
+      if (status.status === 'readyToPlay') {
+        setDuration(player.duration);
+      } else if (status.status === 'error') {
+        console.error('Video player error:', status.error);
+      }
+    });
+
+    const playbackEndListener = player.addListener('playbackEnd', () => {
+      if (autoplay && !loop) {
+        handleNext();
+      }
+    });
+
+    return () => {
+      timeUpdateListener?.remove();
+      statusChangeListener?.remove();
+      playbackEndListener?.remove();
+    };
+  }, [player, autoplay, loop]);
+
+  // Update player properties when state changes
+  useEffect(() => {
+    if (player) {
+      player.loop = loop;
+      player.muted = isMuted;
+      player.playbackRate = playbackRate;
+    }
+  }, [player, loop, isMuted, playbackRate]);
 
   // Auto-hide controls after 3 seconds
   useEffect(() => {
@@ -85,6 +123,11 @@ const MinimalVideoPlayer = () => {
     };
   }, []);
 
+  // Check if expo-video is available
+  if (!VideoView || !useVideoPlayer) {
+    return <VideoPlayerFallback onRetry={() => router.back()} />;
+  }
+
   if (!currentVideo || !currentVideo.uri) {
     console.log('🎥 Video Player Debug:', {
       currentVideo,
@@ -102,63 +145,49 @@ const MinimalVideoPlayer = () => {
     );
   }
 
-  const handlePlayPause = async () => {
-    if (videoRef.current) {
-      const s = await videoRef.current.getStatusAsync();
-      if (s.isPlaying) {
-        await videoRef.current.pauseAsync();
+  const handlePlayPause = () => {
+    if (player) {
+      if (player.playing) {
+        player.pause();
         setIsPlaying(false);
       } else {
-        await videoRef.current.playAsync();
+        player.play();
         setIsPlaying(true);
       }
     }
     setControlsVisible(true);
   };
 
-  const handleSeek = async (value) => {
-    if (videoRef.current && status.durationMillis) {
-      await videoRef.current.setPositionAsync(value);
+  const handleSeek = (value) => {
+    if (player && duration > 0) {
+      player.currentTime = value;
     }
     setControlsVisible(true);
   };
 
-  const handleSkip = async (seconds) => {
-    if (videoRef.current && status.positionMillis != null) {
-      let newPos = status.positionMillis + seconds * 1000;
-      newPos = Math.max(0, Math.min(newPos, status.durationMillis));
-      await videoRef.current.setPositionAsync(newPos);
+  const handleSkip = (seconds) => {
+    if (player) {
+      const newTime = Math.max(0, Math.min(currentTime + seconds, duration));
+      player.currentTime = newTime;
     }
     setControlsVisible(true);
   };
 
-  const handleMute = async () => {
-    if (videoRef.current) {
-      await videoRef.current.setIsMutedAsync(!isMuted);
-      setIsMuted(!isMuted);
-    }
+  const handleMute = () => {
+    setIsMuted(!isMuted);
     setControlsVisible(true);
   };
 
-  const handleSpeed = async () => {
+  const handleSpeed = () => {
     const speeds = [1.0, 1.25, 1.5, 2.0];
     const idx = speeds.indexOf(playbackRate);
     const next = speeds[(idx + 1) % speeds.length];
     setPlaybackRate(next);
-    if (videoRef.current) {
-      await videoRef.current.setRateAsync(next, true);
-    }
     setControlsVisible(true);
   };
 
   const handleFullscreen = async () => {
     setIsTransitioning(true);
-
-    // Smooth pre-transition animation
-    containerOpacity.value = withTiming(0.9, {
-      duration: 100,
-      easing: Easing.out(Easing.quad)
-    });
 
     try {
       if (!isFullscreen) {
@@ -167,20 +196,15 @@ const MinimalVideoPlayer = () => {
         await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
       }
 
-      // Smooth post-transition animation
-      setTimeout(() => {
-        containerOpacity.value = withSpring(1, {
-          damping: 20,
-          stiffness: 150
-        });
-        setIsTransitioning(false);
-      }, 200);
-
       setIsFullscreen(f => !f);
       setControlsVisible(true);
+      
+      // Simple transition delay
+      setTimeout(() => {
+        setIsTransitioning(false);
+      }, 300);
     } catch (error) {
       console.log('Orientation change error:', error);
-      containerOpacity.value = withSpring(1);
       setIsTransitioning(false);
     }
   };
@@ -198,7 +222,7 @@ const MinimalVideoPlayer = () => {
     // Enhanced smooth transition to mini player
     if (showMiniPlayer && currentVideo) {
       // First show mini player with current state
-      showMiniPlayer(currentVideo, status.positionMillis, isPlaying);
+      showMiniPlayer(currentVideo, currentTime * 1000, isPlaying); // Convert to milliseconds
 
       // Add a small delay to ensure mini player is ready before navigation
       setTimeout(() => {
@@ -232,9 +256,9 @@ const MinimalVideoPlayer = () => {
     setControlsVisible(true);
   };
 
-  const formatTime = (millis) => {
-    if (!millis || isNaN(millis)) return '0:00';
-    const totalSeconds = Math.floor(millis / 1000);
+  const formatTime = (seconds) => {
+    if (!seconds || isNaN(seconds)) return '0:00';
+    const totalSeconds = Math.floor(seconds);
     const mins = Math.floor(totalSeconds / 60);
     const secs = totalSeconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -247,57 +271,35 @@ const MinimalVideoPlayer = () => {
   const handleToggleLoop = () => setLoop(l => !l);
   const handleShowInfo = () => {
     // You can expand this to show a modal with more info
-    alert(`Filename: ${currentVideo.filename || ''}\nDuration: ${formatTime(status.durationMillis)}\nResolution: ${status.naturalSize?.width || ''}x${status.naturalSize?.height || ''}`);
+    alert(`Filename: ${currentVideo.filename || ''}\nDuration: ${formatTime(duration)}\nCurrent Time: ${formatTime(currentTime)}`);
   };
 
-  // Animated style for smooth orientation transitions
-  const animatedContainerStyle = useAnimatedStyle(() => {
-    return {
-      opacity: containerOpacity.value,
-      transform: [
-        { scale: containerScale.value }
-      ],
-    };
-  });
+  // Removed animated styles to fix casting error
 
   return (
     <SafeAreaView style={styles.container}>
       <TouchableWithoutFeedback onPress={handleScreenPress}>
-        <Animated.View style={[styles.videoContainer, animatedContainerStyle]}>
-          <Video
-            ref={videoRef}
-            source={{ uri: currentVideo.uri }}
-            style={StyleSheet.absoluteFill}
-            resizeMode="contain"
-            shouldPlay
-            isMuted={isMuted}
-            rate={playbackRate}
-            onPlaybackStatusUpdate={s => {
-              setStatus(s);
-              setIsPlaying(s.isPlaying);
-              // Autoplay logic: if video just finished
-              if (autoplay && s.didJustFinish && !s.isLooping) {
-                handleNext();
-              }
-            }}
-            isLooping={loop}
-            // Enhanced video rendering for smooth transitions
-            useNativeControls={false}
-            progressUpdateIntervalMillis={100}
-            positionMillis={status.positionMillis}
-          />
+        <View style={styles.videoContainer}>
+          {VideoView && player ? (
+            <VideoView
+              player={player}
+              style={StyleSheet.absoluteFill}
+              contentFit="contain"
+              allowsFullscreen={false}
+              allowsPictureInPicture={false}
+              showsTimecodes={false}
+              requiresLinearPlayback={false}
+            />
+          ) : (
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
+              <MaterialIcons name="play-circle-outline" size={64} color="#FFF" />
+              <Text style={{ color: '#FFF', marginTop: 16 }}>Video Player Loading...</Text>
+            </View>
+          )}
           {/* Controls Overlay */}
           {(controlsVisible || isLocked) && (
-            <Animated.View
-              style={[
-                styles.controlsOverlay,
-                {
-                  opacity: withTiming(isTransitioning ? 0.8 : 1, {
-                    duration: 150,
-                    easing: Easing.out(Easing.quad)
-                  })
-                }
-              ]}
+            <View
+              style={styles.controlsOverlay}
               pointerEvents="box-none"
             >
               {/* Top overlay row: Back, Title, More */}
@@ -316,18 +318,18 @@ const MinimalVideoPlayer = () => {
               <View style={styles.bottomControlsGroup}>
                 {controlsVisible && !isLocked && (
                   <View style={styles.seekBarRow}>
-                    <Text style={styles.timeText}>{formatTime(status.positionMillis)}</Text>
+                    <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
                     <Slider
                       style={styles.slider}
                       minimumValue={0}
-                      maximumValue={status.durationMillis || 1}
-                      value={status.positionMillis || 0}
+                      maximumValue={duration || 1}
+                      value={currentTime || 0}
                       onSlidingComplete={handleSeek}
                       minimumTrackTintColor="#FFF"
                       maximumTrackTintColor="#888"
                       thumbTintColor="#FFF"
                     />
-                    <Text style={styles.timeText}>{formatTime(status.durationMillis)}</Text>
+                    <Text style={styles.timeText}>{formatTime(duration)}</Text>
                   </View>
                 )}
                 <View style={styles.bottomControlBar}>
@@ -362,7 +364,7 @@ const MinimalVideoPlayer = () => {
                   )}
                 </View>
               </View>
-            </Animated.View>
+            </View>
           )}
           {/* More Options BottomSheet */}
           <BottomSheet
@@ -392,7 +394,7 @@ const MinimalVideoPlayer = () => {
               },
             ]}
           />
-        </Animated.View>
+        </View>
       </TouchableWithoutFeedback>
     </SafeAreaView>
   );

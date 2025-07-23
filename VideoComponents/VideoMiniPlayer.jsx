@@ -1,7 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, useWindowDimensions, Text, Vibration } from 'react-native';
-import { Video } from 'expo-av';
 import { Play, Pause, X, Trash2, ChevronDown } from 'lucide-react-native';
+
+// Try to import expo-video with fallback
+let VideoView, useVideoPlayer;
+try {
+  const expoVideo = require('expo-video');
+  VideoView = expoVideo.VideoView;
+  useVideoPlayer = expoVideo.useVideoPlayer;
+} catch (error) {
+  console.warn('expo-video not available in mini player, using fallback');
+  VideoView = null;
+  useVideoPlayer = null;
+}
 import useOptimizedVideoStore from '../store/optimizedVideoStore';
 import { router } from 'expo-router';
 import Animated, { 
@@ -32,8 +43,18 @@ const VideoMiniPlayer = () => {
   } = useOptimizedVideoStore();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const videoRef = React.useRef(null);
   const [showControls, setShowControls] = useState(false);
+
+  // Create video player instance for expo-video
+  const player = useVideoPlayer && miniPlayerVideo?.uri ? useVideoPlayer(miniPlayerVideo.uri, (player) => {
+    player.loop = true;
+    player.muted = false;
+    if (isMiniPlayerPlaying) {
+      player.play();
+    } else {
+      player.pause();
+    }
+  }) : null;
   const controlsTimer = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isInDeleteZone, setIsInDeleteZone] = useState(false);
@@ -41,6 +62,17 @@ const VideoMiniPlayer = () => {
   
   // Add video opacity for smooth content transitions
   const videoOpacity = useSharedValue(0);
+
+  // Sync player state with mini player state
+  useEffect(() => {
+    if (player) {
+      if (isMiniPlayerPlaying) {
+        player.play();
+      } else {
+        player.pause();
+      }
+    }
+  }, [player, isMiniPlayerPlaying]);
 
   const miniPlayerWidth = (width - 48) / 2;
   const miniPlayerHeight = (miniPlayerWidth * 9) / 16;
@@ -277,6 +309,15 @@ const VideoMiniPlayer = () => {
   const handleTogglePlayback = (e) => {
     e.stopPropagation();
     toggleMiniPlayerPlayback();
+    
+    // Control expo-video player
+    if (player) {
+      if (isMiniPlayerPlaying) {
+        player.pause();
+      } else {
+        player.play();
+      }
+    }
   };
 
   const handleClose = (e) => {
@@ -351,17 +392,20 @@ const VideoMiniPlayer = () => {
               onPress={handlePlayerPress}
               activeOpacity={1}
             >
-              <Video
-                ref={videoRef}
-                source={{ uri: miniPlayerVideo.uri }}
-                style={styles.video}
-                contentFit="cover"
-                shouldPlay={isMiniPlayerPlaying}
-                positionMillis={miniPlayerPosition}
-                isMuted={false}
-                volume={1.0}
-                isLooping
-              />
+              {VideoView && player ? (
+                <VideoView
+                  player={player}
+                  style={styles.video}
+                  contentFit="cover"
+                  allowsFullscreen={false}
+                  allowsPictureInPicture={false}
+                  showsTimecodes={false}
+                />
+              ) : (
+                <View style={[styles.video, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
+                  <Play size={24} color="#FFF" />
+                </View>
+              )}
               <Animated.View style={[styles.overlay, controlsAnimatedStyle]}>
                 <TouchableOpacity onPress={handleTogglePlayback} style={[styles.controlButton, { left: 8 }]}> 
                   {isMiniPlayerPlaying ? (

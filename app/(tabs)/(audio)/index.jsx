@@ -246,7 +246,7 @@ const AudioTabScreen = () => {
   }, [sharedProps, screenWidth, currentIndex, handleScrollEnd, handleLayout]);
 
   const renderContent = () => {
-    // Show progressive loading indicator during initial load
+    // Show progressive loading indicator only during initial load with no files
     if (isLoading && audioFiles.length === 0) {
       return (
         <ProgressiveLoadingIndicator
@@ -259,25 +259,12 @@ const AudioTabScreen = () => {
       );
     }
 
-    // Show progressive loading with content only if actually loading
-    if (isLoading && !isInitialLoadComplete) {
-      return (
-        <>
-          <ProgressiveLoadingIndicator
-            isLoading={isLoading}
-            totalFiles={audioFiles.length}
-            loadedFiles={audioFiles.length}
-            isComplete={isInitialLoadComplete}
-            mediaType="audio files"
-          />
-          {/* Show loaded files while still loading */}
-          {audioFiles.length > 0 && renderScrollableContent()}
-        </>
-      );
+    // If we have files, show them (even if still loading in background)
+    if (audioFiles.length > 0) {
+      return renderScrollableContent();
     }
-
-    // Metadata loading happens in background - no UI needed
   
+    // Show empty state only when not loading and no files
     if (!isLoading && audioFiles.length === 0) {
       return (
         <View style={styles.centered}>
@@ -293,7 +280,7 @@ const AudioTabScreen = () => {
       );
     }
 
-    // Show main content when loading is complete
+    // Default fallback - show main content
     return renderScrollableContent();
   };
 

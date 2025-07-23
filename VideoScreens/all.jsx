@@ -261,7 +261,8 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
     />
   ), [handleVideoPress, handleMoreOptions, handleThumbnailReady]);
 
-  if (isLoading) {
+  // Only show loading screen if we're loading AND have no files
+  if (isLoading && (!videoFiles || videoFiles.length === 0)) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: themeColors.background }]}> 
         <ActivityIndicator size="large" color={themeColors.primary} />

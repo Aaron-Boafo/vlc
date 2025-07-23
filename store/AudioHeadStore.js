@@ -4,6 +4,7 @@ import {persist, createJSONStorage} from "zustand/middleware";
 import * as MediaLibrary from "expo-media-library";
 import {getAudioMetadata} from "@missingcore/audio-metadata";
 import * as FileSystem from 'expo-file-system';
+import MediaCacheManager from '../utils/MediaCacheManager';
 
 const AUDIO_LIST_PATH = FileSystem.documentDirectory + 'audio_list.json';
 
@@ -46,27 +47,65 @@ const useAudioStore = create(
       setCurrentTrack: (track) => set({ currentTrack: track }),
       setPlaylist: (tracks) => set({ playlist: tracks }),
 
-      // Load audio files progressively in batches
+      // Load audio files with intelligent caching
       loadAudioFiles: async () => {
         try {
           set({ isLoading: true, audioFiles: [] });
-          const fileInfo = await FileSystem.getInfoAsync(AUDIO_LIST_PATH);
-          if (fileInfo.exists) {
-            // Load from cache
-            const content = await FileSystem.readAsStringAsync(AUDIO_LIST_PATH);
-            const audioFiles = JSON.parse(content);
-            set({ audioFiles, isLoading: false });
-            // Optionally, update metadata in background
-            setTimeout(() => {
-              loadMetadataInBackground(audioFiles);
-            }, 100);
-            return;
-          }
-          // If not cached, scan and cache
-          await get().refreshAudioFiles();
+          
+          // Use the new MediaCacheManager for intelligent loading
+          const audioFiles = await MediaCacheManager.loadMediaFiles('audio', (progress) => {
+            console.log(`📊 Audio loading progress: ${progress.phase} - ${progress.message || ''}`);
+            
+            // Update UI with progress - show files as they load
+            if (progress.phase === 'cache_loaded' && progress.files && progress.files.length > 0) {
+              // Show cached files immediately while checking for updates
+              const sortedFiles = [...progress.files].sort((a, b) => a.title.localeCompare(b.title));
+              set({ audioFiles: sortedFiles, isLoading: false }); // Set loading to false to show files
+              
+              // Start background metadata loading immediately
+              setTimeout(() => {
+                loadMetadataInBackground(sortedFiles);
+              }, 100);
+            } else if (progress.phase === 'full_scan' && progress.files && progress.files.length > 0) {
+              // Show files as they're being scanned for progressive loading
+              const sortedFiles = [...progress.files].sort((a, b) => a.title.localeCompare(b.title));
+              set({ audioFiles: sortedFiles }); // Keep loading true during scan
+            } else if (progress.phase === 'complete' && progress.files) {
+              // Final update when loading is complete
+              const sortedFiles = [...progress.files].sort((a, b) => a.title.localeCompare(b.title));
+              set({ audioFiles: sortedFiles, isLoading: false });
+              
+              // Start background metadata loading for final files
+              setTimeout(() => {
+                loadMetadataInBackground(sortedFiles);
+              }, 100);
+            } else if (progress.phase === 'complete') {
+              // Just mark as complete if no files in progress
+              set({ isLoading: false });
+            }
+          });
+
+          // Sort by title (default) - final sort
+          const sortedFiles = [...audioFiles].sort((a, b) => a.title.localeCompare(b.title));
+          set({ audioFiles: sortedFiles, isLoading: false });
+
+          // Start background metadata loading if not already started
+          setTimeout(() => {
+            loadMetadataInBackground(sortedFiles);
+          }, 100);
+
+          console.log(`✅ Loaded ${audioFiles.length} audio files using intelligent caching`);
+          
         } catch (error) {
           console.error("Error loading audio files:", error);
           set({ isLoading: false });
+          
+          // Fallback to old method if new cache manager fails
+          try {
+            await get().refreshAudioFiles();
+          } catch (fallbackError) {
+            console.error("Fallback loading also failed:", fallbackError);
+          }
         }
       },
 
@@ -74,50 +113,79 @@ const useAudioStore = create(
       refreshAudioFiles: async () => {
         try {
           set({ isLoading: true, audioFiles: [] });
-          const { status } = await MediaLibrary.requestPermissionsAsync();
-          if (status !== "granted") {
-            console.log("Media library permission not granted");
-            set({ isLoading: false });
-            return;
-          }
-          let allFiles = [];
-          let hasNextPage = true;
-          const batchSize = 100;
-          while (hasNextPage) {
-            const media = await MediaLibrary.getAssetsAsync({
-              mediaType: MediaLibrary.MediaType.audio,
-              first: batchSize,
-            });
-            const basicFiles = media.assets.map((asset) => ({
-              id: asset.id,
-              uri: asset.uri,
-              filename: asset.filename,
-              duration: asset.duration,
-              album: "Unknown Album",
-              artist: "Unknown Artist",
-              title: asset.filename.replace(/\.[^/.]+$/, ""),
-              year: null,
-              artwork: null,
-              metadataLoaded: false,
-            }));
-            allFiles = [...allFiles, ...basicFiles].filter(
-              (file, index, self) => index === self.findIndex(f => f.id === file.id)
-            );
-            // Sort by title (default)
-            const sortedFiles = [...allFiles].sort((a, b) => a.title.localeCompare(b.title));
-            set({ audioFiles: sortedFiles }); // Update UI after each batch
-            hasNextPage = media.hasNextPage;
-          }
-          // Save to cache
-          await FileSystem.writeAsStringAsync(AUDIO_LIST_PATH, JSON.stringify(allFiles));
-          set({ isLoading: false });
-          // Optimized metadata fetching
+          
+          // Use MediaCacheManager for force refresh
+          const audioFiles = await MediaCacheManager.forceRefresh('audio', (progress) => {
+            console.log(`📊 Audio refresh progress: ${progress.phase} - ${progress.message || ''}`);
+            
+            // Update UI with current progress
+            if (progress.filesFound > 0) {
+              // You can show intermediate results here if desired
+            }
+          });
+
+          // Sort by title (default)
+          const sortedFiles = [...audioFiles].sort((a, b) => a.title.localeCompare(b.title));
+          set({ audioFiles: sortedFiles, isLoading: false });
+
+          // Start optimized metadata loading
           setTimeout(() => {
-            loadMetadataOptimized(allFiles);
+            loadMetadataOptimized(sortedFiles);
           }, 100);
+
+          console.log(`✅ Force refreshed ${audioFiles.length} audio files`);
+          
         } catch (error) {
           console.error("Error refreshing audio files:", error);
           set({ isLoading: false });
+          
+          // Fallback to original method
+          try {
+            const { status } = await MediaLibrary.requestPermissionsAsync();
+            if (status !== "granted") {
+              console.log("Media library permission not granted");
+              return;
+            }
+            
+            let allFiles = [];
+            let hasNextPage = true;
+            const batchSize = 100;
+            
+            while (hasNextPage) {
+              const media = await MediaLibrary.getAssetsAsync({
+                mediaType: MediaLibrary.MediaType.audio,
+                first: batchSize,
+              });
+              
+              const basicFiles = media.assets.map((asset) => ({
+                id: asset.id,
+                uri: asset.uri,
+                filename: asset.filename,
+                duration: asset.duration,
+                album: "Unknown Album",
+                artist: "Unknown Artist",
+                title: asset.filename.replace(/\.[^/.]+$/, ""),
+                year: null,
+                artwork: null,
+                metadataLoaded: false,
+              }));
+              
+              allFiles = [...allFiles, ...basicFiles].filter(
+                (file, index, self) => index === self.findIndex(f => f.id === file.id)
+              );
+              
+              const sortedFiles = [...allFiles].sort((a, b) => a.title.localeCompare(b.title));
+              set({ audioFiles: sortedFiles });
+              
+              hasNextPage = media.hasNextPage;
+            }
+            
+            // Save to old cache as fallback
+            await FileSystem.writeAsStringAsync(AUDIO_LIST_PATH, JSON.stringify(allFiles));
+            
+          } catch (fallbackError) {
+            console.error("Fallback refresh also failed:", fallbackError);
+          }
         }
       },
 
