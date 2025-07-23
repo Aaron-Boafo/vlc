@@ -5,13 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="9db4fd3f-f98f-4439-8024-fcff77de74df" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/VideoComponents/VideoMiniPlayer.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/VideoComponents/VideoMiniPlayer.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/(tabs)/(browse)/_layout.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(tabs)/(browse)/_layout.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/(tabs)/(browse)/index.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(tabs)/(browse)/index.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/(tabs)/(more)/index.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(tabs)/(more)/index.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/player/video.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/player/video.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/store/theme.js" beforeDir="false" afterPath="$PROJECT_DIR$/store/theme.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/AudioScreens/all.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/AudioScreens/all.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/components/FileBrowser.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/components/FileBrowser.jsx" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -46,7 +41,7 @@
     "git-widget-placeholder": "Samuel",
     "kotlin-language-version-configured": "true",
     "last_opened_file_path": "C:/Users/drmid/Desktop",
-    "settings.editor.selected.configurable": "preferences.keymap"
+    "settings.editor.selected.configurable": "AndroidSdkUpdater"
   }
 }]]></component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
