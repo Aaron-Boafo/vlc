@@ -18,13 +18,10 @@ import useThemeStore from '../store/theme';
 const { width } = Dimensions.get('window');
 
 const FileBrowser = ({ onFileSelect, onBack, hideHeader }) => {
-  // In-memory cache for directory contents
-  const directoryCache = React.useRef({});
   const { themeColors } = useThemeStore();
   const [currentPath, setCurrentPath] = useState(FileSystem.documentDirectory);
   const [files, setFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingProgress, setLoadingProgress] = useState({ current: 0, total: 0 });
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [sortBy, setSortBy] = useState('name');
@@ -37,40 +34,25 @@ const FileBrowser = ({ onFileSelect, onBack, hideHeader }) => {
     loadDirectoryContents();
   }, [currentPath, sortBy, sortOrder]);
 
-  // Batch size for file info fetching
-  const BATCH_SIZE = 20;
   const loadDirectoryContents = async () => {
     setIsLoading(true);
-    setLoadingProgress({ current: 0, total: 0 });
     try {
-      // Check cache first
-      if (directoryCache.current[currentPath]) {
-        setFiles(directoryCache.current[currentPath]);
-        setIsLoading(false);
-        setLoadingProgress({ current: 0, total: 0 });
-        return;
-      }
       const contents = await FileSystem.readDirectoryAsync(currentPath);
-      setLoadingProgress({ current: 0, total: contents.length });
-      let fileList = [];
-      for (let i = 0; i < contents.length; i += BATCH_SIZE) {
-        const batch = contents.slice(i, i + BATCH_SIZE);
-        const batchPromises = batch.map(async (item) => {
-          const fullPath = `${currentPath}${item}`;
-          const info = await FileSystem.getInfoAsync(fullPath);
-          return {
-            name: item,
-            path: fullPath,
-            isDirectory: info.isDirectory,
-            size: info.size,
-            modificationTime: info.modificationTime,
-            type: getFileType(item),
-          };
-        });
-        const batchResults = await Promise.all(batchPromises);
-        fileList = fileList.concat(batchResults);
-        setLoadingProgress({ current: Math.min(i + BATCH_SIZE, contents.length), total: contents.length });
-      }
+      const filePromises = contents.map(async (item) => {
+        const fullPath = `${currentPath}${item}`;
+        const info = await FileSystem.getInfoAsync(fullPath);
+        return {
+          name: item,
+          path: fullPath,
+          isDirectory: info.isDirectory,
+          size: info.size,
+          modificationTime: info.modificationTime,
+          type: getFileType(item),
+        };
+      });
+      
+      let fileList = await Promise.all(filePromises);
+      
       // Apply sorting
       fileList.sort((a, b) => {
         let comparison = 0;
@@ -90,22 +72,14 @@ const FileBrowser = ({ onFileSelect, onBack, hideHeader }) => {
         }
         return sortOrder === 'asc' ? comparison : -comparison;
       });
+      
       setFiles(fileList);
-      // Cache the result
-      directoryCache.current[currentPath] = fileList;
     } catch (error) {
       console.error('Error loading directory contents:', error);
-      setFiles([]);
-      setErrorState({
-        message: 'Failed to load directory contents. Please check permissions or try again.',
-        retry: () => loadDirectoryContents(),
-      });
+      Alert.alert('Error', 'Failed to load directory contents');
     } finally {
       setIsLoading(false);
-      setLoadingProgress({ current: 0, total: 0 });
     }
-  // Error state for improved feedback
-  const [errorState, setErrorState] = useState(null);
   };
 
   const getFileType = (filename) => {
@@ -126,13 +100,6 @@ const FileBrowser = ({ onFileSelect, onBack, hideHeader }) => {
 
   const navigateToDirectory = (path) => {
     setCurrentPath(path);
-  };
-
-  // Invalidate cache when files are deleted or changed
-  const invalidateCache = (path) => {
-    if (directoryCache.current[path]) {
-      delete directoryCache.current[path];
-    }
   };
 
   const navigateBack = () => {
@@ -178,7 +145,6 @@ const FileBrowser = ({ onFileSelect, onBack, hideHeader }) => {
             try {
               for (const file of selectedFiles) {
                 await FileSystem.deleteAsync(file.path);
-                invalidateCache(currentPath);
               }
               setSelectedFiles([]);
               setIsSelectionMode(false);
@@ -242,23 +208,18 @@ const FileBrowser = ({ onFileSelect, onBack, hideHeader }) => {
           }
         }}
         onLongPress={() => handleFileLongPress(item)}
-        accessibilityLabel={`File: ${item.name}${item.isDirectory ? ', folder' : ''}`}
-        accessibilityRole={item.isDirectory ? 'button' : 'button'}
-        accessibilityState={{ selected: isSelected, disabled: false }}
       >
         <View style={styles.fileInfo}>
           <MaterialCommunityIcons 
             name={item.isDirectory ? 'folder' : getFileIcon(item.type)} 
             size={24} 
             color={item.isDirectory ? '#FFD700' : getFileColor(item.type)} 
-            accessibilityLabel={item.isDirectory ? 'Folder icon' : `${item.type} file icon`}
-            accessible={false}
           />
           <View style={styles.fileDetails}>
-            <Text style={[styles.fileName, { color: themeColors.text }]} numberOfLines={1} accessibilityLabel={`File name: ${item.name}`}>
+            <Text style={[styles.fileName, { color: themeColors.text }]} numberOfLines={1}>
               {item.name}
             </Text>
-            <Text style={[styles.fileMeta, { color: themeColors.textSecondary }]} accessibilityLabel={`File info: ${item.isDirectory ? 'Folder' : formatFileSize(item.size)}, modified ${formatDate(item.modificationTime)}`}>
+            <Text style={[styles.fileMeta, { color: themeColors.textSecondary }]}>
               {item.isDirectory ? 'Folder' : formatFileSize(item.size)} • {formatDate(item.modificationTime)}
             </Text>
           </View>
@@ -268,12 +229,10 @@ const FileBrowser = ({ onFileSelect, onBack, hideHeader }) => {
             name={isSelected ? 'check-circle' : 'radio-button-unchecked'} 
             size={24} 
             color={isSelected ? themeColors.primary : themeColors.textSecondary} 
-            accessibilityLabel={isSelected ? 'Selected' : 'Not selected'}
-            accessible={false}
           />
         )}
         {!isSelectionMode && (
-          <MaterialIcons name="chevron-right" size={20} color={themeColors.textSecondary} accessibilityLabel="Navigate" accessible={false} />
+          <MaterialIcons name="chevron-right" size={20} color={themeColors.textSecondary} />
         )}
       </TouchableOpacity>
     );
@@ -355,8 +314,8 @@ const FileBrowser = ({ onFileSelect, onBack, hideHeader }) => {
       {!hideHeader && (
         <View style={[styles.browserHeader, { borderBottomColor: themeColors.card }]}>
           <View style={styles.browserHeaderTop}>
-            <TouchableOpacity onPress={onBack} style={styles.backButton} accessibilityLabel="Go back" accessibilityRole="button">
-              <MaterialIcons name="arrow-back" size={24} color={themeColors.text} accessibilityLabel="Back icon" accessible={false} />
+            <TouchableOpacity onPress={onBack} style={styles.backButton}>
+              <MaterialIcons name="arrow-back" size={24} color={themeColors.text} />
             </TouchableOpacity>
             <Text style={[styles.browserTitle, { color: themeColors.text }]}>
               File Browser
@@ -364,23 +323,22 @@ const FileBrowser = ({ onFileSelect, onBack, hideHeader }) => {
             <View style={styles.browserActions}>
               {isSelectionMode ? (
                 <>
-                <TouchableOpacity onPress={deleteSelectedFiles} style={styles.actionButton} accessibilityLabel="Delete selected files" accessibilityRole="button">
-                  <MaterialIcons name="delete" size={20} color="#FF5722" accessibilityLabel="Delete icon" accessible={false} />
-                </TouchableOpacity>
+                  <TouchableOpacity onPress={deleteSelectedFiles} style={styles.actionButton}>
+                    <MaterialIcons name="delete" size={20} color="#FF5722" />
+                  </TouchableOpacity>
                   <TouchableOpacity 
                     onPress={() => {
                       setIsSelectionMode(false);
                       setSelectedFiles([]);
                     }} 
                     style={styles.actionButton}
-                    accessibilityLabel="Cancel selection mode" accessibilityRole="button"
                   >
-                    <MaterialIcons name="close" size={20} color={themeColors.text} accessibilityLabel="Close icon" accessible={false} />
+                    <MaterialIcons name="close" size={20} color={themeColors.text} />
                   </TouchableOpacity>
                 </>
               ) : (
-                <TouchableOpacity onPress={() => setShowSortModal(true)} style={styles.actionButton} accessibilityLabel="Sort files" accessibilityRole="button">
-                  <MaterialIcons name="sort" size={20} color={themeColors.text} accessibilityLabel="Sort icon" accessible={false} />
+                <TouchableOpacity onPress={() => setShowSortModal(true)} style={styles.actionButton}>
+                  <MaterialIcons name="sort" size={20} color={themeColors.text} />
                 </TouchableOpacity>
               )}
             </View>
@@ -394,19 +352,6 @@ const FileBrowser = ({ onFileSelect, onBack, hideHeader }) => {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={themeColors.primary} />
           <Text style={[styles.loadingText, { color: themeColors.text }]}>Loading...</Text>
-          {loadingProgress.total > 0 && (
-            <Text style={[styles.loadingText, { color: themeColors.text, marginTop: 8 }]}> 
-              {`Loaded ${loadingProgress.current} of ${loadingProgress.total} files`}
-            </Text>
-          )}
-        </View>
-      ) : errorState ? (
-        <View style={styles.loadingContainer}>
-          <MaterialIcons name="error-outline" size={48} color="#FF5722" />
-          <Text style={[styles.loadingText, { color: themeColors.text, marginTop: 16 }]}>{errorState.message}</Text>
-          <TouchableOpacity onPress={errorState.retry} style={[styles.modalButton, { backgroundColor: themeColors.primary, marginTop: 24 }]}> 
-            <Text style={styles.modalButtonText}>Retry</Text>
-          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
@@ -419,7 +364,7 @@ const FileBrowser = ({ onFileSelect, onBack, hideHeader }) => {
             <View style={styles.emptyContainer}>
               <MaterialIcons name="folder-open" size={64} color={themeColors.textSecondary} />
               <Text style={[styles.emptyText, { color: themeColors.text }]}>No files found</Text>
-              <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}> 
+              <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
                 This folder is empty
               </Text>
             </View>

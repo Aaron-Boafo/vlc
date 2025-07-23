@@ -3,7 +3,6 @@ import { subscribeWithSelector } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import ProgressiveMediaLoader from '../utils/progressiveMediaLoader';
-import MediaLibraryPersistence from '../utils/mediaLibraryPersistence';
 
 const useOptimizedAudioStore = create(
   subscribeWithSelector(
@@ -17,29 +16,30 @@ const useOptimizedAudioStore = create(
         activeTab: 'all',
         sortOrder: { key: 'title', direction: 'asc' },
 
-        // Fast loading with progressive updates and persistent caching
+        // Fast loading with progressive updates - Enhanced caching
         loadAudioFiles: async (forceRefresh = false) => {
           const state = get();
           
-          try {
-            set({ isLoading: true, isInitialLoadComplete: false });
-
-            // First, try to load from cache
-            let cachedFiles = null;
-            if (!forceRefresh) {
-              cachedFiles = await MediaLibraryPersistence.loadFromCache();
-              if (cachedFiles && cachedFiles.length > 0) {
-                set({ 
-                  audioFiles: cachedFiles,
-                  isInitialLoadComplete: true,
-                  isLoading: false,
-                  lastLoadTime: Date.now()
-                });
+          // Enhanced caching: Skip if files exist and not forcing refresh
+          if (!forceRefresh && state.audioFiles.length > 0) {
+            // Only reload if files are very old (30 minutes) or explicitly forced
+            if (state.lastLoadTime) {
+              const timeSinceLoad = Date.now() - state.lastLoadTime;
+              if (timeSinceLoad < 30 * 60 * 1000) { // 30 minutes instead of 5
+                console.log('⚡ Audio files cached, skipping reload');
+                return state.audioFiles;
               }
+            } else {
+              // If we have files but no timestamp, assume they're fresh
+              console.log('⚡ Audio files exist, skipping reload');
+              return state.audioFiles;
             }
+          }
 
-            // Load current files from the device
-            const currentFiles = await ProgressiveMediaLoader.loadMediaProgressively('audio', (progressFiles, isComplete) => {
+          set({ isLoading: true, isInitialLoadComplete: false });
+
+          try {
+            const files = await ProgressiveMediaLoader.loadMediaProgressively('audio', (progressFiles, isComplete) => {
               // Update UI immediately as files are loaded progressively
               set({ 
                 audioFiles: progressFiles,
@@ -48,24 +48,13 @@ const useOptimizedAudioStore = create(
               });
             });
 
-            // Find new and changed files
-            const newFiles = await MediaLibraryPersistence.findNewFiles(cachedFiles, currentFiles);
-            const changedFiles = await MediaLibraryPersistence.findChangedFiles(cachedFiles, currentFiles);
-
-            // Merge cached files with new and changed files
-            const mergedFiles = await MediaLibraryPersistence.getMergedFiles(cachedFiles, newFiles, changedFiles);
-
-            // Save the updated library to cache
-            await MediaLibraryPersistence.saveToCache(mergedFiles);
-
             set({ 
               lastLoadTime: Date.now(),
               isLoading: false,
               isInitialLoadComplete: true,
-              audioFiles: mergedFiles
             });
 
-            return mergedFiles;
+            return files;
           } catch (error) {
             console.error('❌ Fast audio loading failed:', error);
             set({ isLoading: false, isInitialLoadComplete: true });

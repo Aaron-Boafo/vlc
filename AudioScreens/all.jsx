@@ -441,20 +441,10 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
 
   if (isLoading && sortedAndFilteredAudio.length === 0) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: themeColors.background }]}> 
+      <View style={[styles.loadingContainer, { backgroundColor: themeColors.background }]}>
         <ActivityIndicator size="large" color={themeColors.primary} />
-        <Text style={[styles.loadingText, { color: themeColors.text }]}> 
+        <Text style={[styles.loadingText, { color: themeColors.text }]}>
           Loading your music library...
-        </Text>
-      </View>
-    );
-  }
-
-  if (!isLoading && sortedAndFilteredAudio.length === 0) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: themeColors.background }]}> 
-        <Text style={[styles.loadingText, { color: themeColors.text }]}> 
-          No audio files found.
         </Text>
       </View>
     );
