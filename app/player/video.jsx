@@ -39,13 +39,14 @@ const MinimalVideoPlayer = () => {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const router = useRouter();
 
-  // Create video player instance (with fallback handling)
-  const player = useVideoPlayer ? useVideoPlayer(currentVideo?.uri || '', (player) => {
-    player.loop = loop;
-    player.muted = isMuted;
-    player.playbackRate = playbackRate;
-    player.play();
-  }) : null;
+  // Create video player instance - always call hook to maintain order
+  const player = useVideoPlayer && currentVideo?.uri ? 
+    useVideoPlayer(currentVideo.uri, (player) => {
+      player.loop = loop;
+      player.muted = isMuted;
+      player.playbackRate = playbackRate;
+      player.play();
+    }) : null;
 
   // Removed animation values to fix casting error
 

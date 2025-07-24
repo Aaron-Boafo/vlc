@@ -50,9 +50,9 @@ const getThemeColors = (themeType, accentColor = accentColors) => {
 const useThemeStore = create(
   persist(
     (set) => ({
-      activeTheme: "light",
+      activeTheme: "dark",
       accentColor: "purple",
-      themeColors: getThemeColors("light", "purple"),
+      themeColors: getThemeColors("dark", "purple"),
       selectedBackground: null,
 
       toggleTheme: () =>

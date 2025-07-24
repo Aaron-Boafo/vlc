@@ -78,7 +78,8 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-screen-orientation"
+      "expo-screen-orientation",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true
