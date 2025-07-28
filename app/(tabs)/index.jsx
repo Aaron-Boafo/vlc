@@ -1,38 +1,45 @@
-import useThemeStore from "../../../store/theme";
-import { View, Text, StyleSheet, Platform, TouchableOpacity, ScrollView } from "react-native";
-import AudioHeader from "../../../AudioComponents/title";
-import VideoToggleBar from "../../../VideoComponents/toggleButton";
-import useOptimizedVideoStore from "../../../store/optimizedVideoStore";
-import VideoAllScreen from "../../../VideoScreens/all";
-import VideoPlaylistScreen from "../../../VideoScreens/playlist";
-import VideoFavouriteScreen from "../../../VideoScreens/favourite";
-import VideoHistoryScreen from "../../../VideoScreens/history";
+import useThemeStore from "../../store/theme";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Platform,
+  TouchableOpacity,
+  ScrollView,
+} from "react-native";
+import AudioHeader from "../../AudioComponents/title";
+import VideoToggleBar from "../../VideoComponents/toggleButton";
+import useOptimizedVideoStore from "../../store/optimizedVideoStore";
+import VideoAllScreen from "../../VideoScreens/all";
+import VideoPlaylistScreen from "../../VideoScreens/playlist";
+import VideoFavouriteScreen from "../../VideoScreens/favourite";
+import VideoHistoryScreen from "../../VideoScreens/history";
 // import MiniPlayer from '../../../components/MiniPlayer';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from "react";
 import Constants from "expo-constants";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter, useFocusEffect } from 'expo-router';
-import MoreOptionsMenu from '../../../components/MoreOptionsMenu';
-import SortOptionsSheet from "../../../components/SortOptionsSheet";
-import ProgressiveLoadingIndicator from "../../../components/ProgressiveLoadingIndicator";
-import StoreMigration from "../../../utils/storeMigration";
-import AdvancedSearch from "../../../utils/advancedSearch";
-import PerformanceAnalytics from "../../../utils/performanceAnalytics";
-import NavigationOptimizer from "../../../utils/navigationOptimizer";
-import LazyScreen from "../../../components/LazyScreen";
-import ImageOptimizer from "../../../utils/imageOptimizer";
-import * as Icons from 'lucide-react-native';
+import { useRouter, useFocusEffect } from "expo-router";
+import MoreOptionsMenu from "../../components/MoreOptionsMenu";
+import SortOptionsSheet from "../../components/SortOptionsSheet";
+import ProgressiveLoadingIndicator from "../../components/ProgressiveLoadingIndicator";
+import StoreMigration from "../../utils/storeMigration";
+import AdvancedSearch from "../../utils/advancedSearch";
+import PerformanceAnalytics from "../../utils/performanceAnalytics";
+import NavigationOptimizer from "../../utils/navigationOptimizer";
+import LazyScreen from "../../components/LazyScreen";
+import ImageOptimizer from "../../utils/imageOptimizer";
+import * as Icons from "lucide-react-native";
 
 export default function VideoTabScreen() {
-  const { 
-    activeTab, 
-    loadVideoFiles, 
-    videoFiles, 
+  const {
+    activeTab,
+    loadVideoFiles,
+    videoFiles,
     isLoading,
     isInitialLoadComplete,
     sortOrder,
     sortVideoFiles,
-    toggleTabs 
+    toggleTabs,
   } = useOptimizedVideoStore();
   const { themeColors } = useThemeStore();
   const [showSort, setShowSort] = useState(false);
@@ -50,7 +57,7 @@ export default function VideoTabScreen() {
         await StoreMigration.migrateVideoStore();
         setMigrationComplete(true);
       } catch (error) {
-        console.error('Video migration failed:', error);
+        console.error("Video migration failed:", error);
         setMigrationComplete(true); // Continue anyway
       }
     };
@@ -58,12 +65,42 @@ export default function VideoTabScreen() {
   }, []);
 
   const videoSortOptions = [
-    { label: 'Filename (A-Z)', key: 'filename', direction: 'asc', icon: Icons.ArrowDownAZ },
-    { label: 'Filename (Z-A)', key: 'filename', direction: 'desc', icon: Icons.ArrowUpAZ },
-    { label: 'Duration (Shortest)', key: 'duration', direction: 'asc', icon: Icons.Clock },
-    { label: 'Duration (Longest)', key: 'duration', direction: 'desc', icon: Icons.Clock },
-    { label: 'Date Added (Newest)', key: 'modificationTime', direction: 'desc', icon: Icons.CalendarClock },
-    { label: 'Date Added (Oldest)', key: 'modificationTime', direction: 'asc', icon: Icons.CalendarClock },
+    {
+      label: "Filename (A-Z)",
+      key: "filename",
+      direction: "asc",
+      icon: Icons.ArrowDownAZ,
+    },
+    {
+      label: "Filename (Z-A)",
+      key: "filename",
+      direction: "desc",
+      icon: Icons.ArrowUpAZ,
+    },
+    {
+      label: "Duration (Shortest)",
+      key: "duration",
+      direction: "asc",
+      icon: Icons.Clock,
+    },
+    {
+      label: "Duration (Longest)",
+      key: "duration",
+      direction: "desc",
+      icon: Icons.Clock,
+    },
+    {
+      label: "Date Added (Newest)",
+      key: "modificationTime",
+      direction: "desc",
+      icon: Icons.CalendarClock,
+    },
+    {
+      label: "Date Added (Oldest)",
+      key: "modificationTime",
+      direction: "asc",
+      icon: Icons.CalendarClock,
+    },
   ];
 
   // Optimized loading - prevent unnecessary reloads on tab switches
@@ -71,16 +108,26 @@ export default function VideoTabScreen() {
     useCallback(() => {
       // Only load if migration is complete and we haven't loaded yet
       if (migrationComplete && !hasInitiallyLoaded && videoFiles.length === 0) {
-        console.log('🚀 Loading video files with fast loader...');
+        console.log("🚀 Loading video files with fast loader...");
         const startTime = Date.now();
         setHasInitiallyLoaded(true);
         loadVideoFiles().then(() => {
-          PerformanceAnalytics.trackLoadTime('VideoFiles', startTime, Date.now(), videoFiles.length);
+          PerformanceAnalytics.trackLoadTime(
+            "VideoFiles",
+            startTime,
+            Date.now(),
+            videoFiles.length
+          );
           // 🖼️ Preload video thumbnails for better performance
           ImageOptimizer.preloadArtwork(videoFiles.slice(0, 10));
         });
       }
-    }, [migrationComplete, hasInitiallyLoaded, videoFiles.length, loadVideoFiles])
+    }, [
+      migrationComplete,
+      hasInitiallyLoaded,
+      videoFiles.length,
+      loadVideoFiles,
+    ])
   );
 
   // 🔍 Build search index when video files change
@@ -88,8 +135,17 @@ export default function VideoTabScreen() {
     if (videoFiles.length > 0) {
       const startTime = Date.now();
       AdvancedSearch.buildSearchIndex(videoFiles);
-      PerformanceAnalytics.trackLoadTime('VideoSearchIndex', startTime, Date.now(), videoFiles.length);
-      console.log('🔍 Video search index built for', videoFiles.length, 'files');
+      PerformanceAnalytics.trackLoadTime(
+        "VideoSearchIndex",
+        startTime,
+        Date.now(),
+        videoFiles.length
+      );
+      console.log(
+        "🔍 Video search index built for",
+        videoFiles.length,
+        "files"
+      );
     }
   }, [videoFiles]);
 
@@ -107,17 +163,20 @@ export default function VideoTabScreen() {
   ];
 
   // Shared props for all screens
-  const sharedSearchProps = React.useMemo(() => ({
-    showSearch,
-    setShowSearch,
-    searchQuery,
-    setSearchQuery,
-    onCloseSearch: () => setShowSearch(false)
-  }), [showSearch, setShowSearch, searchQuery, setSearchQuery]);
+  const sharedSearchProps = React.useMemo(
+    () => ({
+      showSearch,
+      setShowSearch,
+      searchQuery,
+      setSearchQuery,
+      onCloseSearch: () => setShowSearch(false),
+    }),
+    [showSearch, setShowSearch, searchQuery, setSearchQuery]
+  );
 
   // Get current tab index
   const getCurrentTabIndex = useCallback(() => {
-    return tabs.findIndex(tab => tab.name === activeTab);
+    return tabs.findIndex((tab) => tab.name === activeTab);
   }, [activeTab]);
 
   // Update current index when activeTab changes
@@ -129,22 +188,29 @@ export default function VideoTabScreen() {
       if (scrollViewRef.current && screenWidth > 0) {
         scrollViewRef.current.scrollTo({
           x: newIndex * screenWidth,
-          animated: true
+          animated: true,
         });
       }
     }
   }, [activeTab, getCurrentTabIndex, currentIndex, screenWidth]);
 
   // Handle scroll end to update active tab
-  const handleScrollEnd = useCallback((event) => {
-    const contentOffsetX = event.nativeEvent.contentOffset.x;
-    const newIndex = Math.round(contentOffsetX / screenWidth);
-    
-    if (newIndex !== currentIndex && newIndex >= 0 && newIndex < tabs.length) {
-      setCurrentIndex(newIndex);
-      toggleTabs(tabs[newIndex].name);
-    }
-  }, [screenWidth, currentIndex, toggleTabs]);
+  const handleScrollEnd = useCallback(
+    (event) => {
+      const contentOffsetX = event.nativeEvent.contentOffset.x;
+      const newIndex = Math.round(contentOffsetX / screenWidth);
+
+      if (
+        newIndex !== currentIndex &&
+        newIndex >= 0 &&
+        newIndex < tabs.length
+      ) {
+        setCurrentIndex(newIndex);
+        toggleTabs(tabs[newIndex].name);
+      }
+    },
+    [screenWidth, currentIndex, toggleTabs]
+  );
 
   // Handle layout to get screen width
   const handleLayout = useCallback((event) => {
@@ -167,7 +233,10 @@ export default function VideoTabScreen() {
         {tabs.map((tab, index) => {
           const TabComponent = tab.component;
           return (
-            <View key={tab.name} style={[styles.tabScreen, { width: screenWidth }]}>
+            <View
+              key={tab.name}
+              style={[styles.tabScreen, { width: screenWidth }]}
+            >
               {tab.preload ? (
                 <TabComponent {...sharedSearchProps} />
               ) : (
@@ -180,7 +249,13 @@ export default function VideoTabScreen() {
         })}
       </ScrollView>
     );
-  }, [sharedSearchProps, screenWidth, currentIndex, handleScrollEnd, handleLayout]);
+  }, [
+    sharedSearchProps,
+    screenWidth,
+    currentIndex,
+    handleScrollEnd,
+    handleLayout,
+  ]);
 
   const renderContent = () => {
     // Show progressive loading indicator only during initial load with no files
@@ -211,23 +286,21 @@ export default function VideoTabScreen() {
   };
 
   return (
-    <SafeAreaView 
+    <SafeAreaView
       style={[styles.screen, { backgroundColor: themeColors.background }]}
-      edges={['top']} // Only apply safe area to top, let bottom be handled by tab bar
+      edges={["top"]} // Only apply safe area to top, let bottom be handled by tab bar
     >
       <AudioHeader
         title="Video"
-        onSearch={() => setShowSearch(s => !s)}
+        onSearch={() => setShowSearch((s) => !s)}
         onFilter={() => setShowSort(true)}
         onMore={() => setShowMore(true)}
         onRefresh={loadVideoFiles}
       />
-      
+
       <VideoToggleBar />
 
-      <View style={styles.contentArea}>
-        {renderContent()}
-      </View>
+      <View style={styles.contentArea}>{renderContent()}</View>
 
       {/* <MiniPlayer /> */}
 
@@ -238,13 +311,15 @@ export default function VideoTabScreen() {
         title="Sort Videos"
         sortOptions={videoSortOptions}
         currentSortOrder={sortOrder || { key: "filename", direction: "asc" }}
-        onSort={(newSortOrder) => sortVideoFiles(newSortOrder.key, newSortOrder.direction)}
+        onSort={(newSortOrder) =>
+          sortVideoFiles(newSortOrder.key, newSortOrder.direction)
+        }
       />
       <MoreOptionsMenu
         visible={showMore}
         onClose={() => setShowMore(false)}
-        onSettings={() => router.push('/(tabs)/(more)/settings')}
-        onAbout={() => router.push('/(tabs)/(more)/about')}
+        onSettings={() => router.push("/(tabs)/(more)/settings")}
+        onAbout={() => router.push("/(tabs)/(more)/about")}
         onRefresh={loadVideoFiles}
       />
     </SafeAreaView>
@@ -256,13 +331,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   centerContainer: {
-    flex: 1, 
-    justifyContent: "center", 
-    alignItems: "center"
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
   contentArea: {
     flex: 1,
-    paddingBottom: Platform.OS === 'ios' ? 0 : 20, // Extra padding for Android
+    paddingBottom: Platform.OS === "ios" ? 0 : 20, // Extra padding for Android
   },
   scrollContainer: {
     flex: 1,
