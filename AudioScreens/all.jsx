@@ -114,26 +114,10 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
   const metadataQueue = useRef([]); // Queue for batch processing
   const maxCacheSize = useRef(1000); // Limit cache size to prevent memory issues
 
-  // 🧠 Register metadata cache with memory manager and optimize for large libraries
+  // 🧠 Register metadata cache with memory manager (only once on mount)
   useEffect(() => {
-    const startTime = Date.now();
-    
     MemoryManager.registerCache('audioMetadata', metadataCache.current, maxCacheSize.current);
     MemoryManager.registerCache('audioTrackMetadata', trackMetadata, maxCacheSize.current);
-    
-    // 🚀 Optimize for library size and start performance monitoring
-    if (audioFiles.length > 0) {
-      const optimizedSettings = LargeLibraryOptimizer.optimizeForLibrarySize(audioFiles.length);
-      maxCacheSize.current = optimizedSettings.cacheSize;
-      
-      // 📊 Start performance monitoring for large libraries
-      if (LargeLibraryOptimizer.isLargeLibrary()) {
-        PerformanceMonitor.startMonitoring();
-        PerformanceMonitor.trackLoadTime('audio', audioFiles.length, Date.now() - startTime);
-      }
-      
-      console.log(`📚 Library optimization applied for ${audioFiles.length} files:`, optimizedSettings);
-    }
     
     return () => {
       // Cleanup when component unmounts
@@ -146,6 +130,23 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
         console.log('📊 Audio screen performance report:', report.summary);
       }
     };
+  }, []); // Empty dependency array - run only once on mount
+
+  // 🚀 Optimize for library size when audio files change
+  useEffect(() => {
+    if (audioFiles.length > 0) {
+      const startTime = Date.now();
+      const optimizedSettings = LargeLibraryOptimizer.optimizeForLibrarySize(audioFiles.length);
+      maxCacheSize.current = optimizedSettings.cacheSize;
+      
+      // 📊 Start performance monitoring for large libraries
+      if (LargeLibraryOptimizer.isLargeLibrary()) {
+        PerformanceMonitor.startMonitoring();
+        PerformanceMonitor.trackLoadTime('audio', audioFiles.length, Date.now() - startTime);
+      }
+      
+      console.log(`📚 Library optimization applied for ${audioFiles.length} files:`, optimizedSettings);
+    }
   }, [audioFiles.length]);
 
   const onRefresh = async () => {
@@ -195,6 +196,8 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
       
       console.log('🎵 Playing track:', enrichedTracks[index].title, 'with artwork:', !!enrichedTracks[index].artwork);
       console.log('🎨 Artwork URI:', enrichedTracks[index].artwork?.substring(0, 50) + '...');
+      
+      // Start playing the track and navigate to player
       await audioControl.setAndPlayPlaylist(enrichedTracks, index);
       router.push('/player/audio');
     } catch (error) {

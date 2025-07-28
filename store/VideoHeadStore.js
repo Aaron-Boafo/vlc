@@ -91,6 +91,7 @@ const useVideoStore = create(
       isMiniPlayerPlaying: false,
       miniPlayerPosition: 0,
       miniPlayerVideo: null,
+      isTransitioning: false, // Prevent multiple simultaneous plays
 
       // Sorting function
       sortOrder: { key: 'filename', direction: 'asc' }, // default sort
@@ -241,14 +242,26 @@ const useVideoStore = create(
 
       // Set a single video to play
       setAndPlayVideo: (video, shouldContinuePlayback = false) => {
-        const videoFiles = get().videoFiles || [];
-        const index = videoFiles.findIndex(v => v.id === video.id);
-        set({
-          currentVideo: video,
-          currentVideoIndex: index,
-          isMiniPlayerVisible: false, // Always hide miniplayer when a new video is chosen
-        });
-        // Navigation should be handled by the component that calls this.
+        const { isTransitioning } = get();
+        if (isTransitioning) {
+          console.log("Video transition already in progress, ignoring request");
+          return;
+        }
+        
+        set({ isTransitioning: true });
+        
+        try {
+          const videoFiles = get().videoFiles || [];
+          const index = videoFiles.findIndex(v => v.id === video.id);
+          set({
+            currentVideo: video,
+            currentVideoIndex: index,
+            isMiniPlayerVisible: false, // Always hide miniplayer when a new video is chosen
+          });
+          // Navigation should be handled by the component that calls this.
+        } finally {
+          setTimeout(() => set({ isTransitioning: false }), 500); // Small delay to prevent rapid clicks
+        }
       },
 
       showMiniPlayer: (video, position, isPlaying = true) => {
@@ -284,30 +297,44 @@ const useVideoStore = create(
       },
 
       playNext: () => {
-        const { currentVideoIndex, videoFiles } = get();
-        if (!videoFiles || !Array.isArray(videoFiles) || videoFiles.length === 0) {
+        const { currentVideoIndex, videoFiles, isTransitioning } = get();
+        if (!videoFiles || !Array.isArray(videoFiles) || videoFiles.length === 0 || isTransitioning) {
           return;
         }
-        const nextIndex = (currentVideoIndex + 1) % videoFiles.length;
-        if (nextIndex < videoFiles.length) {
-          set({
-            currentVideo: videoFiles[nextIndex],
-            currentVideoIndex: nextIndex,
-          });
+        
+        set({ isTransitioning: true });
+        
+        try {
+          const nextIndex = (currentVideoIndex + 1) % videoFiles.length;
+          if (nextIndex < videoFiles.length) {
+            set({
+              currentVideo: videoFiles[nextIndex],
+              currentVideoIndex: nextIndex,
+            });
+          }
+        } finally {
+          setTimeout(() => set({ isTransitioning: false }), 300);
         }
       },
 
       playPrevious: () => {
-        const { currentVideoIndex, videoFiles } = get();
-        if (!videoFiles || !Array.isArray(videoFiles) || videoFiles.length === 0) {
+        const { currentVideoIndex, videoFiles, isTransitioning } = get();
+        if (!videoFiles || !Array.isArray(videoFiles) || videoFiles.length === 0 || isTransitioning) {
           return;
         }
-        const prevIndex = (currentVideoIndex - 1 + videoFiles.length) % videoFiles.length;
-        if (prevIndex >= 0) {
-          set({
-            currentVideo: videoFiles[prevIndex],
-            currentVideoIndex: prevIndex,
-          });
+        
+        set({ isTransitioning: true });
+        
+        try {
+          const prevIndex = (currentVideoIndex - 1 + videoFiles.length) % videoFiles.length;
+          if (prevIndex >= 0) {
+            set({
+              currentVideo: videoFiles[prevIndex],
+              currentVideoIndex: prevIndex,
+            });
+          }
+        } finally {
+          setTimeout(() => set({ isTransitioning: false }), 300);
         }
       },
       

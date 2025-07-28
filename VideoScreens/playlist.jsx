@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -30,6 +30,7 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
   const [optionsVisible, setOptionsVisible] = useState(false);
   const [optionsPlaylist, setOptionsPlaylist] = useState(null);
   const [videoThumbnails, setVideoThumbnails] = useState({});
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   useEffect(() => {
     const generateThumbnails = async () => {
@@ -83,10 +84,13 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
     setPlaylistModalVisible(true);
   };
 
-  const handleVideoPress = (video) => {
+  const handleVideoPress = useCallback((video) => {
+    // Prevent multiple rapid clicks
+    if (isTransitioning) return;
+    
     setCurrentVideo(video);
-    router.push('/player/video');
-  };
+    router.replace('/player/video');
+  }, [isTransitioning, setCurrentVideo, router]);
 
   const handleToggleVideo = (video) => {
     setSelectedVideos((prev) =>

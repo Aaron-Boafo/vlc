@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, useWindowDimensions, Text, Vibration } from 'react-native';
-import { Play, Pause, X, Trash2, ChevronDown } from 'lucide-react-native';
+import { View, StyleSheet, TouchableOpacity, useWindowDimensions, Text } from 'react-native';
+import { Play, Pause, X } from 'lucide-react-native';
 
 // Try to import expo-video with fallback
 let VideoView, useVideoPlayer;
@@ -15,22 +15,7 @@ try {
 }
 import useOptimizedVideoStore from '../store/optimizedVideoStore';
 import { router } from 'expo-router';
-import Animated, { 
-  useAnimatedStyle, 
-  withTiming, 
-  useSharedValue, 
-  useAnimatedGestureHandler, 
-  runOnJS,
-  withSpring,
-  interpolate,
-  Extrapolate,
-  withSequence,
-  withDelay,
-  Easing
-} from 'react-native-reanimated';
-import { PanGestureHandler } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 
 const VideoMiniPlayer = () => {
   const { 
@@ -45,237 +30,38 @@ const VideoMiniPlayer = () => {
   const insets = useSafeAreaInsets();
   const [showControls, setShowControls] = useState(false);
 
-  // Create video player instance for expo-video
-  const player = useVideoPlayer && miniPlayerVideo?.uri ? useVideoPlayer(miniPlayerVideo.uri, (player) => {
-    player.loop = true;
-    player.muted = false;
-    if (isMiniPlayerPlaying) {
-      player.play();
-    } else {
-      player.pause();
+  // Create video player instance for expo-video (always call hook)
+  const player = useVideoPlayer ? useVideoPlayer(
+    miniPlayerVideo?.uri || '', 
+    (player) => {
+      if (miniPlayerVideo?.uri) {
+        player.loop = true;
+        player.muted = false;
+        if (isMiniPlayerPlaying) {
+          player.play();
+        } else {
+          player.pause();
+        }
+      }
     }
-  }) : null;
+  ) : null;
   const controlsTimer = useRef(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [isInDeleteZone, setIsInDeleteZone] = useState(false);
-  const [hasTriggeredHaptic, setHasTriggeredHaptic] = useState(false);
-  
-  // Add video opacity for smooth content transitions
-  const videoOpacity = useSharedValue(0);
 
   // Sync player state with mini player state
   useEffect(() => {
-    if (player) {
+    if (player && miniPlayerVideo?.uri) {
       if (isMiniPlayerPlaying) {
         player.play();
       } else {
         player.pause();
       }
     }
-  }, [player, isMiniPlayerPlaying]);
+  }, [player, isMiniPlayerPlaying, miniPlayerVideo?.uri]);
 
   const miniPlayerWidth = (width - 48) / 2;
   const miniPlayerHeight = (miniPlayerWidth * 9) / 16;
 
-  // Enhanced animation values
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
-  const scale = useSharedValue(1);
-  const rotation = useSharedValue(0);
-  const deleteZoneOpacity = useSharedValue(0);
-  const deleteZoneScale = useSharedValue(0.8);
 
-  // Delete zone configuration
-  const DELETE_ZONE_HEIGHT = 120;
-  const DELETE_THRESHOLD = height - DELETE_ZONE_HEIGHT;
-
-  useEffect(() => {
-    // Enhanced smooth entrance/exit animations
-    if (isMiniPlayerVisible) {
-      // Smooth entrance animation from bottom-right
-      translateX.value = withSpring(0, { 
-        damping: 20, 
-        stiffness: 150,
-        mass: 1
-      });
-      translateY.value = withSpring(0, { 
-        damping: 20, 
-        stiffness: 150,
-        mass: 1
-      });
-      scale.value = withSequence(
-        withTiming(0.8, { duration: 0 }),
-        withSpring(1, { 
-          damping: 15, 
-          stiffness: 200 
-        })
-      );
-      rotation.value = withSpring(0, { damping: 20 });
-      deleteZoneOpacity.value = 0;
-      deleteZoneScale.value = 0.8;
-    } else {
-      // Smooth exit animation
-      scale.value = withTiming(0.8, { 
-        duration: 200,
-        easing: Easing.out(Easing.cubic)
-      });
-      translateY.value = withTiming(100, { 
-        duration: 250,
-        easing: Easing.out(Easing.cubic)
-      });
-    }
-  }, [isMiniPlayerVisible, width, height]);
-
-  // Enhanced haptic feedback function
-  const triggerHapticFeedback = (type = 'light') => {
-    try {
-      if (type === 'enter') {
-        Vibration.vibrate(50); // Light vibration when entering delete zone
-      } else if (type === 'delete') {
-        Vibration.vibrate([0, 100, 50, 100]); // Pattern for deletion
-      }
-    } catch (error) {
-      console.log('Haptic feedback not available');
-    }
-  };
-
-  const panGesture = useAnimatedGestureHandler({
-    onStart: (_, ctx) => {
-      ctx.startX = translateX.value;
-      ctx.startY = translateY.value;
-      
-      // Start drag animations
-      scale.value = withSpring(1.1, { damping: 15 });
-      rotation.value = withSpring(2, { damping: 15 });
-      deleteZoneOpacity.value = withTiming(1, { duration: 200 });
-      deleteZoneScale.value = withSpring(1, { damping: 15 });
-      
-      runOnJS(setIsDragging)(true);
-      runOnJS(setHasTriggeredHaptic)(false);
-    },
-    
-    onActive: (event, ctx) => {
-      const newX = ctx.startX + event.translationX;
-      const newY = ctx.startY + event.translationY;
-      
-      translateX.value = newX;
-      translateY.value = newY;
-      
-      // Calculate current absolute position
-      const currentAbsoluteY = height - 65 - miniPlayerHeight + newY;
-      const isInZone = currentAbsoluteY > DELETE_THRESHOLD;
-      
-      // Enhanced visual feedback based on proximity to delete zone
-      const distanceToZone = Math.max(0, DELETE_THRESHOLD - currentAbsoluteY);
-      const proximityFactor = Math.max(0, 1 - distanceToZone / 100);
-      
-      // Dynamic scaling and rotation based on proximity
-      scale.value = 1.1 + (proximityFactor * 0.2);
-      rotation.value = 2 + (proximityFactor * 8);
-      
-      // Update delete zone appearance
-      if (isInZone) {
-        deleteZoneScale.value = withSpring(1.2, { damping: 10 });
-        if (!hasTriggeredHaptic) {
-          runOnJS(triggerHapticFeedback)('enter');
-          runOnJS(setHasTriggeredHaptic)(true);
-        }
-        runOnJS(setIsInDeleteZone)(true);
-      } else {
-        deleteZoneScale.value = withSpring(1, { damping: 15 });
-        runOnJS(setIsInDeleteZone)(false);
-        runOnJS(setHasTriggeredHaptic)(false);
-      }
-    },
-    
-    onEnd: (event) => {
-      const finalY = translateY.value;
-      const currentAbsoluteY = height - 65 - miniPlayerHeight + finalY;
-      const shouldDelete = currentAbsoluteY > DELETE_THRESHOLD;
-      
-      if (shouldDelete) {
-        // Enhanced delete animation
-        scale.value = withSequence(
-          withSpring(1.3, { damping: 10 }),
-          withTiming(0, { duration: 200 })
-        );
-        rotation.value = withTiming(15, { duration: 200 });
-        translateY.value = withTiming(height, { duration: 300 });
-        
-        runOnJS(triggerHapticFeedback)('delete');
-        runOnJS(setTimeout)(() => {
-          runOnJS(closeMiniPlayer)();
-        }, 250);
-      } else {
-        // Snap to nearest corner with enhanced animation
-        const corners = [
-          { x: 0, y: 0 }, // top-right
-          { x: 0, y: -(height - miniPlayerHeight - 65) }, // bottom-right
-          { x: -(width - miniPlayerWidth - 16), y: 0 }, // top-left
-          { x: -(width - miniPlayerWidth - 16), y: -(height - miniPlayerHeight - 65) }, // bottom-left
-        ];
-        
-        const dist = (a, b) => Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
-        const current = { x: translateX.value, y: translateY.value };
-        let minDist = Infinity;
-        let nearest = corners[0];
-        
-        for (let c of corners) {
-          const d = dist(current, c);
-          if (d < minDist) {
-            minDist = d;
-            nearest = c;
-          }
-        }
-        
-        // Smooth return animation
-        translateX.value = withSpring(nearest.x, { damping: 15, stiffness: 150 });
-        translateY.value = withSpring(nearest.y, { damping: 15, stiffness: 150 });
-        scale.value = withSpring(1, { damping: 15 });
-        rotation.value = withSpring(0, { damping: 15 });
-      }
-      
-      // Hide delete zone
-      deleteZoneOpacity.value = withTiming(0, { duration: 300 });
-      deleteZoneScale.value = withSpring(0.8, { damping: 15 });
-      
-      runOnJS(setIsDragging)(false);
-      runOnJS(setIsInDeleteZone)(false);
-      runOnJS(setHasTriggeredHaptic)(false);
-    },
-  });
-
-  const containerAnimatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [
-        { translateX: translateX.value },
-        { translateY: translateY.value },
-        { scale: scale.value },
-        { rotate: `${rotation.value}deg` }
-      ],
-      opacity: withTiming(isMiniPlayerVisible ? 1 : 0, { 
-        duration: 300,
-        easing: Easing.bezier(0.25, 0.1, 0.25, 1) // Smooth easing curve
-      }),
-      shadowOpacity: withTiming(isDragging ? 0.3 : 0.15, { duration: 200 }),
-      elevation: isDragging ? 15 : 10,
-      // Prevent flickering during transitions
-      zIndex: isMiniPlayerVisible ? 1000 : -1,
-    };
-  });
-
-  const deleteZoneAnimatedStyle = useAnimatedStyle(() => {
-    return {
-      opacity: deleteZoneOpacity.value,
-      transform: [{ scale: deleteZoneScale.value }],
-    };
-  });
-  
-  const controlsAnimatedStyle = useAnimatedStyle(() => {
-    return {
-      opacity: withTiming(showControls ? 1 : 0, { duration: 200 })
-    };
-  });
 
   useEffect(() => {
     if (isMiniPlayerVisible) {
@@ -284,11 +70,21 @@ const VideoMiniPlayer = () => {
     } else {
       setShowControls(false);
       if (controlsTimer.current) clearTimeout(controlsTimer.current);
+      
+      // Cleanup video player when mini player becomes invisible
+      if (player && miniPlayerVideo?.uri) {
+        try {
+          player.pause();
+          player.currentTime = 0;
+        } catch (error) {
+          console.log('Error cleaning up video player:', error);
+        }
+      }
     }
     return () => {
       if (controlsTimer.current) clearTimeout(controlsTimer.current);
     };
-  }, [isMiniPlayerVisible]);
+  }, [isMiniPlayerVisible, player, miniPlayerVideo?.uri]);
 
   const handleOpenFullScreen = () => {
     if (miniPlayerVideo) {
@@ -311,7 +107,7 @@ const VideoMiniPlayer = () => {
     toggleMiniPlayerPlayback();
     
     // Control expo-video player
-    if (player) {
+    if (player && miniPlayerVideo?.uri) {
       if (isMiniPlayerPlaying) {
         player.pause();
       } else {
@@ -320,109 +116,71 @@ const VideoMiniPlayer = () => {
     }
   };
 
-  const handleClose = (e) => {
-    e.stopPropagation();
+  // Cleanup function for proper video player cleanup
+  const cleanupAndClose = () => {
+    // Stop and cleanup video player before closing
+    if (player && miniPlayerVideo?.uri) {
+      try {
+        player.pause();
+        // Reset player position
+        player.currentTime = 0;
+      } catch (error) {
+        console.log('Error stopping video player:', error);
+      }
+    }
+    
     closeMiniPlayer();
   };
 
+  const handleClose = (e) => {
+    e.stopPropagation();
+    cleanupAndClose();
+  };
+
+  if (!isMiniPlayerVisible) {
+    return null;
+  }
+
   return (
-    <>
-      {/* Enhanced delete zone with beautiful animations */}
-      <Animated.View 
-        style={[styles.deleteZoneContainer, deleteZoneAnimatedStyle]} 
-        pointerEvents="none"
-      >
-        <LinearGradient
-          colors={[
-            'rgba(255, 59, 48, 0)',
-            'rgba(255, 59, 48, 0.3)',
-            'rgba(255, 59, 48, 0.6)',
-            'rgba(255, 59, 48, 0.8)'
-          ]}
-          style={styles.deleteZoneGradient}
+    <View style={[
+      styles.container,
+      { width: miniPlayerWidth, height: miniPlayerHeight }
+    ]}>
+      {miniPlayerVideo && miniPlayerVideo.uri && (
+        <TouchableOpacity 
+          style={styles.pressableArea} 
+          onPress={handlePlayerPress}
+          activeOpacity={1}
         >
-          <View style={[
-            styles.deleteZoneContent,
-            { 
-              backgroundColor: isInDeleteZone 
-                ? 'rgba(255, 59, 48, 0.9)' 
-                : 'rgba(255, 59, 48, 0.7)' 
-            }
-          ]}>
-            <Animated.View style={{
-              transform: [
-                { scale: isInDeleteZone ? 1.2 : 1 },
-                { rotate: isInDeleteZone ? '10deg' : '0deg' }
-              ]
-            }}>
-              <Trash2 
-                size={isInDeleteZone ? 42 : 36} 
-                color="#fff" 
-                strokeWidth={2.5}
-              />
-            </Animated.View>
-            
-            <Text style={[
-              styles.deleteZoneText,
-              { 
-                fontSize: isInDeleteZone ? 16 : 14,
-                fontWeight: isInDeleteZone ? 'bold' : '600'
-              }
-            ]}>
-              {isInDeleteZone ? 'Release to Delete' : 'Drag here to close'}
-            </Text>
-            
-            {isInDeleteZone && (
-              <View style={styles.deleteZoneIndicator}>
-                <ChevronDown size={20} color="#fff" />
-              </View>
-            )}
-          </View>
-        </LinearGradient>
-      </Animated.View>
-      <PanGestureHandler onGestureEvent={panGesture} enabled={isMiniPlayerVisible}>
-        <Animated.View style={[
-          styles.container,
-          { width: miniPlayerWidth, height: miniPlayerHeight },
-          containerAnimatedStyle
-        ]}>
-          {miniPlayerVideo && miniPlayerVideo.uri && (
-            <TouchableOpacity 
-              style={styles.pressableArea} 
-              onPress={handlePlayerPress}
-              activeOpacity={1}
-            >
-              {VideoView && player ? (
-                <VideoView
-                  player={player}
-                  style={styles.video}
-                  contentFit="cover"
-                  allowsFullscreen={false}
-                  allowsPictureInPicture={false}
-                  showsTimecodes={false}
-                />
-              ) : (
-                <View style={[styles.video, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
-                  <Play size={24} color="#FFF" />
-                </View>
-              )}
-              <Animated.View style={[styles.overlay, controlsAnimatedStyle]}>
-                <TouchableOpacity onPress={handleTogglePlayback} style={[styles.controlButton, { left: 8 }]}> 
-                  {isMiniPlayerPlaying ? (
-                    <Pause size={18} color="white" fill="white" />
-                  ) : (
-                    <Play size={18} color="white" fill="white" style={{ marginLeft: 2 }}/>
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity onPress={handleClose} style={[styles.controlButton, { right: 8 }]}> 
-                  <X size={18} color="white" />
-                </TouchableOpacity>
-              </Animated.View>
-            </TouchableOpacity>
+          {VideoView && player ? (
+            <VideoView
+              player={player}
+              style={styles.video}
+              contentFit="cover"
+              allowsFullscreen={false}
+              allowsPictureInPicture={false}
+              showsTimecodes={false}
+            />
+          ) : (
+            <View style={[styles.video, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
+              <Play size={24} color="#FFF" />
+            </View>
           )}
-        </Animated.View>
-      </PanGestureHandler>
-    </>
+          <View style={[styles.overlay, { opacity: showControls ? 1 : 0 }]}>
+            <TouchableOpacity onPress={handleTogglePlayback} style={[styles.controlButton, { left: 8 }]}> 
+              {isMiniPlayerPlaying ? (
+                <Pause size={18} color="white" fill="white" />
+              ) : (
+                <Play size={18} color="white" fill="white" style={{ marginLeft: 2 }}/>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleClose} style={[styles.controlButton, { right: 8 }]}> 
+              <X size={18} color="white" />
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      )}
+    </View>
   );
 };
 
@@ -462,40 +220,6 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  // Enhanced delete zone styles
-  deleteZoneContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 120,
-    zIndex: 999,
-  },
-  deleteZoneGradient: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  deleteZoneContent: {
-    height: 80,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingVertical: 12,
-  },
-  deleteZoneText: {
-    color: '#fff',
-    marginTop: 8,
-    textAlign: 'center',
-    fontWeight: '600',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  deleteZoneIndicator: {
-    marginTop: 4,
-    opacity: 0.8,
   },
 });
 

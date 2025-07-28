@@ -7,13 +7,26 @@ class MemoryManager {
     this.maxCacheSize = 1000; // Default max cache size
     this.cleanupInterval = 5 * 60 * 1000; // 5 minutes
     this.lastCleanup = Date.now();
+    this.cleanupStarted = false;
     
-    // Start periodic cleanup
-    this.startPeriodicCleanup();
+    // Start periodic cleanup only once
+    if (!this.cleanupStarted) {
+      this.startPeriodicCleanup();
+      this.cleanupStarted = true;
+    }
   }
 
-  // Register a cache for management
+  // Register a cache for management (prevent duplicates)
   registerCache(name, cache, maxSize = 1000) {
+    // Check if cache is already registered
+    if (this.caches.has(name)) {
+      // Update existing cache reference but don't log again
+      const existing = this.caches.get(name);
+      existing.cache = cache;
+      existing.lastAccessed = Date.now();
+      return;
+    }
+    
     this.caches.set(name, {
       cache,
       maxSize,

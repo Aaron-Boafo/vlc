@@ -17,7 +17,7 @@ import * as Icons from 'lucide-react-native';
 import useThemeStore from '../store/theme';
 import { router } from 'expo-router';
 import useAudioControl from '../store/useAudioControl';
-import useVideoStore from '../store/VideoHeadStore';
+import useOptimizedVideoStore from '../store/optimizedVideoStore';
 import PropTypes from 'prop-types';
 
 const StreamModal = ({ visible, onClose }) => {
@@ -28,7 +28,7 @@ const StreamModal = ({ visible, onClose }) => {
   const [showPasteButton, setShowPasteButton] = useState(true);
   const inputRef = useRef(null);
   const audioControl = useAudioControl();
-  const videoControl = useVideoStore();
+  const videoControl = useOptimizedVideoStore();
 
   // Auto-focus input when modal becomes visible
   useEffect(() => {
@@ -41,16 +41,9 @@ const StreamModal = ({ visible, onClose }) => {
 
   const validateUrl = (url) => {
     try {
-      // More comprehensive URL validation
-      const urlPattern = new RegExp(
-        '^(https?:\\/\\/)?' + // protocol
-        '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|' + // domain name
-        '((\\d{1,3}\\.){3}\\d{1,3}))' + // OR ip (v4) address
-        '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*' + // port and path
-        '(\\?[;&a-z\\d%_.~+=-]*)?' + // query string
-        '(\\#[-a-z\\d_]*)?$', 'i' // fragment locator
-      );
-      return !!urlPattern.test(url);
+      // Simple but effective URL validation
+      const urlPattern = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?(\?[;&a-z\d%_.~+=-]*)?(#[-a-z\d_]*)?$/i;
+      return urlPattern.test(url) || url.startsWith('http://') || url.startsWith('https://');
     } catch {
       return false;
     }
@@ -133,7 +126,7 @@ const StreamModal = ({ visible, onClose }) => {
           filename: streamType === 'youtube' ? "YouTube Stream" : "Network Stream",
           artist: streamType === 'youtube' ? "YouTube" : "Unknown",
         };
-        videoControl.setAndPlayVideo(videoTrack);
+        videoControl.setAndPlayVideo(videoTrack, 'stream'); // Pass 'stream' as source tab
         router.push('/player/video');
       } else {
         const audioTrack = {
@@ -144,7 +137,7 @@ const StreamModal = ({ visible, onClose }) => {
           artwork: null,
         };
         await audioControl.setAndPlayPlaylist([audioTrack]);
-        router.push('/(tabs)/(audio)/player');
+        router.push('/player/audio');
       }
 
       onClose();
@@ -212,8 +205,8 @@ const StreamModal = ({ visible, onClose }) => {
                     styles.input,
                     {
                       color: themeColors.text,
-                      backgroundColor: themeColors.sectionBackground,
-                      borderColor: error ? '#ff4444' : themeColors.sectionBackground,
+                      backgroundColor: themeColors.background,
+                      borderColor: error ? '#ff4444' : themeColors.border || '#e0e0e0',
                       paddingRight: 40, // Space for clear button
                     }
                   ]}

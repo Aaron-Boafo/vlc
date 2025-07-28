@@ -47,6 +47,7 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
     buttons: [],
   });
   const [videoThumbnails, setVideoThumbnails] = useState({});
+  const [isTransitioning, setIsTransitioning] = useState(false);
   
   // 🚀 Optimized thumbnail management for large libraries
   const thumbnailCache = useRef(new Map());
@@ -61,26 +62,10 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
     }
   }, [loadVideoFiles]);
 
-  // 🧠 Register thumbnail cache with memory manager and optimize for large libraries
+  // 🧠 Register thumbnail cache with memory manager (only once on mount)
   useEffect(() => {
-    const startTime = Date.now();
-    
     MemoryManager.registerCache('videoThumbnails', thumbnailCache.current, maxThumbnailCache.current);
     MemoryManager.registerCache('videoThumbnailState', videoThumbnails, maxThumbnailCache.current);
-    
-    // 🚀 Optimize for library size and start performance monitoring
-    if (videoFiles.length > 0) {
-      const optimizedSettings = LargeLibraryOptimizer.optimizeForLibrarySize(videoFiles.length);
-      maxThumbnailCache.current = Math.floor(optimizedSettings.cacheSize / 2); // Thumbnails use more memory
-      
-      // 📊 Start performance monitoring for large libraries
-      if (LargeLibraryOptimizer.isLargeLibrary()) {
-        PerformanceMonitor.startMonitoring();
-        PerformanceMonitor.trackLoadTime('video', videoFiles.length, Date.now() - startTime);
-      }
-      
-      console.log(`🎥 Video library optimization applied for ${videoFiles.length} files:`, optimizedSettings);
-    }
     
     return () => {
       // Cleanup when component unmounts
@@ -93,6 +78,23 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
         console.log('📊 Video screen performance report:', report.summary);
       }
     };
+  }, []); // Empty dependency array - run only once on mount
+
+  // 🚀 Optimize for library size when video files change
+  useEffect(() => {
+    if (videoFiles.length > 0) {
+      const startTime = Date.now();
+      const optimizedSettings = LargeLibraryOptimizer.optimizeForLibrarySize(videoFiles.length);
+      maxThumbnailCache.current = Math.floor(optimizedSettings.cacheSize / 2); // Thumbnails use more memory
+      
+      // 📊 Start performance monitoring for large libraries
+      if (LargeLibraryOptimizer.isLargeLibrary()) {
+        PerformanceMonitor.startMonitoring();
+        PerformanceMonitor.trackLoadTime('video', videoFiles.length, Date.now() - startTime);
+      }
+      
+      console.log(`🎥 Video library optimization applied for ${videoFiles.length} files:`, optimizedSettings);
+    }
   }, [videoFiles.length]);
 
   const onRefresh = async () => {
@@ -134,7 +136,10 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
     });
   }, []);
 
-  const handleVideoPress = (video) => {
+  const handleVideoPress = useCallback((video) => {
+    // Prevent multiple rapid clicks
+    if (isTransitioning) return;
+    
     // Check for invalid characters in filename
     if (video.filename && (video.filename.includes('?') || video.filename.includes('#'))) {
       setCustomAlert({
@@ -145,13 +150,14 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
       });
       return;
     }
+    
     // Attach thumbnail if available
     const videoWithThumb = videoThumbnails[video.id] ? { ...video, thumbnail: videoThumbnails[video.id] } : video;
-    setAndPlayVideo(videoWithThumb);
-    setTimeout(() => {
-      router.push('/player/video');
-    }, 50);
-  };
+    setAndPlayVideo(videoWithThumb, 'video'); // Pass 'video' as source tab
+    
+    // Use replace for smoother navigation
+    router.replace('/player/video');
+  }, [isTransitioning, videoThumbnails, setAndPlayVideo, router]);
 
   const handleMoreOptions = (video) => {
     setSelectedVideo(video);
@@ -161,7 +167,7 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
   const handlePlay = () => {
     if (selectedVideo) {
       const videoWithThumb = videoThumbnails[selectedVideo.id] ? { ...selectedVideo, thumbnail: videoThumbnails[selectedVideo.id] } : selectedVideo;
-      setAndPlayVideo(videoWithThumb);
+      setAndPlayVideo(videoWithThumb, 'video'); // Pass 'video' as source tab
       setShowMoreModal(false);
       setTimeout(() => {
         router.push('/player/video');

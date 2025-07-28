@@ -24,7 +24,7 @@ import NavigationOptimizer from "../../../utils/navigationOptimizer";
 import LazyScreen from "../../../components/LazyScreen";
 import * as Icons from 'lucide-react-native';
 
-const AudioTabScreen = () => {
+const AudioTabScreen = React.memo(() => {
   const { 
     audioFiles, 
     loadAudioFiles, 
@@ -48,6 +48,9 @@ const AudioTabScreen = () => {
 
   // Prevent unnecessary reloading on tab switches
   const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
+  
+  // Performance optimization - track if screen is focused
+  const [isFocused, setIsFocused] = useState(true);
 
   // Run migration on first load
   useEffect(() => {
@@ -74,22 +77,32 @@ const AudioTabScreen = () => {
     { label: 'Date Added (Oldest)', key: 'modificationTime', direction: 'asc', icon: Icons.CalendarClock },
   ];
 
-  // Optimized loading - prevent unnecessary reloads on tab switches
+  // Ultra-fast loading with focus optimization
   useFocusEffect(
     useCallback(() => {
+      setIsFocused(true);
+      
       // Only load if migration is complete and we haven't loaded yet
       if (migrationComplete && !hasInitiallyLoaded && audioFiles.length === 0) {
         console.log('🚀 Loading audio files with fast loader...');
         const startTime = Date.now();
         setHasInitiallyLoaded(true);
-        loadAudioFiles().then(() => {
-          PerformanceAnalytics.trackLoadTime('AudioFiles', startTime, Date.now(), audioFiles.length);
-          // Show metadata loading indicator when files are loaded
-          if (audioFiles.length > 0) {
-            setShowMetadataLoading(true);
-          }
+        
+        // Use NavigationOptimizer for faster loading
+        NavigationOptimizer.preWarmScreen('audio').then(() => {
+          loadAudioFiles().then(() => {
+            PerformanceAnalytics.trackLoadTime('AudioFiles', startTime, Date.now(), audioFiles.length);
+            // Show metadata loading indicator when files are loaded
+            if (audioFiles.length > 0) {
+              setShowMetadataLoading(true);
+            }
+          });
         });
       }
+      
+      return () => {
+        setIsFocused(false);
+      };
     }, [migrationComplete, hasInitiallyLoaded, audioFiles.length, loadAudioFiles])
   );
 
@@ -110,13 +123,31 @@ const AudioTabScreen = () => {
     }
   }, [audioFiles]);
 
-  const handleTrackPress = async (item) => {
+  const handleTrackPress = useCallback(async (item) => {
+    // Prevent multiple rapid clicks
+    if (audioControl.isTransitioning || audioControl.isLoading) {
+      console.log('🎵 Audio control busy, skipping track press');
+      return;
+    }
+    
+    console.log('🎵 Track pressed:', item.title);
+    
     // Use the full playlist starting from the selected track
     const allTracks = audioFiles;
     const startIndex = allTracks.findIndex(track => track.id === item.id);
-    await audioControl.setAndPlayPlaylist(allTracks, startIndex);
-    router.push("/player/audio");
-  };
+    
+    console.log('🎵 Starting playlist with', allTracks.length, 'tracks at index', startIndex);
+    
+    try {
+      await audioControl.setAndPlayPlaylist(allTracks, startIndex);
+      console.log('🎵 Playlist set and playback started');
+      
+      // Use replace for smoother navigation
+      router.replace("/player/audio");
+    } catch (error) {
+      console.error('🎵 Error starting playback:', error);
+    }
+  }, [audioFiles, audioControl, router]);
   
   const handleViewableItemsChanged = ({ viewableItems }) => {
     const visibleIds = viewableItems.map(item => item.item.id);
@@ -126,14 +157,21 @@ const AudioTabScreen = () => {
     // by the fast loading system, so no manual intervention needed
   };
   
-  const renderItem = ({ item }) => {
+  const renderItem = useCallback(({ item }) => {
     const isPlaying = audioControl.currentTrack?.id === item.id && audioControl.isPlaying;
+    const isTransitioning = audioControl.isTransitioning && audioControl.currentTrack?.id === item.id;
     const { primary, text, textSecondary, card } = themeColors;
 
     return (
       <TouchableOpacity
-        style={[styles.trackItem, { backgroundColor: card }]}
+        style={[
+          styles.trackItem, 
+          { backgroundColor: card },
+          isTransitioning && { opacity: 0.7 }
+        ]}
         onPress={() => handleTrackPress(item)}
+        disabled={audioControl.isTransitioning || audioControl.isLoading}
+        activeOpacity={0.7}
       >
         <Image
           source={item.artwork ? { uri: item.artwork } : require('../../../assets/images/icon.png')}
@@ -147,14 +185,14 @@ const AudioTabScreen = () => {
             {item.artist}
           </Text>
         </View>
-        {isPlaying && (
+        {(isPlaying || isTransitioning) && (
           <View style={styles.playingIndicator}>
             <Music4 size={24} color={primary} />
           </View>
         )}
       </TouchableOpacity>
     );
-  };
+  }, [audioControl.currentTrack?.id, audioControl.isPlaying, audioControl.isTransitioning, audioControl.isLoading, themeColors, handleTrackPress]);
 
   // Memoize shared props to prevent unnecessary re-renders
   const sharedProps = useMemo(() => ({ 
@@ -198,16 +236,26 @@ const AudioTabScreen = () => {
     }
   }, [activeTab, getCurrentTabIndex, currentIndex, screenWidth]);
 
-  // Handle scroll end to update active tab
+  // Ultra-fast scroll handling with immediate feedback
   const handleScrollEnd = useCallback((event) => {
+    if (!isFocused) return; // Skip if not focused
+    
     const contentOffsetX = event.nativeEvent.contentOffset.x;
     const newIndex = Math.round(contentOffsetX / screenWidth);
     
     if (newIndex !== currentIndex && newIndex >= 0 && newIndex < tabs.length) {
       setCurrentIndex(newIndex);
+      
+      // Immediate state update for instant feedback
       toggleTabs(tabs[newIndex].name);
+      
+      // Preload next likely tab
+      const nextTabIndex = (newIndex + 1) % tabs.length;
+      if (tabs[nextTabIndex]) {
+        NavigationOptimizer.preloadTab(tabs[nextTabIndex].name);
+      }
     }
-  }, [screenWidth, currentIndex, toggleTabs]);
+  }, [screenWidth, currentIndex, toggleTabs, isFocused]);
 
   // Handle layout to get screen width
   const handleLayout = useCallback((event) => {
@@ -224,8 +272,18 @@ const AudioTabScreen = () => {
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={handleScrollEnd}
         onLayout={handleLayout}
-        scrollEventThrottle={16}
+        scrollEventThrottle={8} // Faster scroll updates
         style={styles.scrollContainer}
+        decelerationRate="fast"
+        bounces={false}
+        overScrollMode="never"
+        // Performance optimizations
+        removeClippedSubviews={true}
+        keyboardShouldPersistTaps="handled"
+        // Faster scrolling
+        snapToInterval={screenWidth}
+        snapToAlignment="start"
+        directionalLockEnabled={true}
       >
         {tabs.map((tab, index) => {
           const TabComponent = tab.component;
@@ -314,7 +372,7 @@ const AudioTabScreen = () => {
       />
     </SafeAreaView>
   );
-};
+});
 
 const styles = StyleSheet.create({
   screen: {

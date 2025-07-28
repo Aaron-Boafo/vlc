@@ -8,6 +8,7 @@ import { useEffect, useCallback } from 'react';
 import { Audio } from 'expo-av';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import usePlaybackStore from '../store/playbackStore';
+import useAudioControl from '../store/useAudioControl';
 import React from 'react';
 
 // Simple error boundary component

@@ -3,10 +3,10 @@ import { View, Text, StyleSheet, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import useThemeStore from '../store/theme';
 
-const ProgressiveLoadingIndicator = memo(({ 
-  isLoading, 
-  totalFiles, 
-  loadedFiles, 
+const ProgressiveLoadingIndicator = memo(({
+  isLoading,
+  totalFiles,
+  loadedFiles,
   isComplete,
   mediaType = 'files'
 }) => {
@@ -51,13 +51,13 @@ const ProgressiveLoadingIndicator = memo(({
         <Text style={[styles.title, { color: themeColors.text }]}>
           {isComplete ? '✅ Loading Complete' : `🔄 Loading ${mediaType}...`}
         </Text>
-        
+
         <View style={styles.statsContainer}>
           <Text style={[styles.stats, { color: themeColors.textSecondary }]}>
             {displayCount} {mediaType} loaded
             {totalFiles > 0 && ` of ${totalFiles}`}
           </Text>
-          
+
           {!isComplete && (
             <Text style={[styles.status, { color: themeColors.primary }]}>
               Finding more...

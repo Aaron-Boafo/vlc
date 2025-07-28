@@ -29,6 +29,9 @@ const useOptimizedVideoStore = create(
                 miniPlayerPosition: 0,
                 miniPlayerVideo: null,
 
+                // Navigation context tracking
+                sourceTab: null, // Track which tab the user came from
+
                 // Fast loading with progressive updates - Enhanced caching
                 loadVideoFiles: async (forceRefresh = false) => {
                     const state = get();
@@ -97,7 +100,7 @@ const useOptimizedVideoStore = create(
                 toggleTabs: (tab) => set({ activeTab: tab }),
 
                 // Video playback management
-                setAndPlayVideo: (video) => {
+                setAndPlayVideo: (video, sourceTab = null) => {
                     // Validate input
                     if (!video || !video.uri) {
                         console.error("Invalid video provided to setAndPlayVideo:", video);
@@ -108,7 +111,8 @@ const useOptimizedVideoStore = create(
                         video: video,
                         hasUri: !!video?.uri,
                         uri: video?.uri,
-                        filename: video?.filename
+                        filename: video?.filename,
+                        sourceTab: sourceTab
                     });
                     
                     const videoFiles = get().videoFiles || [];
@@ -118,9 +122,10 @@ const useOptimizedVideoStore = create(
                         currentVideo: video,
                         currentVideoIndex: index,
                         isMiniPlayerVisible: false,
+                        sourceTab: sourceTab, // Store the source tab
                     });
 
-                    console.log('🎥 Video store updated. Current video:', get().currentVideo);
+                    console.log('🎥 Video store updated. Current video:', get().currentVideo, 'Source tab:', sourceTab);
 
                     // Add to history
                     get().addToHistory(video);
@@ -239,12 +244,22 @@ const useOptimizedVideoStore = create(
                 hideMiniPlayer: () => set({ isMiniPlayerVisible: false }),
 
                 closeMiniPlayer: () => {
+                    // Ensure complete cleanup of mini player state
                     set({
                         isMiniPlayerVisible: false,
                         isMiniPlayerPlaying: false,
                         miniPlayerVideo: null,
                         miniPlayerPosition: 0,
                     });
+                    
+                    // Force a small delay to ensure UI updates
+                    setTimeout(() => {
+                        const state = get();
+                        if (state.isMiniPlayerVisible) {
+                            // Force set to false if still visible
+                            set({ isMiniPlayerVisible: false });
+                        }
+                    }, 100);
                 },
 
                 toggleMiniPlayerPlayback: () => {
@@ -280,6 +295,35 @@ const useOptimizedVideoStore = create(
                     });
 
                     get().addToHistory(prevVideo);
+                },
+
+                // Navigation helper
+                getReturnRoute: () => {
+                    const { sourceTab, activeTab } = get();
+                    
+                    // If we have a specific source tab, return to the appropriate tab
+                    if (sourceTab) {
+                        switch (sourceTab) {
+                            case 'video':
+                                return '/(tabs)/(video)';
+                            case 'browse':
+                                return '/(tabs)/(browse)';
+                            case 'playlist':
+                                return '/(tabs)/(playlist)';
+                            case 'stream':
+                                return '/(tabs)/(browse)'; // Stream modal is typically accessed from browse
+                            default:
+                                return '/(tabs)/(video)';
+                        }
+                    }
+                    
+                    // If we have an active tab, return to video tab
+                    if (activeTab) {
+                        return '/(tabs)/(video)';
+                    }
+                    
+                    // Default fallback to video tab (changed from browse)
+                    return '/(tabs)/(video)';
                 },
 
                 // Utility functions

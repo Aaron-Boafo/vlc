@@ -20,6 +20,7 @@ const useAudioControl = create(
   position: 0,
   isLoading: false,
   isMiniPlayerVisible: true,
+  isTransitioning: false, // Prevent multiple simultaneous plays
 
   // Sleep Timer State
   sleepTimerId: null,
@@ -50,6 +51,13 @@ const useAudioControl = create(
   },
 
   setAndPlayPlaylist: async (tracks, startIndex = 0) => {
+    // Prevent multiple simultaneous plays
+    const { isTransitioning, isLoading } = get();
+    if (isTransitioning || isLoading) {
+      console.log("Audio transition already in progress, ignoring request");
+      return;
+    }
+    
     // Validate input
     if (!tracks || !Array.isArray(tracks) || tracks.length === 0) {
       console.error("Invalid tracks provided to setAndPlayPlaylist:", tracks);
@@ -59,35 +67,64 @@ const useAudioControl = create(
     // Ensure startIndex is within bounds
     const validStartIndex = Math.max(0, Math.min(startIndex, tracks.length - 1));
     
-    const { sound } = get();
-    if (sound) {
-      try {
-        await sound.stopAsync();
-        await sound.unloadAsync();
-      } catch (error) {
-        console.error("Error stopping/unloading previous sound:", error);
+    set({ isTransitioning: true });
+    
+    try {
+      const { sound } = get();
+      if (sound) {
+        try {
+          await sound.stopAsync();
+          await sound.unloadAsync();
+        } catch (error) {
+          console.error("Error stopping/unloading previous sound:", error);
+        }
       }
+      const trackToPlay = tracks[validStartIndex];
+      
+      // Validate track has required properties
+      if (!trackToPlay || !trackToPlay.uri) {
+        console.error("Invalid track at index", validStartIndex, ":", trackToPlay);
+        set({ isTransitioning: false });
+        return;
+      }
+      
+      // 🎨 Enrich track with metadata if not already present
+      const enrichedTrack = await get()._enrichTrackMetadata(trackToPlay);
+      
+      set({
+        playQueue: tracks,
+        originalQueue: tracks,
+        currentIndex: validStartIndex,
+        currentTrack: enrichedTrack,
+        sound: null,
+        isMiniPlayerVisible: true,
+      });
+      
+      console.log('🎵 Loading and playing track:', enrichedTrack.title);
+      await get()._loadAndPlayTrack(enrichedTrack, true); // Skip transition check
+      
+      // Wait a bit to ensure audio has started before clearing transition state
+      setTimeout(() => {
+        set({ isTransitioning: false });
+      }, 500);
+      
+      // Ensure playback starts - fallback mechanism
+      setTimeout(async () => {
+        const { sound, isPlaying } = get();
+        if (sound && !isPlaying) {
+          console.log('🎵 Fallback: Starting playback manually');
+          try {
+            await sound.playAsync();
+            set({ isPlaying: true });
+          } catch (error) {
+            console.error('🎵 Fallback playback failed:', error);
+          }
+        }
+      }, 1000);
+    } catch (error) {
+      console.error('Error in setAndPlayPlaylist:', error);
+      set({ isTransitioning: false });
     }
-    const trackToPlay = tracks[validStartIndex];
-    
-    // Validate track has required properties
-    if (!trackToPlay || !trackToPlay.uri) {
-      console.error("Invalid track at index", validStartIndex, ":", trackToPlay);
-      return;
-    }
-    
-    // 🎨 Enrich track with metadata if not already present
-    const enrichedTrack = await get()._enrichTrackMetadata(trackToPlay);
-    
-    set({
-      playQueue: tracks,
-      originalQueue: tracks,
-      currentIndex: validStartIndex,
-      currentTrack: enrichedTrack,
-      sound: null,
-      isMiniPlayerVisible: true,
-    });
-    get()._loadAndPlayTrack(enrichedTrack);
   },
 
   // Set play queue without starting
@@ -124,10 +161,14 @@ const useAudioControl = create(
     get().clearSleepTimer();
   },
 
-  _loadAndPlayTrack: async (track) => {
-    if (get().isLoading) {
+  _loadAndPlayTrack: async (track, skipTransitionCheck = false) => {
+    const { isLoading, isTransitioning } = get();
+    
+    // Only check isTransitioning if not called from setAndPlayPlaylist
+    if (isLoading || (!skipTransitionCheck && isTransitioning)) {
       return;
     }
+    
     set({ isLoading: true });
     const { sound: existingSound, playQueue, currentIndex } = get();
     
@@ -219,6 +260,14 @@ const useAudioControl = create(
       // Set up status callback
       newSound.setOnPlaybackStatusUpdate((status) => onPlaybackStatusUpdate(status, set, get));
 
+      // Ensure playback starts
+      try {
+        await newSound.playAsync();
+        console.log('🎵 Audio playback started for:', track.title);
+      } catch (playError) {
+        console.error('Error starting playback:', playError);
+      }
+
       set({
           sound: newSound,
           isPlaying: true,
@@ -240,21 +289,21 @@ const useAudioControl = create(
 
   // Play current track (now primarily for resume)
   play: async () => {
-    const { sound, currentTrack, isPlaying, isLoading } = get();
-    if (isPlaying || isLoading) return;
+    const { sound, currentTrack, isPlaying, isLoading, isTransitioning } = get();
+    if (isPlaying || isLoading || isTransitioning) return;
     
     if (sound) {
       set({ isPlaying: true });
       await sound.playAsync();
     } else if (currentTrack) {
-      get()._loadAndPlayTrack(currentTrack);
+      await get()._loadAndPlayTrack(currentTrack);
     }
   },
 
   // Pause current track
   pause: async () => {
-    const {sound, isLoading} = get();
-    if (isLoading) return;
+    const {sound, isLoading, isTransitioning} = get();
+    if (isLoading || isTransitioning) return;
     if (sound) {
       const status = await sound.getStatusAsync();
       if (status.isLoaded && status.isPlaying) {
@@ -328,35 +377,41 @@ const useAudioControl = create(
 
   // Next track
   next: async () => {
-    const { playQueue, currentIndex, isShuffleOn } = get();
-    if (playQueue.length === 0) return;
+    const { playQueue, currentIndex, isShuffleOn, isTransitioning, isLoading } = get();
+    if (playQueue.length === 0 || isTransitioning || isLoading) return;
 
-    let nextIndex;
-    if (isShuffleOn) {
-      // Pick a random index that's not the current one
-      if (playQueue.length === 1) {
-        nextIndex = 0;
+    set({ isTransitioning: true });
+    
+    try {
+      let nextIndex;
+      if (isShuffleOn) {
+        // Pick a random index that's not the current one
+        if (playQueue.length === 1) {
+          nextIndex = 0;
+        } else {
+          do {
+            nextIndex = Math.floor(Math.random() * playQueue.length);
+          } while (nextIndex === currentIndex);
+        }
       } else {
-        do {
-          nextIndex = Math.floor(Math.random() * playQueue.length);
-        } while (nextIndex === currentIndex);
+        nextIndex = (currentIndex + 1) % playQueue.length;
       }
-    } else {
-      nextIndex = (currentIndex + 1) % playQueue.length;
+      const nextTrack = playQueue[nextIndex];
+      
+      // 🎨 Enrich track with metadata before playing
+      const enrichedTrack = await get()._enrichTrackMetadata(nextTrack);
+      
+      set({ currentIndex: nextIndex, currentTrack: enrichedTrack });
+      await get()._loadAndPlayTrack(enrichedTrack, true); // Skip transition check
+    } finally {
+      set({ isTransitioning: false });
     }
-    const nextTrack = playQueue[nextIndex];
-    
-    // 🎨 Enrich track with metadata before playing
-    const enrichedTrack = await get()._enrichTrackMetadata(nextTrack);
-    
-    set({ currentIndex: nextIndex, currentTrack: enrichedTrack });
-    get()._loadAndPlayTrack(enrichedTrack);
   },
 
   // Previous track
   previous: async () => {
-    const { playQueue, currentIndex, position, isPlaying } = get();
-    if (playQueue.length === 0) return;
+    const { playQueue, currentIndex, position, isPlaying, isTransitioning, isLoading } = get();
+    if (playQueue.length === 0 || isTransitioning || isLoading) return;
 
     // If track has been playing for > 3s, just restart it.
     if (position > 3000) {
@@ -365,15 +420,21 @@ const useAudioControl = create(
       return;
     }
 
-    const prevIndex =
-      currentIndex === 0 ? playQueue.length - 1 : currentIndex - 1;
-    const prevTrack = playQueue[prevIndex];
+    set({ isTransitioning: true });
     
-    // 🎨 Enrich track with metadata before playing
-    const enrichedTrack = await get()._enrichTrackMetadata(prevTrack);
-    
-    set({ currentIndex: prevIndex, currentTrack: enrichedTrack });
-    get()._loadAndPlayTrack(enrichedTrack);
+    try {
+      const prevIndex =
+        currentIndex === 0 ? playQueue.length - 1 : currentIndex - 1;
+      const prevTrack = playQueue[prevIndex];
+      
+      // 🎨 Enrich track with metadata before playing
+      const enrichedTrack = await get()._enrichTrackMetadata(prevTrack);
+      
+      set({ currentIndex: prevIndex, currentTrack: enrichedTrack });
+      await get()._loadAndPlayTrack(enrichedTrack, true); // Skip transition check
+    } finally {
+      set({ isTransitioning: false });
+    }
   },
 
   // Seek to position
@@ -563,10 +624,16 @@ const onPlaybackStatusUpdate = (status, set, get) => {
     return;
   }
 
+  const currentState = get();
+  
+  // Only update isPlaying if we're not in a loading/transitioning state
+  // This prevents the status callback from overriding our manual play state
+  const shouldUpdatePlayingState = !currentState.isLoading && !currentState.isTransitioning;
+
   set({
     position: status.positionMillis || 0,
     duration: status.durationMillis || 0,
-    isPlaying: status.isPlaying,
+    ...(shouldUpdatePlayingState && { isPlaying: status.isPlaying }),
   });
 
   if (status.didJustFinish) {

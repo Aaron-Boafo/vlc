@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ const { width } = Dimensions.get('window');
 const VideoFavouriteScreen = ({ showSearch, setShowSearch, searchQuery, setSearchQuery }) => {
   const { favouriteVideos, setCurrentVideo, removeFromFavourites } = useOptimizedVideoStore();
   const { themeColors } = useThemeStore();
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   const formatDuration = (seconds) => {
     if (!seconds) return '0:00';
@@ -29,10 +30,13 @@ const VideoFavouriteScreen = ({ showSearch, setShowSearch, searchQuery, setSearc
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleVideoPress = (video) => {
+  const handleVideoPress = useCallback((video) => {
+    // Prevent multiple rapid clicks
+    if (isTransitioning) return;
+    
     setCurrentVideo(video);
-    router.push('/player/video');
-  };
+    router.replace('/player/video');
+  }, [isTransitioning, setCurrentVideo, router]);
 
   const handleRemoveFromFavourites = (videoId) => {
     removeFromFavourites(videoId);

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ const { width } = Dimensions.get('window');
 const VideoHistoryScreen = ({ showSearch, setShowSearch, searchQuery, setSearchQuery }) => {
   const { videoHistory, setCurrentVideo, removeFromHistory } = useOptimizedVideoStore();
   const { themeColors } = useThemeStore();
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   const formatDuration = (seconds) => {
     if (!seconds) return '0:00';
@@ -38,10 +39,13 @@ const VideoHistoryScreen = ({ showSearch, setShowSearch, searchQuery, setSearchQ
     return `${Math.floor(diffInHours / 168)}w ago`;
   };
 
-  const handleVideoPress = (video) => {
+  const handleVideoPress = useCallback((video) => {
+    // Prevent multiple rapid clicks
+    if (isTransitioning) return;
+    
     setCurrentVideo(video);
-    router.push('/player/video');
-  };
+    router.replace('/player/video');
+  }, [isTransitioning, setCurrentVideo, router]);
 
   // Filter videoHistory by searchQuery
   const filteredHistory = useMemo(() => {

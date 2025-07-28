@@ -220,6 +220,14 @@ const MinimalVideoPlayer = () => {
   };
 
   const handleBack = () => {
+    if (isTransitioning) return;
+    
+    setIsTransitioning(true);
+    
+    // For now, let's just always go back to the video tab to test
+    // We can add the smart routing back once we confirm basic navigation works
+    const targetRoute = '/(tabs)/(video)';
+    
     // Enhanced smooth transition to mini player
     if (showMiniPlayer && currentVideo) {
       // First show mini player with current state
@@ -227,10 +235,12 @@ const MinimalVideoPlayer = () => {
 
       // Add a small delay to ensure mini player is ready before navigation
       setTimeout(() => {
-        router.back();
-      }, 100);
+        router.replace(targetRoute);
+        setIsTransitioning(false);
+      }, 150);
     } else {
-      router.back();
+      router.replace(targetRoute);
+      setTimeout(() => setIsTransitioning(false), 150);
     }
   };
 
@@ -241,18 +251,28 @@ const MinimalVideoPlayer = () => {
     return list.findIndex(v => v.id === currentVideo.id);
   };
   const handlePrevious = () => {
+    if (isTransitioning) return;
+    
     const list = getCurrentList();
     const idx = getCurrentIndex();
     if (idx > 0) {
-      setAndPlayVideo(list[idx - 1]);
+      setIsTransitioning(true);
+      const currentSourceTab = useOptimizedVideoStore.getState().sourceTab;
+      setAndPlayVideo(list[idx - 1], currentSourceTab); // Preserve current source tab
+      setTimeout(() => setIsTransitioning(false), 500);
     }
     setControlsVisible(true);
   };
   const handleNext = () => {
+    if (isTransitioning) return;
+    
     const list = getCurrentList();
     const idx = getCurrentIndex();
     if (idx < list.length - 1) {
-      setAndPlayVideo(list[idx + 1]);
+      setIsTransitioning(true);
+      const currentSourceTab = useOptimizedVideoStore.getState().sourceTab;
+      setAndPlayVideo(list[idx + 1], currentSourceTab); // Preserve current source tab
+      setTimeout(() => setIsTransitioning(false), 500);
     }
     setControlsVisible(true);
   };

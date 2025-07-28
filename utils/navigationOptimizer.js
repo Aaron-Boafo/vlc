@@ -193,6 +193,22 @@ class NavigationOptimizer {
     console.log('📱 Navigation cache cleared');
   }
 
+  // Preload tab data for faster switching
+  async preloadTab(tabName) {
+    // Don't preload if already transitioning
+    if (this.isTransitioning) return;
+    
+    // Use InteractionManager to avoid blocking UI
+    InteractionManager.runAfterInteractions(async () => {
+      try {
+        await this.preWarmScreen(tabName);
+        console.log(`📱 Preloaded tab: ${tabName}`);
+      } catch (error) {
+        console.log(`Failed to preload tab ${tabName}:`, error);
+      }
+    });
+  }
+
   // Get performance stats
   getPerformanceStats() {
     return {

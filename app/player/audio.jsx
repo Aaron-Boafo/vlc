@@ -68,6 +68,8 @@ const PlayerScreen = () => {
     setSleepTimer: useAudioControlSetSleepTimer,
     clearSleepTimer: useAudioControlClearSleepTimer,
     setPlaybackSpeed: useAudioControlSetPlaybackSpeed,
+    isTransitioning: useAudioControlIsTransitioning,
+    isLoading: useAudioControlIsLoading,
   } = useAudioControl();
   const { playbackRate } = usePlaybackStore();
   const { playlists, addTrackToPlaylist } = usePlaylistStore();
@@ -109,6 +111,9 @@ const PlayerScreen = () => {
   };
 
   const handlePlayPause = async () => {
+    // Prevent multiple rapid clicks
+    if (useAudioControlIsTransitioning || useAudioControlIsLoading) return;
+    
     if (useAudioControlIsPlaying) await useAudioControlPause();
     else await useAudioControlPlay();
   };
@@ -118,11 +123,11 @@ const PlayerScreen = () => {
   };
 
   const handleClose = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(tabs)/(audio)'); // fallback to audio all screen
-    }
+    // Prevent multiple rapid clicks
+    if (useAudioControlIsTransitioning) return;
+    
+    // Always use replace to ensure we go to the correct tab
+    router.replace('/(tabs)/(audio)');
   };
 
   const handleRepeatPress = () => {
@@ -159,7 +164,7 @@ const PlayerScreen = () => {
     };
   }, []);
 
-  console.log('Slider position:', useAudioControlPosition, 'Duration:', useAudioControlDuration);
+  // Removed debug logging
 
   if (!useAudioControlCurrentTrack) {
     return (

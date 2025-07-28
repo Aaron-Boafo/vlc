@@ -188,6 +188,11 @@ class DeviceOptimizer {
     }
   }
 
+  // Check if device is high-end for performance optimizations
+  isHighEndDevice() {
+    return this.deviceInfo.performanceTier === 'high';
+  }
+
   // Log device info for debugging
   logDeviceInfo() {
     console.log('📱 Device Optimization Info:', {
