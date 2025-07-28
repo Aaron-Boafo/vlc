@@ -1,17 +1,15 @@
 import React, { memo, useCallback, useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import PerformanceAnalytics from '../utils/performanceAnalytics';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Image } from 'react-native';
 import { X } from 'lucide-react-native';
-import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import Svg, { Circle, G } from 'react-native-svg';
 import useThemeStore from '../store/theme';
 import useAudioControl from '../store/useAudioControl';
 import { useRouter, useSegments } from 'expo-router';
-import PerformanceAnalytics from '../utils/performanceAnalytics';
+import useAudioStore from '../store/AudioHeadStore';
 
 const MiniPlayer = memo(() => {
-  const renderStart = Date.now();
-
   const { themeColors } = useThemeStore();
   const {
     currentTrack,
@@ -28,48 +26,77 @@ const MiniPlayer = memo(() => {
   const router = useRouter();
   const segments = useSegments();
 
-  // 🎨 Memoized artwork to prevent blinking
-  const artworkUri = useMemo(() => currentTrack?.artwork, [currentTrack?.artwork]);
+  // 🎨 Stable artwork URI to prevent blinking
+  const artworkUri = useMemo(() => {
+    return currentTrack?.artwork || null;
+  }, [currentTrack?.id, currentTrack?.artwork]);
 
-  // 🎯 Highly optimized values for 60 FPS performance
-  const throttledPosition = useMemo(() => {
-    // Update position every 2 seconds instead of every 500ms
-    return Math.floor(position / 2000) * 2000;
-  }, [Math.floor(position / 2000)]);
-
+  // Progress calculation
   const progress = useMemo(() => {
     if (duration === 0) return 0;
-    return Math.min(throttledPosition / duration, 1);
-  }, [throttledPosition, duration]);
+    return Math.min(position / duration, 1);
+  }, [position, duration]);
 
   // 🎯 Memoized callbacks
-  const handlePlayPause = useCallback(() => {
+  const [isTransitioning, setIsTransitioning] = React.useState(false);
+  
+  const handlePlayPause = useCallback(async (e) => {
+    e.stopPropagation(); // Prevent opening full player
+    if (isTransitioning) return;
+    
     console.log('🎵 Mini player play/pause pressed, isPlaying:', isPlaying);
-    const startTime = Date.now();
-    isPlaying ? pause() : play();
-    PerformanceAnalytics.trackRenderTime('MiniPlayer-PlayPause', Date.now() - startTime);
-  }, [isPlaying, pause, play]);
+    setIsTransitioning(true);
+    
+    try {
+      if (isPlaying) {
+        await pause();
+      } else {
+        await play();
+      }
+    } catch (error) {
+      console.error('Error toggling playback:', error);
+    } finally {
+      setIsTransitioning(false);
+    }
+  }, [isPlaying, pause, play, isTransitioning]);
 
+  const [isNavigating, setIsNavigating] = React.useState(false);
+  
   const handleOpenFullPlayer = useCallback(() => {
+    if (isNavigating) return; // Prevent multiple presses
+    
     console.log('🎵 Mini player main area pressed - opening full player');
-    router.push('/player/audio');
-  }, [router]);
+    setIsNavigating(true);
+    
+    const state = useAudioStore.getState();
+    router.push({
+      pathname: '/player/audio',
+      params: { activeTab: state.activeTab }
+    });
+    
+    // Reset navigation state after a delay
+    setTimeout(() => setIsNavigating(false), 1000);
+  }, [router, isNavigating]);
 
   // Cleanup function for proper audio cleanup
-  const cleanupAndClose = useCallback(() => {
+  const cleanupAndClose = useCallback(async (e) => {
+    e.stopPropagation(); // Prevent opening full player
+    if (isTransitioning) return;
+    
     console.log('🎵 Mini player close button pressed');
-    // Stop and cleanup audio before closing
-    if (sound) {
-      try {
-        sound.pauseAsync();
-      } catch (error) {
-        console.log('Error stopping audio:', error);
-      }
+    setIsTransitioning(true);
+    
+    try {
+      // First stop the playback
+      await stop();
+      // Then hide the mini player
+      hideMiniPlayer();
+    } catch (error) {
+      console.error('Error closing mini player:', error);
+    } finally {
+      setIsTransitioning(false);
     }
-
-    stop();
-    hideMiniPlayer();
-  }, [sound, stop, hideMiniPlayer]);
+  }, [stop, hideMiniPlayer, isTransitioning]);
 
 
 
@@ -85,11 +112,14 @@ const MiniPlayer = memo(() => {
 
   // 📊 Optimized performance tracking - reduce overhead
   React.useEffect(() => {
-    const renderTime = Date.now() - renderStart;
-    // Only track significant renders and throttle tracking
-    if (renderTime > 100 && Math.random() < 0.1) { // Only track 10% of renders
-      PerformanceAnalytics.trackRenderTime('MiniPlayer', renderTime);
-    }
+    const renderStart = Date.now();
+    return () => {
+      const renderTime = Date.now() - renderStart;
+      // Only track significant renders and throttle tracking
+      if (renderTime > 100 && Math.random() < 0.1) { // Only track 10% of renders
+        PerformanceAnalytics.trackRenderTime('MiniPlayer', renderTime);
+      }
+    };
   });
 
   // Check if the current screen is the player screen
@@ -121,24 +151,28 @@ const MiniPlayer = memo(() => {
     return null;
   }
 
-  // Render with proper touch handling
-  const MiniPlayerContent = () => (
-    <View style={styles.pressableArea}>
-      {/* Main touchable area for opening full player */}
+  return (
+    <View style={[
+      styles.container,
+      { backgroundColor: themeColors.background, borderColor: themeColors.primary }
+    ]}>
+      {/* Artwork and Info - Touchable to open full player */}
       <TouchableOpacity
         style={styles.mainTouchArea}
         activeOpacity={0.95}
         onPress={handleOpenFullPlayer}
+        disabled={isTransitioning || isNavigating}
       >
-        {currentTrack.artwork ? (
+        {artworkUri ? (
           <Image 
             source={{ uri: artworkUri }} 
             style={styles.artwork}
-            cachePolicy="memory-disk"
-            transition={200}
+            resizeMode="cover"
           />
         ) : (
-          <View style={[styles.artwork, { backgroundColor: themeColors.primary, justifyContent: 'center', alignItems: 'center' }]} />
+          <View style={[styles.artwork, { backgroundColor: themeColors.primary, justifyContent: 'center', alignItems: 'center' }]}>
+            <MaterialIcons name="music-note" size={24} color={themeColors.background} />
+          </View>
         )}
         <View style={styles.infoContainer}>
           <Text style={[styles.title, { color: themeColors.text }]} numberOfLines={1}>
@@ -150,75 +184,44 @@ const MiniPlayer = memo(() => {
         </View>
       </TouchableOpacity>
 
-      {/* Play/Pause button - separate from main touch area */}
-      <View style={styles.controlsContainer}>
-        <View style={{
-          width: circleProps.svgSize,
-          height: circleProps.svgSize,
-          justifyContent: 'center',
-          alignItems: 'center',
-          position: 'relative',
-          marginLeft: 12,
-          marginRight: 8
-        }}>
-          <Svg width={circleProps.svgSize} height={circleProps.svgSize} style={{ position: 'absolute', top: 0, left: 0 }}>
-            <G rotation={-90} origin={`${circleProps.svgSize / 2}, ${circleProps.svgSize / 2}`}>
-              <Circle
-                cx={circleProps.svgSize / 2}
-                cy={circleProps.svgSize / 2}
-                r={circleProps.radius}
-                stroke={themeColors.primary}
-                strokeWidth={circleProps.arcThickness}
-                fill="none"
-                strokeDasharray={circleProps.circumference}
-                strokeDashoffset={circleProps.strokeDashoffset}
-                strokeLinecap="round"
-              />
-            </G>
-          </Svg>
-          <TouchableOpacity
-            style={{
-              width: circleProps.buttonSize,
-              height: circleProps.buttonSize,
-              borderRadius: circleProps.buttonSize / 2,
-              backgroundColor: themeColors.background,
-              alignItems: 'center',
-              justifyContent: 'center',
-              elevation: 2,
-              shadowColor: '#000',
-              shadowOpacity: 0.12,
-              shadowRadius: 4,
-              shadowOffset: { width: 0, height: 2 },
-            }}
-            onPress={handlePlayPause}
-            activeOpacity={0.8}
-          >
-            {isPlaying ? (
-              <MaterialIcons name="pause" size={28} color={themeColors.primary} />
-            ) : (
-              <MaterialIcons name="play-arrow" size={28} color={themeColors.primary} />
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* Close button - separate from main touch area */}
+      {/* Play/Pause Button */}
+      <View style={styles.playButtonContainer}>
+        <Svg width={circleProps.svgSize} height={circleProps.svgSize} style={{ position: 'absolute' }}>
+          <G rotation={-90} origin={`${circleProps.svgSize / 2}, ${circleProps.svgSize / 2}`}>
+            <Circle
+              cx={circleProps.svgSize / 2}
+              cy={circleProps.svgSize / 2}
+              r={circleProps.radius}
+              stroke={themeColors.primary}
+              strokeWidth={circleProps.arcThickness}
+              fill="none"
+              strokeDasharray={circleProps.circumference}
+              strokeDashoffset={circleProps.strokeDashoffset}
+              strokeLinecap="round"
+            />
+          </G>
+        </Svg>
         <TouchableOpacity
-          style={styles.closeButton}
-          onPress={cleanupAndClose}
-          activeOpacity={0.7}
+          style={[styles.playButton, { backgroundColor: themeColors.background }]}
+          onPress={handlePlayPause}
+          activeOpacity={0.8}
         >
-          <X size={22} color={themeColors.textSecondary} />
+          {isPlaying ? (
+            <MaterialIcons name="pause" size={28} color={themeColors.primary} />
+          ) : (
+            <MaterialIcons name="play-arrow" size={28} color={themeColors.primary} />
+          )}
         </TouchableOpacity>
       </View>
-    </View>
-  );
 
-  return (
-    <View style={[
-      styles.container,
-      { backgroundColor: themeColors.background, borderColor: themeColors.primary }
-    ]}>
-      <MiniPlayerContent />
+      {/* Close Button */}
+      <TouchableOpacity
+        style={styles.closeButton}
+        onPress={cleanupAndClose}
+        activeOpacity={0.7}
+      >
+        <X size={22} color={themeColors.textSecondary} />
+      </TouchableOpacity>
     </View>
   );
 });
@@ -241,19 +244,10 @@ const styles = StyleSheet.create({
     padding: 8,
     zIndex: 100,
   },
-  pressableArea: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
   mainTouchArea: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-  },
-  controlsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   artwork: {
     width: 48,
@@ -273,8 +267,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 2,
   },
+  playButtonContainer: {
+    width: 46,
+    height: 46,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+    marginRight: 8,
+  },
+  playButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
   closeButton: {
-    marginLeft: 4,
     padding: 8,
     borderRadius: 20,
     minWidth: 36,

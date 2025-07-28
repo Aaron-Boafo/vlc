@@ -6,28 +6,10 @@
   <component name="ChangeListManager">
     <list default="true" id="9db4fd3f-f98f-4439-8024-fcff77de74df" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/AudioScreens/all.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/AudioScreens/all.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/VideoComponents/VideoMiniPlayer.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/VideoComponents/VideoMiniPlayer.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/VideoScreens/all.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/VideoScreens/all.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/VideoScreens/favourite.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/VideoScreens/favourite.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/VideoScreens/history.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/VideoScreens/history.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/VideoScreens/playlist.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/VideoScreens/playlist.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/(tabs)/(audio)/index.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(tabs)/(audio)/index.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.vscode/settings.json" beforeDir="false" afterPath="$PROJECT_DIR$/.vscode/settings.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/(tabs)/_layout.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(tabs)/_layout.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/_layout.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/_layout.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/player/audio.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/player/audio.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/player/video.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/player/video.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/images/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/(tabs)/index.jsx" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/components/MiniPlayer.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/components/MiniPlayer.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/components/ProgressiveLoadingIndicator.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/components/ProgressiveLoadingIndicator.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/components/StreamModal.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/components/StreamModal.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/package.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/store/VideoHeadStore.js" beforeDir="false" afterPath="$PROJECT_DIR$/store/VideoHeadStore.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/store/optimizedVideoStore.js" beforeDir="false" afterPath="$PROJECT_DIR$/store/optimizedVideoStore.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/store/useAudioControl.js" beforeDir="false" afterPath="$PROJECT_DIR$/store/useAudioControl.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils/deviceOptimizer.js" beforeDir="false" afterPath="$PROJECT_DIR$/utils/deviceOptimizer.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils/memoryManager.js" beforeDir="false" afterPath="$PROJECT_DIR$/utils/memoryManager.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils/navigationOptimizer.js" beforeDir="false" afterPath="$PROJECT_DIR$/utils/navigationOptimizer.js" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

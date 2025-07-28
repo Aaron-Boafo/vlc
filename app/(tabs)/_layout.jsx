@@ -25,7 +25,7 @@ const TabLayouts = React.memo(() => {
     if (currentTab === tabName || isTransitioning) return; // Skip if same tab or transitioning
 
     setIsTransitioning(true);
-    
+
     // Use TabOptimizer for instant feedback and background optimization
     TabOptimizer.optimizeTabSwitch(currentTab, tabName, () => {
       setCurrentTab(tabName);
@@ -101,7 +101,7 @@ const TabLayouts = React.memo(() => {
         screenListeners={screenListeners}
       >
         <Tabs.Screen
-          name="index"
+          name="(video)"
           options={{
             title: "Video",
             headerShown: false,
@@ -128,42 +128,42 @@ const TabLayouts = React.memo(() => {
             tabBarTestID: 'audio-tab',
           }}
         />
-        <Tabs.Screen 
-          name="(browse)" 
-          options={{ 
-            title: "Browse", 
-            tabBarIcon: ({ focused, size = 24, color }) => 
+        <Tabs.Screen
+          name="(browse)"
+          options={{
+            title: "Browse",
+            tabBarIcon: ({ focused, size = 24, color }) =>
               focused ? <Icons.FolderOpen size={size} color={color} /> : <Icons.FolderClosed size={size} color={color} />,
             // Keep browse alive for faster switching
             detachInactiveScreens: false,
             lazy: false,
             unmountOnBlur: false,
             tabBarTestID: 'browse-tab',
-          }} 
+          }}
         />
-        <Tabs.Screen 
-          name="(playlist)" 
-          options={{ 
-            title: "Playlist", 
+        <Tabs.Screen
+          name="(playlist)"
+          options={{
+            title: "Playlist",
             tabBarIcon: ({ color, size = 24 }) => <Icons.ListMusic color={color} size={size} />,
             // Keep playlist alive for instant switching
             detachInactiveScreens: false,
             lazy: false,
             unmountOnBlur: false,
             tabBarTestID: 'playlist-tab',
-          }} 
+          }}
         />
-        <Tabs.Screen 
-          name="(more)" 
-          options={{ 
-            title: "More", 
+        <Tabs.Screen
+          name="(more)"
+          options={{
+            title: "More",
             tabBarIcon: ({ color, size = 24 }) => <Icons.Component color={color} size={size} />,
             // Keep more alive for faster switching
             detachInactiveScreens: false,
             lazy: false,
             unmountOnBlur: false,
             tabBarTestID: 'more-tab',
-          }} 
+          }}
         />
       </Tabs>
       <MiniPlayer />

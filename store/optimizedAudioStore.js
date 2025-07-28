@@ -10,28 +10,46 @@ const useOptimizedAudioStore = create(
       (set, get) => ({
         // Core state
         audioFiles: [],
+        cachedFiles: null,
         isLoading: false,
         isInitialLoadComplete: false,
         lastLoadTime: null,
         activeTab: 'all',
         sortOrder: { key: 'title', direction: 'asc' },
+        
+        // Cache maintenance
+        updateCache: (files) => {
+          set({ 
+            cachedFiles: files,
+            lastLoadTime: Date.now()
+          });
+        },
 
         // Fast loading with progressive updates - Enhanced caching
         loadAudioFiles: async (forceRefresh = false) => {
           const state = get();
           
-          // Enhanced caching: Skip if files exist and not forcing refresh
+          // First check memory cache
+          if (!forceRefresh && state.cachedFiles) {
+            console.log('⚡ Using memory-cached audio files');
+            set({ audioFiles: state.cachedFiles });
+            return state.cachedFiles;
+          }
+          
+          // Then check persisted files
           if (!forceRefresh && state.audioFiles.length > 0) {
-            // Only reload if files are very old (30 minutes) or explicitly forced
+            // Only reload if files are very old (5 minutes) or explicitly forced
             if (state.lastLoadTime) {
               const timeSinceLoad = Date.now() - state.lastLoadTime;
-              if (timeSinceLoad < 30 * 60 * 1000) { // 30 minutes instead of 5
-                console.log('⚡ Audio files cached, skipping reload');
+              if (timeSinceLoad < 5 * 60 * 1000) { // 5 minutes
+                console.log('⚡ Using persisted audio files');
+                get().updateCache(state.audioFiles);
                 return state.audioFiles;
               }
             } else {
               // If we have files but no timestamp, assume they're fresh
-              console.log('⚡ Audio files exist, skipping reload');
+              console.log('⚡ Using existing audio files');
+              get().updateCache(state.audioFiles);
               return state.audioFiles;
             }
           }
@@ -46,6 +64,9 @@ const useOptimizedAudioStore = create(
                 isInitialLoadComplete: isComplete,
                 isLoading: !isComplete,
               });
+              if (isComplete) {
+                get().updateCache(progressFiles);
+              }
             });
 
             set({ 
@@ -121,7 +142,7 @@ const useOptimizedAudioStore = create(
           activeTab: state.activeTab,
           sortOrder: state.sortOrder,
           lastLoadTime: state.lastLoadTime,
-          // Don't persist audioFiles - let them load fresh for better performance
+          // Persist activeTab to maintain tab state between sessions
         }),
       }
     )

@@ -1,33 +1,28 @@
-import useThemeStore from "../../store/theme";
+import useThemeStore from "../../../store/theme";
 import {
   View,
-  Text,
   StyleSheet,
   Platform,
-  TouchableOpacity,
   ScrollView,
 } from "react-native";
-import AudioHeader from "../../AudioComponents/title";
-import VideoToggleBar from "../../VideoComponents/toggleButton";
-import useOptimizedVideoStore from "../../store/optimizedVideoStore";
-import VideoAllScreen from "../../VideoScreens/all";
-import VideoPlaylistScreen from "../../VideoScreens/playlist";
-import VideoFavouriteScreen from "../../VideoScreens/favourite";
-import VideoHistoryScreen from "../../VideoScreens/history";
-// import MiniPlayer from '../../../components/MiniPlayer';
+import AudioHeader from "../../../AudioComponents/title";
+import VideoToggleBar from "../../../VideoComponents/toggleButton";
+import useOptimizedVideoStore from "../../../store/optimizedVideoStore";
+import VideoAllScreen from "../../../VideoScreens/all";
+import VideoPlaylistScreen from "../../../VideoScreens/playlist";
+import VideoFavouriteScreen from "../../../VideoScreens/favourite";
+import VideoHistoryScreen from "../../../VideoScreens/history";
 import React, { useState, useEffect, useCallback } from "react";
-import Constants from "expo-constants";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
-import MoreOptionsMenu from "../../components/MoreOptionsMenu";
-import SortOptionsSheet from "../../components/SortOptionsSheet";
-import ProgressiveLoadingIndicator from "../../components/ProgressiveLoadingIndicator";
-import StoreMigration from "../../utils/storeMigration";
-import AdvancedSearch from "../../utils/advancedSearch";
-import PerformanceAnalytics from "../../utils/performanceAnalytics";
-import NavigationOptimizer from "../../utils/navigationOptimizer";
-import LazyScreen from "../../components/LazyScreen";
-import ImageOptimizer from "../../utils/imageOptimizer";
+import MoreOptionsMenu from "../../../components/MoreOptionsMenu";
+import SortOptionsSheet from "../../../components/SortOptionsSheet";
+import ProgressiveLoadingIndicator from "../../../components/ProgressiveLoadingIndicator";
+import StoreMigration from "../../../utils/storeMigration";
+import AdvancedSearch from "../../../utils/advancedSearch";
+import PerformanceAnalytics from "../../../utils/performanceAnalytics";
+import LazyScreen from "../../../components/LazyScreen";
+import ImageOptimizer from "../../../utils/imageOptimizer";
 import * as Icons from "lucide-react-native";
 
 export default function VideoTabScreen() {
@@ -36,7 +31,6 @@ export default function VideoTabScreen() {
     loadVideoFiles,
     videoFiles,
     isLoading,
-    isInitialLoadComplete,
     sortOrder,
     sortVideoFiles,
     toggleTabs,

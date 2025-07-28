@@ -37,9 +37,10 @@ import {
 } from "lucide-react-native";
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import useThemeStore from "../../store/theme";
 import useAudioControl from "../../store/useAudioControl";
+import useAudioStore from "../../store/AudioHeadStore";
 import useFavouriteStore from "../../store/favouriteStore";
 import usePlaybackStore from "../../store/playbackStore";
 import * as NavigationBar from 'expo-navigation-bar';
@@ -52,6 +53,15 @@ const { width } = Dimensions.get("window");
 
 const PlayerScreen = () => {
   const { themeColors } = useThemeStore();
+  const { activeTab } = useLocalSearchParams();
+  const toggleTabs = useAudioStore(state => state.toggleTabs);
+
+  // Set the active tab when the component mounts
+  useEffect(() => {
+    if (activeTab) {
+      toggleTabs(activeTab);
+    }
+  }, [activeTab, toggleTabs]);
   const {
     currentTrack: useAudioControlCurrentTrack,
     isPlaying: useAudioControlIsPlaying,
