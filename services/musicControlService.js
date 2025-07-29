@@ -8,16 +8,23 @@ const setupMusicControls = (audioControl) => {
   audioControlRef = audioControl;
   
   try {
-    // Enable background audio
+    // Enable background audio - wrap in try-catch for safety
     Audio.setAudioModeAsync({
       staysActiveInBackground: true,
       playsInSilentModeIOS: true,
       shouldDuckAndroid: true,
       playThroughEarpieceAndroid: false,
+    }).catch(error => {
+      console.warn('Audio mode setup failed:', error);
     });
 
-    // Enable the music control
-    MusicControl.enableBackgroundMode(true);
+    // Enable the music control - check if available first
+    if (MusicControl && typeof MusicControl.enableBackgroundMode === 'function') {
+      MusicControl.enableBackgroundMode(true);
+    } else {
+      console.warn('MusicControl not available');
+      return () => {}; // Return empty cleanup function
+    }
 
     // Enable control center / lock screen controls
     MusicControl.enableControl('play', true);

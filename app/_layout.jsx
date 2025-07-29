@@ -2,14 +2,15 @@ import { Stack, SplashScreen } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import "../global.css";
-import { View } from 'react-native';
+import { View, Text } from 'react-native';
 import { useFonts } from 'expo-font';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect } from 'react';
 import { Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import usePlaybackStore from '../store/playbackStore';
 import useAudioControl from '../store/useAudioControl';
+import AppThemeProvider from '../components/ThemeProvider';
 import React from 'react';
 
 // Simple error boundary component

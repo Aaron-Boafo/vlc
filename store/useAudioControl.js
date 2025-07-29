@@ -42,23 +42,33 @@ const useAudioControl = create(
           playsInSilentModeIOS: true,
           shouldDuckAndroid: true,
           playThroughEarpieceAndroid: false,
+        }).catch(audioError => {
+          console.warn('Audio mode setup failed:', audioError);
         });
 
-        // Setup music controls
-        const cleanup = setupMusicControls({
-          play: () => get().play(),
-          pause: () => get().pause(),
-          next: () => get().next(),
-          previous: () => get().previous(),
-          seek: (position) => get().seek(position)
-        });
+        // Setup music controls - delay and make safer to prevent startup crashes
+        setTimeout(() => {
+          try {
+            const cleanup = setupMusicControls({
+              play: () => get().play(),
+              pause: () => get().pause(),
+              next: () => get().next(),
+              previous: () => get().previous(),
+              seek: (position) => get().seek(position)
+            });
 
-        // Store cleanup function
-        set({ _cleanupMusicControls: cleanup });
+            // Store cleanup function
+            set({ _cleanupMusicControls: cleanup });
+          } catch (musicControlError) {
+            console.warn('Music control setup failed:', musicControlError);
+            set({ _cleanupMusicControls: () => {} });
+          }
+        }, 2000); // Delay music control setup to prevent startup crash
 
-        return cleanup;
+        return () => {}; // Return empty cleanup for now
       } catch (error) {
         console.error("Error initializing audio:", error);
+        return () => {}; // Return empty cleanup on error
       }
     },
 
