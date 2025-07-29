@@ -11,16 +11,16 @@ const useUserProfileStore = create(
       userName: 'User',
       userAvatar: null,
       isWebSocketInitialized: false,
-      
+
       // Actions
       setUserName: (name) => set({ userName: name }),
       setUserAvatar: (uri) => set({ userAvatar: uri }),
-      resetProfile: () => set({ 
-        userName: 'User', 
+      resetProfile: () => set({
+        userName: 'User',
         userAvatar: null,
-        isWebSocketInitialized: false 
+        isWebSocketInitialized: false
       }),
-      
+
       // Initialize WebSocket connection
       initializeWebSocket: async () => {
         const state = get();
@@ -37,13 +37,13 @@ const useUserProfileStore = create(
             console.warn('No auth token available for WebSocket initialization');
             return false;
           }
-          
+
           // Update the auth token in the WebSocket service
           webSocketService.authToken = token;
-          
+
           // Initialize the connection
           await webSocketService.initialize();
-          
+
           set({ isWebSocketInitialized: true });
           console.log('WebSocket initialized successfully');
           return true;
@@ -54,7 +54,7 @@ const useUserProfileStore = create(
           return false;
         }
       },
-      
+
       // Update profile and initialize WebSocket
       setUserProfile: async (profileData) => {
         // Update the profile data first
@@ -62,7 +62,7 @@ const useUserProfileStore = create(
           userName: profileData.name || 'User',
           userAvatar: profileData.avatar,
         });
-        
+
         // Only initialize WebSocket if we have a valid token
         if (await SecureStore.getItemAsync('auth_token')) {
           try {

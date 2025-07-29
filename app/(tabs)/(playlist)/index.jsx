@@ -147,7 +147,7 @@ const PlaylistScreen = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
   const [createModal, setCreateModal] = useState(false);
-  const [playlistType, setPlaylistType] = useState(tab === 'video' ? 'video' : 'audio');
+  const [playlistType, setPlaylistType] = useState('audio'); // Default to audio
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [selectedTracks, setSelectedTracks] = useState([]);
   const [optionsVisible, setOptionsVisible] = useState(false);

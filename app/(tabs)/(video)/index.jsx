@@ -41,6 +41,7 @@ export default function VideoTabScreen() {
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [migrationComplete, setMigrationComplete] = useState(false);
+  const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
   const router = useRouter();
 
   // Run migration on first load
@@ -103,6 +104,7 @@ export default function VideoTabScreen() {
       if (migrationComplete && !hasInitiallyLoaded && videoFiles.length === 0) {
         console.log("🚀 Loading video files with fast loader...");
         const startTime = Date.now();
+        setHasInitiallyLoaded(true); // Mark as loaded
         loadVideoFiles().then(() => {
           PerformanceAnalytics.trackLoadTime(
             "VideoFiles",

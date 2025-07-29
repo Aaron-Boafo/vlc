@@ -5,52 +5,14 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="9db4fd3f-f98f-4439-8024-fcff77de74df" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/assets/images/bg-login.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/components/CloudStorageBrowser.jsx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/components/FileUploader.jsx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/components/MediaSelector.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/components/StorageHubScreen.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/components/ThemeProvider.jsx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/config/api.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/contexts/ThemeContext.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/hooks/useAppTheme.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/services/README.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/services/api.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/services/authService.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/services/musicControlService.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/services/profileService.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/services/storageService.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/services/websocketService.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/store/userProfile.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/utils/themeUtils.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/AudioComponents/title.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/AudioComponents/title.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/AudioComponents/toggleButton.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/AudioComponents/toggleButton.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/VideoComponents/VideoMiniPlayer.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/VideoComponents/VideoMiniPlayer.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/VideoComponents/toggleButton.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/VideoComponents/toggleButton.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/VideoScreens/favourite.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/VideoScreens/favourite.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/VideoScreens/history.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/VideoScreens/history.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/VideoScreens/playlist.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/VideoScreens/playlist.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/(tabs)/(audio)/index.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(tabs)/(audio)/index.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/(tabs)/(browse)/index.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(tabs)/(browse)/index.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/(tabs)/(more)/index.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(tabs)/(more)/index.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/(tabs)/(playlist)/_layout.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(tabs)/(playlist)/_layout.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/(onboarding)/_layout.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(onboarding)/_layout.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/(onboarding)/index.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(onboarding)/index.jsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/(tabs)/(playlist)/index.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(tabs)/(playlist)/index.jsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/(tabs)/(video)/index.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(tabs)/(video)/index.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/(tabs)/_layout.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(tabs)/_layout.jsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/_layout.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/_layout.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/components/AuthForm.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/components/AuthForm.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/components/UserProfileModal.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/components/UserProfileModal.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/images/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/images/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/components/AccentColorPicker.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/components/AccentColorPicker.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/components/BottomSheet.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/components/BottomSheet.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/components/SortOptionsSheet.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/components/SortOptionsSheet.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/package-lock.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/package.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/store/optimizedAudioStore.js" beforeDir="false" afterPath="$PROJECT_DIR$/store/optimizedAudioStore.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/store/optimizedVideoStore.js" beforeDir="false" afterPath="$PROJECT_DIR$/store/optimizedVideoStore.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/store/theme.js" beforeDir="false" afterPath="$PROJECT_DIR$/store/theme.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/store/useAudioControl.js" beforeDir="false" afterPath="$PROJECT_DIR$/store/useAudioControl.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/store/userProfile.js" beforeDir="false" afterPath="$PROJECT_DIR$/store/userProfile.js" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -73,21 +35,21 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.cidr.known.project.marker": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.readMode.enableVisualFormatting": "true",
-    "ScreenRecorder.SavePath": "C:\\Users\\drmid\\Desktop",
-    "cf.first.check.clang-format": "false",
-    "cidr.known.project.marker": "true",
-    "git-widget-placeholder": "Merging Samuel",
-    "kotlin-language-version-configured": "true",
-    "last_opened_file_path": "C:/Users/drmid/Desktop",
-    "settings.editor.selected.configurable": "AndroidSdkUpdater"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.readMode.enableVisualFormatting&quot;: &quot;true&quot;,
+    &quot;ScreenRecorder.SavePath&quot;: &quot;C:\\Users\\drmid\\Desktop&quot;,
+    &quot;cf.first.check.clang-format&quot;: &quot;false&quot;,
+    &quot;cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;Samuel&quot;,
+    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/drmid/Desktop&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;AndroidSdkUpdater&quot;
   }
-}]]></component>
+}</component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">

@@ -236,8 +236,38 @@ const OnboardingScreen = () => {
     const viewConfig = useRef({viewAreaCoveragePercentThreshold: 50}).current;
 
     const handleNext = () => {
+        console.log('handleNext called, currentIndex:', currentIndex);
         if (currentIndex < onboardingData.length - 1) {
-            slideRef.current?.scrollToIndex({index: currentIndex + 1});
+            try {
+                const nextIndex = currentIndex + 1;
+                console.log('Scrolling to index:', nextIndex);
+                
+                // Try scrollToIndex first
+                slideRef.current?.scrollToIndex({
+                    index: nextIndex,
+                    animated: true
+                });
+                
+                // Fallback: use scrollTo if scrollToIndex doesn't work
+                setTimeout(() => {
+                    if (slideRef.current) {
+                        slideRef.current.scrollTo({
+                            x: width * nextIndex,
+                            animated: true
+                        });
+                    }
+                }, 100);
+                
+            } catch (error) {
+                console.error('Error in handleNext:', error);
+                // Final fallback: use scrollTo
+                if (slideRef.current) {
+                    slideRef.current.scrollTo({
+                        x: width * (currentIndex + 1),
+                        animated: true
+                    });
+                }
+            }
         }
     };
 
@@ -276,9 +306,12 @@ const OnboardingScreen = () => {
     };
 
     const handleMainButtonPress = () => {
+        console.log('Main button pressed, currentIndex:', currentIndex, 'total:', onboardingData.length);
         if (currentIndex === onboardingData.length - 1) {
+            console.log('Last slide, finishing onboarding');
             requestPermissionsAndFinish();
         } else {
+            console.log('Not last slide, calling handleNext');
             handleNext();
         }
     };
@@ -310,6 +343,11 @@ const OnboardingScreen = () => {
                 <Animated.FlatList
                     ref={slideRef}
                     data={onboardingData}
+                    getItemLayout={(data, index) => ({
+                        length: width,
+                        offset: width * index,
+                        index,
+                    })}
                     renderItem={({item, index}) => (
                         <View style={styles.slide}>
                             <BackgroundPattern pattern={item.pattern} colors={item.gradient} />
@@ -337,10 +375,16 @@ const OnboardingScreen = () => {
                     viewabilityConfig={viewConfig}
                 />
 
-                <View style={styles.bottomContainer}>
+                <View style={[styles.bottomContainer, { zIndex: 100 }]}>
                     <Paginator data={onboardingData} scrollX={scrollX} />
-                    <View style={styles.buttonContainer}>
-                        <Pressable style={[styles.button, styles.skipButton]} onPress={skip}>
+                    <View style={[styles.buttonContainer, { zIndex: 101 }]}>
+                        <Pressable 
+                            style={[styles.button, styles.skipButton, { zIndex: 1000 }]} 
+                            onPress={() => {
+                                console.log('Skip button pressed');
+                                skip();
+                            }}
+                        >
                             <LinearGradient
                                 colors={['rgba(139, 92, 246, 0.1)', 'rgba(139, 92, 246, 0.05)']}
                                 style={styles.skipButtonGradient}
@@ -352,7 +396,10 @@ const OnboardingScreen = () => {
                         </Pressable>
                         <TouchableOpacity
                             onPress={handleMainButtonPress}
+                            onPressIn={() => console.log('Button pressed in')}
+                            onPressOut={() => console.log('Button pressed out')}
                             activeOpacity={0.8}
+                            style={{ zIndex: 1000 }} // Ensure button is on top
                         >
                             <LinearGradient
                                 colors={['#8B5CF6', '#A855F7', '#EC4899']} // More vibrant gradient

@@ -1,52 +1,63 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import tinycolor from 'tinycolor2';
 
 // Define theme colors first
 const accentColors = {
-  fuchsia: "#F44BF8",  // Original Fuchsia - Modern and energetic
-  gold: "#FFD700",     // Vibrant Gold - Excellent visibility in all modes
-  coral: "#FB6A4A",    // Warm Coral - Better visibility on light UI
-  teal: "#14B8A6",     // Teal 500 - More vibrant and contrast-friendly
-  purple: "#8B5CF6",   // Violet 500 - Pops nicely in dark UI
-  blue: "#2563EB",     // Blue 600 - Calmer and more readable in both themes
-  red: "#DC2626",      // Red 600 - Deeper tone, prevents glare
-  gray: "#6B7280"      // Slate Gray 500 - Better on dark backgrounds
+  purple: '#8B5CF6',
+  blue: '#3B82F6',
+  green: '#10B981',
+  red: '#EF4444',
+  orange: '#F97316',
+  pink: '#EC4899',
+  indigo: '#6366F1',
+  teal: '#14B8A6',
+  yellow: '#F59E0B',
+  fuchsia: '#D946EF',
+  lime: '#84CC16',
+  cyan: '#06B6D4',
+  emerald: '#059669',
+  violet: '#8B5A2B',
+  rose: '#F43F5E',
+  amber: '#F59E0B',
+  sky: '#0EA5E9',
 };
 
-// Typography
+// Typography and spacing constants
 const typography = {
-  h1: { fontSize: 32, fontWeight: '700', lineHeight: 40 },
-  h2: { fontSize: 24, fontWeight: '600', lineHeight: 32 },
-  h3: { fontSize: 20, fontWeight: '600', lineHeight: 28 },
-  body: { fontSize: 16, lineHeight: 24 },
-  bodySmall: { fontSize: 14, lineHeight: 20 },
-  caption: { fontSize: 12, lineHeight: 16 },
+  fontSizeXS: 12,
+  fontSizeSM: 14,
+  fontSizeMD: 16,
+  fontSizeLG: 18,
+  fontSizeXL: 20,
+  fontSize2XL: 24,
+  fontSize3XL: 30,
+  fontWeightNormal: '400',
+  fontWeightMedium: '500',
+  fontWeightSemiBold: '600',
+  fontWeightBold: '700',
 };
 
-// Spacing system (in pixels)
 const spacing = {
-  xs: 4,
-  sm: 8,
-  md: 16,
-  lg: 24,
-  xl: 32,
-  xxl: 48,
+  spaceXS: 4,
+  spaceSM: 8,
+  spaceMD: 16,
+  spaceLG: 24,
+  spaceXL: 32,
+  space2XL: 48,
 };
 
-// Theme color generator function
-const getThemeColors = (themeType, accentColorName) => {
-  // Get the base accent color
-  const accentColor = accentColors[accentColorName] || accentColors.fuchsia;
+const getThemeColors = (theme, accentColor) => {
+  const accent = accentColors[accentColor] || accentColors.purple;
   
   // Create a slightly lighter and darker version for hover/press states
   const accentLight = tinycolor(accentColor).lighten(15).toString();
   const accentDark = tinycolor(accentColor).darken(15).toString();
   
   const baseTheme = {
-    // Primary accent colors
-    primary: accentColor,
+    // Primary colors
+    primary: accent,
     primaryLight: accentLight,
     primaryDark: accentDark,
     
@@ -54,104 +65,90 @@ const getThemeColors = (themeType, accentColorName) => {
     secondary: tinycolor(accentColor).complement().toString(),
     
     // Accent color (same as primary for consistency)
-    accent: accentColor,
-    shadow: accentColor,
-    descText: "#8e8e8e",
-    iconBackground: accentColor,
-    accentColor: accentColor,
+    accent: accent,
   };
 
-  return themeType === "light"
-    ? {
-        ...baseTheme,
-        // Modern Light Theme with Better Contrast
-        background: "#F8FAFF",
-        sectionBackground: "#F0F4FF",
-        card: "#FFFFFF",
-        cardElevated: "#E6EDFF",
-        tabIconColor: accentColor,
-        ribbon: accentDark,
-        
-        // Text with better contrast
-        text: "#1A1F36",
-        textSecondary: "#4A5568",
-        textTertiary: "718096",
-        
-        // UI Elements
-        border: "#E2E8F0",
-        inputBackground: "#FFFFFF",
-        inputText: "#1A1F36",
-        inputPlaceholder: "#A0AEC0",
-        
-        // Status Colors
-        success: "#00A86B",
-        warning: "#DD6B20",
-        error: "#E53E3E",
-        info: "#3182CE",
-        
-        // Modern Effects
-        overlay: 'rgba(248, 250, 255, 0.9)',
-        backdrop: 'rgba(248, 250, 255, 0.7)',
-        shadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
-        shadowLight: '0 2px 10px rgba(0, 0, 0, 0.05)',
-        
-        // Modern UI Elements
-        cardShadow: '0 8px 30px rgba(0, 50, 150, 0.1)',
-        buttonHover: 'rgba(0, 0, 0, 0.04)',
-        buttonActive: 'rgba(0, 0, 0, 0.08)',
-        
-        // Gradients
-        gradientPrimary: 'linear-gradient(135deg, #4D8AFF 0%, #8A63FF 100%)',
-        gradientSecondary: 'linear-gradient(135deg, #00C2FF 0%, #00E0A0 100%)',
-        // Typography and spacing
-        ...typography,
-        ...spacing,
-      }
-    : {
-        ...baseTheme,
-        // Vibrant Blue-Black Theme
-        background: "#0E1525",
-        sectionBackground: "#1A2238",
-        card: "#1E2A4A",
-        cardElevated: "#2A3A62",
-        tabIconColor: accentLight,
-        ribbon: accentDark,
-        
-        // Text with better contrast
-        text: "#FFFFFF",
-        textSecondary: "#C5D0FF",
-        textTertiary: "#7E8DB8",
-        
-        // UI Elements
-        border: "#3A4A7A",
-        inputBackground: "#1E2A4A",
-        inputText: "#FFFFFF",
-        inputPlaceholder: "#7E8DB8",
-        
-        // Status Colors
-        success: "#00F5A0",
-        warning: "#FFB74D",
-        error: "#FF5C8D",
-        info: "#4D8AFF",
-        
-        // Modern Effects
-        overlay: 'rgba(14, 21, 37, 0.9)',
-        backdrop: 'rgba(14, 21, 37, 0.7)',
-        shadow: '0 4px 20px rgba(0, 15, 50, 0.4)',
-        shadowLight: '0 2px 10px rgba(0, 15, 50, 0.25)',
-        
-        // Modern UI Elements
-        cardShadow: '0 8px 30px rgba(0, 20, 80, 0.35)',
-        buttonHover: 'rgba(100, 150, 255, 0.15)',
-        buttonActive: 'rgba(100, 150, 255, 0.25)',
-        
-        // Gradients
-        gradientPrimary: 'linear-gradient(135deg, #4D8AFF 0%, #8A63FF 100%)',
-        gradientSecondary: 'linear-gradient(135deg, #00F5A0 0%, #00D9FF 100%)',
-        // Typography and spacing
-        ...typography,
-        ...spacing,
-      };
+  if (theme === 'dark') {
+    return {
+      ...baseTheme,
+      // Background colors
+      background: '#0F0F23',
+      backgroundSecondary: '#1A1A2E',
+      card: '#16213E',
+      surface: '#1E1E3F',
+      
+      // Text colors
+      text: '#FFFFFF',
+      textSecondary: '#B0B0C3',
+      textTertiary: '#8A8A9E',
+      
+      // Border and divider colors
+      border: '#2A2A4A',
+      divider: '#2A2A4A',
+      
+      // Status colors
+      success: '#10B981',
+      warning: '#F59E0B',
+      error: '#EF4444',
+      info: '#3B82F6',
+      
+      // Shadow and overlay
+      shadow: '#000000',
+      overlay: 'rgba(0, 0, 0, 0.5)',
+      
+      // Interactive states
+      hover: 'rgba(139, 92, 246, 0.1)',
+      pressed: 'rgba(139, 92, 246, 0.2)',
+      disabled: '#4A4A6A',
+      
+      // Gradients
+      gradientPrimary: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)',
+      gradientSecondary: 'linear-gradient(135deg, #00F5A0 0%, #00D9FF 100%)',
+      // Typography and spacing
+      ...typography,
+      ...spacing,
+    };
+  } else {
+    return {
+      ...baseTheme,
+      // Background colors
+      background: '#FFFFFF',
+      backgroundSecondary: '#F8FAFC',
+      card: '#FFFFFF',
+      surface: '#F1F5F9',
+      
+      // Text colors
+      text: '#1E293B',
+      textSecondary: '#64748B',
+      textTertiary: '#94A3B8',
+      
+      // Border and divider colors
+      border: '#E2E8F0',
+      divider: '#E2E8F0',
+      
+      // Status colors
+      success: '#10B981',
+      warning: '#F59E0B',
+      error: '#EF4444',
+      info: '#3B82F6',
+      
+      // Shadow and overlay
+      shadow: '#000000',
+      overlay: 'rgba(0, 0, 0, 0.3)',
+      
+      // Interactive states
+      hover: 'rgba(139, 92, 246, 0.1)',
+      pressed: 'rgba(139, 92, 246, 0.2)',
+      disabled: '#CBD5E1',
+      
+      // Gradients
+      gradientPrimary: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)',
+      gradientSecondary: 'linear-gradient(135deg, #00F5A0 0%, #00D9FF 100%)',
+      // Typography and spacing
+      ...typography,
+      ...spacing,
+    };
+  }
 };
 
 // Create a separate store configuration

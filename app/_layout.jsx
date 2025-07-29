@@ -106,7 +106,10 @@ function RootLayoutContent() {
           }}
         >
           <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
+          <Stack.Screen name="(onboarding)" options={{ 
+            headerShown: false,
+            gestureEnabled: true // Enable gestures for onboarding
+          }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen
             name="player"
