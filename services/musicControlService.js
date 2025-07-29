@@ -1,14 +1,15 @@
 import { Audio } from 'expo-av';
-import MusicControl, { Command } from 'react-native-music-control';
+import * as Notifications from 'expo-notifications';
 
 // Store reference to audio control functions
 let audioControlRef = null;
+let currentNotificationId = null;
 
 const setupMusicControls = (audioControl) => {
   audioControlRef = audioControl;
   
   try {
-    // Enable background audio - wrap in try-catch for safety
+    // Enable background audio
     Audio.setAudioModeAsync({
       staysActiveInBackground: true,
       playsInSilentModeIOS: true,
@@ -18,117 +19,68 @@ const setupMusicControls = (audioControl) => {
       console.warn('Audio mode setup failed:', error);
     });
 
-    // Enable the music control - check if available first
-    if (MusicControl && typeof MusicControl.enableBackgroundMode === 'function') {
-      MusicControl.enableBackgroundMode(true);
-    } else {
-      console.warn('MusicControl not available');
-      return () => {}; // Return empty cleanup function
-    }
-
-    // Enable control center / lock screen controls
-    MusicControl.enableControl('play', true);
-    MusicControl.enableControl('pause', true);
-    MusicControl.enableControl('stop', true);
-    MusicControl.enableControl('nextTrack', true);
-    MusicControl.enableControl('previousTrack', true);
-    MusicControl.enableControl('seekForward', false); // Disable if not needed
-    MusicControl.enableControl('seekBackward', false); // Disable if not needed
-    MusicControl.enableControl('seek', true); // Enable seek bar
-    MusicControl.enableControl('volume', true); // Enable volume control
-    MusicControl.enableControl('remoteVolume', false);
-
-    // Register to events
-    MusicControl.on(Command.play, () => {
-      console.log('🎵 Music Control: Play pressed');
-      if (audioControlRef?.play) {
-        audioControlRef.play();
-      }
-    });
-
-    MusicControl.on(Command.pause, () => {
-      console.log('🎵 Music Control: Pause pressed');
-      if (audioControlRef?.pause) {
-        audioControlRef.pause();
-      }
-    });
-
-    MusicControl.on(Command.stop, () => {
-      console.log('🎵 Music Control: Stop pressed');
-      if (audioControlRef?.pause) {
-        audioControlRef.pause();
-      }
-    });
-
-    MusicControl.on(Command.nextTrack, () => {
-      console.log('🎵 Music Control: Next track pressed');
-      if (audioControlRef?.next) {
-        audioControlRef.next();
-      }
-    });
-
-    MusicControl.on(Command.previousTrack, () => {
-      console.log('🎵 Music Control: Previous track pressed');
-      if (audioControlRef?.previous) {
-        audioControlRef.previous();
-      }
-    });
-
-    MusicControl.on(Command.seek, (position) => {
-      console.log('🎵 Music Control: Seek to', position);
-      if (audioControlRef?.seek) {
-        audioControlRef.seek(position);
-      }
-    });
-
-    console.log('🎵 Music controls initialized with react-native-music-control');
+    console.log('🎵 Simple notification system initialized');
     
     // Return cleanup function
     return () => {
-      try {
-        MusicControl.stopControl();
-        audioControlRef = null;
-        console.log('🎵 Music controls cleaned up');
-      } catch (error) {
-        console.warn('Error cleaning up music controls:', error);
+      if (currentNotificationId) {
+        Notifications.dismissNotificationAsync(currentNotificationId);
+        currentNotificationId = null;
       }
+      audioControlRef = null;
+      console.log('🎵 Notification system cleaned up');
     };
+    
   } catch (error) {
-    console.error('Error setting up music controls:', error);
+    console.error('Error setting up notification system:', error);
     return () => {}; // Return empty cleanup function
   }
 };
 
-// Update the music control with current track info
+// Update the notification with current track info
 const updateNotification = async (track, isPlaying, position = 0, duration = 0) => {
   if (!track) return;
 
   try {
-    // Set the music control info
-    MusicControl.setNowPlaying({
-      title: track.title || 'Unknown Track',
-      artwork: track.artwork || '', // URL to artwork
-      artist: track.artist || 'Unknown Artist',
-      album: track.album || '',
-      genre: track.genre || '',
-      duration: Math.floor(duration / 1000) || 0, // in seconds
-      description: '', // Android only
-      color: 0x8B5CF6, // Android only - using your purple theme
-      colorized: true, // Android only
-      date: track.year || '', // Release date, Android only
-      rating: false, // Android only (Boolean or Number)
+    // Dismiss previous notification if exists
+    if (currentNotificationId) {
+      await Notifications.dismissNotificationAsync(currentNotificationId);
+    }
+
+    // Format time for display
+    const formatTime = (ms) => {
+      const seconds = Math.floor(ms / 1000);
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    // Create notification content
+    const notificationContent = {
+      title: `${isPlaying ? '🎵' : '⏸️'} ${track.title || 'Unknown Track'}`,
+      body: `${track.artist || 'Unknown Artist'}${duration > 0 ? ` • ${formatTime(position)} / ${formatTime(duration)}` : ''}`,
+      data: { 
+        trackId: track.id || 'unknown',
+        isPlaying: isPlaying,
+        position: position,
+        duration: duration
+      },
+      sound: false, // Don't play sound for music notifications
+      priority: Notifications.AndroidNotificationPriority.LOW,
+      sticky: true, // Keep notification visible
+    };
+
+    // Schedule the notification
+    const notificationId = await Notifications.scheduleNotificationAsync({
+      content: notificationContent,
+      trigger: null, // Show immediately
     });
 
-    // Update playback state
-    MusicControl.updatePlayback({
-      state: isPlaying ? MusicControl.STATE_PLAYING : MusicControl.STATE_PAUSED,
-      speed: 1.0,
-      elapsedTime: Math.floor(position / 1000) || 0, // in seconds
-    });
-
-    console.log('🎵 Music control updated:', track.title, isPlaying ? 'playing' : 'paused');
+    currentNotificationId = notificationId;
+    console.log('🎵 Notification updated:', track.title, isPlaying ? 'playing' : 'paused');
+    
   } catch (error) {
-    console.warn('Error updating music control:', error);
+    console.warn('Error updating notification:', error);
   }
 };
 

@@ -6,7 +6,6 @@ import usePlaybackStore from "./playbackStore";
 import AudioOptimizer from '../utils/audioOptimizations';
 import * as FileSystem from 'expo-file-system';
 import { setupMusicControls, updateNotification } from '../services/musicControlService';
-import MusicControl from 'react-native-music-control';
 import * as Notifications from 'expo-notifications';
 
 const useAudioControl = create(
@@ -591,11 +590,12 @@ const useAudioControl = create(
         _cleanupMusicControls();
       }
 
-      // Clear music control notification
+      // Clear notification
       try {
-        MusicControl.stopControl();
+        await Notifications.dismissAllNotificationsAsync();
+        console.log('🎵 Notifications cleared');
       } catch (error) {
-        console.warn('Error stopping music control:', error);
+        console.warn('Error clearing notifications:', error);
       }
 
       // Reset state

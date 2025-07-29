@@ -6,13 +6,9 @@
   <component name="ChangeListManager">
     <list default="true" id="9db4fd3f-f98f-4439-8024-fcff77de74df" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/(onboarding)/_layout.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(onboarding)/_layout.jsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/(onboarding)/index.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(onboarding)/index.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/(tabs)/(playlist)/index.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(tabs)/(playlist)/index.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/(tabs)/(video)/index.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(tabs)/(video)/index.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/_layout.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/_layout.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/store/theme.js" beforeDir="false" afterPath="$PROJECT_DIR$/store/theme.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/store/userProfile.js" beforeDir="false" afterPath="$PROJECT_DIR$/store/userProfile.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/services/musicControlService.js" beforeDir="false" afterPath="$PROJECT_DIR$/services/musicControlService.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/store/useAudioControl.js" beforeDir="false" afterPath="$PROJECT_DIR$/store/useAudioControl.js" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

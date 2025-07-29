@@ -238,35 +238,39 @@ const OnboardingScreen = () => {
     const handleNext = () => {
         console.log('handleNext called, currentIndex:', currentIndex);
         if (currentIndex < onboardingData.length - 1) {
+            const nextIndex = currentIndex + 1;
+            console.log('Moving to index:', nextIndex);
+            
             try {
-                const nextIndex = currentIndex + 1;
-                console.log('Scrolling to index:', nextIndex);
-                
-                // Try scrollToIndex first
-                slideRef.current?.scrollToIndex({
-                    index: nextIndex,
-                    animated: true
-                });
-                
-                // Fallback: use scrollTo if scrollToIndex doesn't work
-                setTimeout(() => {
-                    if (slideRef.current) {
-                        slideRef.current.scrollTo({
-                            x: width * nextIndex,
+                // Method 1: Try scrollToIndex
+                if (slideRef.current && typeof slideRef.current.scrollToIndex === 'function') {
+                    slideRef.current.scrollToIndex({
+                        index: nextIndex,
+                        animated: true
+                    });
+                    console.log('Used scrollToIndex');
+                } else {
+                    // Method 2: Use scrollToOffset (more reliable)
+                    if (slideRef.current && typeof slideRef.current.scrollToOffset === 'function') {
+                        slideRef.current.scrollToOffset({
+                            offset: width * nextIndex,
                             animated: true
                         });
+                        console.log('Used scrollToOffset');
+                    } else {
+                        console.warn('No scroll methods available, updating state only');
                     }
-                }, 100);
+                }
+                
+                // Always update the state as a fallback
+                setTimeout(() => {
+                    setCurrentIndex(nextIndex);
+                }, 300);
                 
             } catch (error) {
                 console.error('Error in handleNext:', error);
-                // Final fallback: use scrollTo
-                if (slideRef.current) {
-                    slideRef.current.scrollTo({
-                        x: width * (currentIndex + 1),
-                        animated: true
-                    });
-                }
+                // Fallback: just update the state
+                setCurrentIndex(nextIndex);
             }
         }
     };
@@ -348,6 +352,10 @@ const OnboardingScreen = () => {
                         offset: width * index,
                         index,
                     })}
+                    initialNumToRender={1}
+                    maxToRenderPerBatch={1}
+                    windowSize={3}
+                    removeClippedSubviews={false}
                     renderItem={({item, index}) => (
                         <View style={styles.slide}>
                             <BackgroundPattern pattern={item.pattern} colors={item.gradient} />
