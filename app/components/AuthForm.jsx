@@ -125,12 +125,8 @@ export default function AuthForm({
         const username = userData.username || `User_${trimmedPhone.slice(-4)}`;
         const profilePicture = userData.profilePicture || `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=0D8ABC&color=fff`;
         
-        // Save the JWT token to secure storage
+        // Save the JWT token to secure storage first
         await SecureStore.setItemAsync('auth_token', token);
-        
-        // Update the profile store
-        useUserProfileStore.getState().setUserName(username);
-        useUserProfileStore.getState().setUserAvatar(profilePicture);
         
         // Prepare user profile data
         const userProfile = {
@@ -144,9 +140,31 @@ export default function AuthForm({
         
         console.log('User logged in with profile:', userProfile);
         
-        // Call the onLogin callback with user data if provided
-        if (onLogin) {
-          onLogin(userProfile);
+        // Update profile store and initialize WebSocket
+        try {
+          await useUserProfileStore.getState().setUserProfile({
+            name: username,
+            avatar: profilePicture,
+            email: userData.email || ''
+          });
+          
+          console.log('Profile updated, WebSocket should be initializing...');
+          
+          // Call the onLogin callback with user data if provided
+          if (onLogin) {
+            onLogin(userProfile);
+          }
+          
+          // Close the modal
+          onClose();
+          
+        } catch (wsError) {
+          console.error('Error during WebSocket initialization:', wsError);
+          // Still continue with login even if WebSocket fails
+          if (onLogin) {
+            onLogin(userProfile);
+          }
+          onClose();
         }
         
         // Fetch the latest profile data to ensure we have the most up-to-date information

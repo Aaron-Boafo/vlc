@@ -12,230 +12,36 @@ import {
   SafeAreaView,
   Modal as RNModal,
 } from 'react-native';
-import * as MediaLibrary from 'expo-media-library';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Icons from 'lucide-react-native';
 import useThemeStore from '../../../store/theme';
-import { useRouter } from 'expo-router';
+import { router } from 'expo-router';
 import * as FileSystem from 'expo-file-system';
-import * as SecureStore from 'expo-secure-store';
+import * as MediaLibrary from 'expo-media-library';
 import AudioHeader from '../../../AudioComponents/title';
 import { SafeAreaView as SafeAreaViewRN } from 'react-native-safe-area-context';
 import FileBrowser from '../../../components/FileBrowser';
 import * as DocumentPicker from 'expo-document-picker';
 import StreamModal from '../../../components/StreamModal';
-import api from '../../../services/api';
-import axios from 'axios';
+import StorageHubScreen from '../../../components/StorageHubScreen';
 
 const BrowseTab = ({ styles, themeColors }) => {
-  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [recentFiles, setRecentFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedQuickAction, setSelectedQuickAction] = useState(null);
   const [showSearch, setShowSearch] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [showStorageSheet, setShowStorageSheet] = useState(false);
   const [storageRoot, setStorageRoot] = useState(null);
   const [storageTitle, setStorageTitle] = useState('');
   const [showStreamModal, setShowStreamModal] = useState(false);
-  
-  // Function to manually refresh storage access
-  const handleRefreshStorage = async () => {
-    try {
-      console.log('Manually refreshing storage access...');
-      // Clear current storage state
-      setStorages([{ id: 'internal', name: 'App Storage', icon: 'folder', root: FileSystem.documentDirectory }]);
-      setStorageRoot(null);
-      setStorageTitle('');
-      
-      // Re-initialize storage
-      const availableStorages = await getStoragePaths();
-      console.log('Refreshed storage paths:', availableStorages);
-      
-      if (availableStorages.length > 0) {
-        setStorages(availableStorages);
-        const defaultStorage = availableStorages[0];
-        setStorageRoot(defaultStorage.root);
-        setStorageTitle(defaultStorage.name);
-        Alert.alert('Success', 'Storage access refreshed successfully!');
-      } else {
-        Alert.alert('No Storage Found', 'Could not find any accessible storage locations.');
-      }
-    } catch (error) {
-      console.error('Error refreshing storage:', error);
-      Alert.alert('Error', 'Failed to refresh storage access. Please check console for details.');
-    }
-  };
-
-  // Function to get accessible storage paths on Android
-  const getStoragePaths = async () => {
-    const paths = [];
-    
-    // Always include the app's document directory
-    paths.push({
-      id: 'internal',
-      name: 'App Storage',
-      icon: 'folder',
-      root: FileSystem.documentDirectory
-    });
-
-    try {
-      // Try to access common media directories
-      const mediaDirs = [
-        { id: 'downloads', name: 'Downloads', icon: 'folder-download', path: 'Download' },
-        { id: 'music', name: 'Music', icon: 'folder-music', path: 'Music' },
-        { id: 'dcim', name: 'Pictures', icon: 'folder-image', path: 'DCIM' },
-        { id: 'movies', name: 'Movies', icon: 'folder-video', path: 'Movies' },
-      ];
-
-      // Check each media directory
-      for (const dir of mediaDirs) {
-        try {
-          const fullPath = `${FileSystem.documentDirectory}../${dir.path}/`;
-          const info = await FileSystem.getInfoAsync(fullPath);
-          if (info.exists && info.isDirectory) {
-            paths.push({
-              id: dir.id,
-              name: dir.name,
-              icon: dir.icon,
-              root: fullPath
-            });
-          }
-        } catch (error) {
-          console.log(`Could not access ${dir.name}:`, error.message);
-        }
-      }
-
-      // Try to access external storage
-      const externalDirs = [
-        { id: 'storage_emulated', name: 'Internal Storage', icon: 'sd', path: '/storage/emulated/0' },
-        { id: 'storage_self', name: 'Primary Storage', icon: 'sd', path: '/storage/self/primary' },
-      ];
-
-      for (const dir of externalDirs) {
-        try {
-          const info = await FileSystem.getInfoAsync(dir.path);
-          if (info.exists && info.isDirectory) {
-            paths.push({
-              id: dir.id,
-              name: dir.name,
-              icon: dir.icon,
-              root: dir.path + '/'
-            });
-          }
-        } catch (error) {
-          console.log(`Could not access ${dir.path}:`, error.message);
-        }
-      }
-    } catch (error) {
-      console.error('Error getting storage paths:', error);
-    }
-
-    console.log('Available storage paths:', paths);
-    return paths;
-  };
-
   const [storages, setStorages] = useState([
     { id: 'internal', name: 'Internal Storage', icon: 'folder', root: FileSystem.documentDirectory }
   ]);
   const [storageInfo, setStorageInfo] = useState({ used: 0, total: 1, percent: 0 });
   const [organizeModalVisible, setOrganizeModalVisible] = useState(false);
-  const [hasPermission, setHasPermission] = useState(false);
-
-  // Check and log storage access
-  const checkStorageAccess = async () => {
-    try {
-      console.log('Checking storage access...');
-      
-      // List all available storage directories
-      const documentDir = FileSystem.documentDirectory;
-      const cacheDir = FileSystem.cacheDirectory;
-      const bundleDir = FileSystem.bundleDirectory;
-      
-      console.log('Document directory:', documentDir);
-      console.log('Cache directory:', cacheDir);
-      console.log('Bundle directory:', bundleDir);
-      
-      // Try to list files in the root directory
-      try {
-        const rootContents = await FileSystem.readDirectoryAsync('/');
-        console.log('Root directory contents:', rootContents);
-      } catch (error) {
-        console.log('Cannot access root directory:', error.message);
-      }
-      
-      // Try to list files in the storage directory
-      try {
-        const storageContents = await FileSystem.readDirectoryAsync('/storage/');
-        console.log('Storage directory contents:', storageContents);
-      } catch (error) {
-        console.log('Cannot access storage directory:', error.message);
-      }
-      
-      // Try to list files in the external storage directory
-      try {
-        const externalContents = await FileSystem.readDirectoryAsync('/storage/emulated/0/');
-        console.log('External storage contents:', externalContents);
-      } catch (error) {
-        console.log('Cannot access external storage:', error.message);
-      }
-      
-    } catch (error) {
-      console.error('Error checking storage access:', error);
-    }
-  };
-
-  // Request storage permission and initialize storage paths on mount
-  useEffect(() => {
-    const initializeStorage = async () => {
-      try {
-        console.log('Initializing storage...');
-        
-        // First, request media library permissions
-        try {
-          console.log('Requesting media library permission...');
-          const { status, canAskAgain, granted } = await MediaLibrary.requestPermissionsAsync();
-          console.log('Media library permission status:', { status, canAskAgain, granted });
-          setHasPermission(status === 'granted');
-        } catch (error) {
-          console.warn('Error requesting media library permission:', error);
-        }
-        
-        // Check storage access and log available paths
-        await checkStorageAccess();
-        
-        // Initialize available storage paths
-        try {
-          console.log('Getting storage paths...');
-          const availableStorages = await getStoragePaths();
-          
-          // Always update the storages with whatever we found
-          if (availableStorages.length > 0) {
-            console.log('Updating available storages:', availableStorages);
-            setStorages(availableStorages);
-            
-            // Set the first available storage as the default if not already set
-            if (!storageRoot) {
-              const defaultStorage = availableStorages[0];
-              console.log('Setting default storage:', defaultStorage);
-              setStorageRoot(defaultStorage.root);
-              setStorageTitle(defaultStorage.name);
-            }
-          } else {
-            console.warn('No accessible storage paths found');
-          }
-        } catch (error) {
-          console.error('Error initializing storage paths:', error);
-        }
-        
-      } catch (error) {
-        console.error('Error initializing storage:', error);
-      }
-    };
-    
-    initializeStorage();
-  }, []); // Empty dependency array means this runs once on mount
 
   const categories = [
     { id: 'all', name: 'All Files', icon: 'folder-multiple', color: '#4CAF50' },
@@ -249,493 +55,8 @@ const BrowseTab = ({ styles, themeColors }) => {
     { id: 'scan', name: 'Scan Files', icon: 'folder-search', action: () => scanFiles() },
     { id: 'import', name: 'Import Media', icon: 'import', action: () => importMedia() },
     { id: 'organize', name: 'Organize', icon: 'folder-multiple-outline', action: () => setOrganizeModalVisible(true) },
-    { 
-      id: 'cloud', 
-      name: 'Cloud Storage', 
-      icon: 'cloud-upload', 
-      action: async () => {
-        try {
-          // Check if user is authenticated
-          const token = await SecureStore.getItemAsync('auth_token');
-          if (!token) {
-            Alert.alert(
-              'Authentication Required',
-              'Please log in to access cloud storage',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Go to Login', onPress: () => router.push('/(auth)/login') }
-              ]
-            );
-            return;
-          }
-          
-          // Show cloud storage options
-          Alert.alert(
-            'Cloud Storage',
-            'Choose an action',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Upload to Cloud', onPress: () => uploadToCloud() },
-              { text: 'View Cloud Files', onPress: () => viewCloudFiles() }
-            ]
-          );
-        } catch (error) {
-          console.error('Cloud storage error:', error);
-          Alert.alert('Error', 'Failed to access cloud storage');
-        }
-      } 
-    },
+    { id: 'cloud', name: 'Cloud Services', icon: 'cloud-outline', action: () => cloudServices() },
   ];
-
-  // Function to handle file upload to cloud using media library
-  const uploadToCloud = async () => {
-    try {
-      // Request media library permissions
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      
-      if (status !== 'granted') {
-        Alert.alert('Permission required', 'Please grant media library access to upload files');
-        return;
-      }
-
-      // Show loading indicator
-      Alert.alert(
-        'Loading Media',
-        'Preparing your media files...',
-        [],
-        { cancelable: false }
-      );
-
-      try {
-        // Get media files (videos and audio)
-        const media = await MediaLibrary.getAssetsAsync({
-          mediaType: ['video', 'audio'],
-          sortBy: ['creationTime'],
-          first: 50, // Get first 50 files
-        });
-
-        // Map media items
-        const mediaItems = media.assets.map(asset => ({
-          id: asset.id,
-          name: asset.filename,
-          uri: asset.uri,
-          type: asset.mediaType === 'video' ? 'video/mp4' : 'audio/mpeg',
-          size: asset.fileSize,
-          duration: asset.duration,
-        }));
-
-        // Dismiss the loading alert by showing a new one with empty content
-        Alert.alert(
-          '',
-          '',
-          [],
-          { cancelable: false }
-        );
-
-        // Show media selection dialog
-        Alert.alert(
-          'Select Media to Upload',
-          'Choose a video or audio file to upload',
-          mediaItems.map(item => ({
-            text: `${item.name} (${(item.size / (1024 * 1024)).toFixed(2)} MB)`,
-            onPress: () => handleMediaSelect(item)
-          })).concat([
-            { 
-              text: 'Cancel',
-              style: 'cancel'
-            }
-          ])
-        );
-      } catch (error) {
-        console.error('Error loading media:', error);
-        Alert.alert(
-          'Error',
-          'Failed to load media files. Please try again.',
-          [{ text: 'OK' }]
-        );
-      }
-    } catch (error) {
-      console.error('Error accessing media library:', error);
-      Alert.alert('Error', 'Failed to access media library');
-    }
-  };
-
-// ...
-  // Handle media file selection and upload
-  const handleMediaSelect = async (mediaItem) => {
-    try {
-      const fileSizeMB = mediaItem.size / (1024 * 1024);
-      
-      if (fileSizeMB > 100) {
-        Alert.alert('Error', 'File size exceeds 100MB limit');
-        return;
-      }
-
-      // Show upload confirmation
-      Alert.alert(
-        'Upload to Cloud',
-        `Upload ${mediaItem.name} (${fileSizeMB.toFixed(2)} MB) to cloud storage?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Upload',
-            onPress: async () => {
-              // Show uploading indicator
-              Alert.alert(
-                'Uploading...',
-                `Please wait while we upload ${mediaItem.name}`,
-                [],
-                { cancelable: false }
-              );
-
-              try {
-                // Upload the selected media file
-                const token = await SecureStore.getItemAsync('auth_token');
-                if (!token) {
-                  throw new Error('Authentication required');
-                }
-
-                const formData = new FormData();
-                formData.append('file', {
-                  uri: mediaItem.uri,
-                  name: mediaItem.name,
-                  type: mediaItem.type,
-                });
-
-                // Show initial upload alert
-                let uploadAlert = {
-                  title: 'Uploading...',
-                  message: `Starting upload of ${mediaItem.name}`,
-                };
-                
-                // Show the first alert
-                Alert.alert(uploadAlert.title, uploadAlert.message, [], { cancelable: false });
-                
-                // Function to update the upload alert
-                const updateUploadAlert = (title, message) => {
-                  uploadAlert = { title, message };
-                  Alert.alert(title, message, [], { cancelable: false });
-                };
-
-                try {
-                  // Using XMLHttpRequest for better progress tracking
-                  const xhr = new XMLHttpRequest();
-                  
-                  // Set up progress tracking
-                  xhr.upload.onprogress = (event) => {
-                    if (event.lengthComputable) {
-                      const percentComplete = Math.round((event.loaded / event.total) * 100);
-                      updateUploadAlert(
-                        'Uploading...',
-                        `Uploading ${mediaItem.name}: ${percentComplete}%`
-                      );
-                    }
-                  };
-
-                  // Set up completion handler
-                  xhr.onload = () => {
-                    if (xhr.status >= 200 && xhr.status < 300) {
-                      const result = JSON.parse(xhr.responseText);
-                      updateUploadAlert(
-                        'Upload Complete',
-                        `${mediaItem.name} has been uploaded successfully!`
-                      );
-                      // Refresh the media list or update UI as needed
-                      // refreshMediaList();
-                    } else {
-                      throw new Error(`Upload failed with status ${xhr.status}`);
-                    }
-                  };
-
-                  // Set up error handler
-                  xhr.onerror = () => {
-                    throw new Error('Network error during upload');
-                  };
-
-                  // Open and send the request
-                  xhr.open('POST', 'YOUR_UPLOAD_ENDPOINT');
-                  xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-                  xhr.send(formData);
-                  
-                } catch (error) {
-                  console.error('Upload error:', error);
-                  updateUploadAlert(
-                    'Upload Failed',
-                    `Failed to upload ${mediaItem.name}. Please try again.\n\nError: ${error.message}`
-                  );
-                }
-                
-                formData.append('metadata', JSON.stringify(metadata));
-
-                // Upload using fetch with progress
-                const response = await fetch('https://vlc-spring-boot.onrender.com/storage/add', {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Accept': 'application/json',
-                    'Content-Type': 'multipart/form-data',
-                  },
-                  body: formData
-                });
-
-                if (!response.ok) {
-                  throw new Error('Upload failed');
-                }
-
-                const result = await response.json();
-                Alert.alert('Success', 'File uploaded successfully!');
-                
-              } catch (error) {
-                console.error('Upload error:', error);
-                Alert.alert('Upload Failed', error.message || 'Failed to upload file');
-              }
-            }
-          }
-        ]
-      );
-    } catch (error) {
-      console.error('Error handling media selection:', error);
-      Alert.alert('Error', 'Failed to process the selected media');
-    }
-  };
-
-  // Handle file selection from the file browser
-  const handleFileSelect = async (file) => {
-    try {
-      if (file.isDirectory) {
-        // If a directory is selected, navigate into it
-        setStorageRoot(file.path);
-        return;
-      }
-
-      const fileInfo = await FileSystem.getInfoAsync(file.path);
-      const fileSizeMB = fileInfo.size / (1024 * 1024);
-      
-      if (fileSizeMB > 100) { // 100MB limit
-        Alert.alert('Error', 'File size exceeds 100MB limit');
-        return;
-      }
-
-      // Show upload confirmation
-      Alert.alert(
-        'Upload to Cloud',
-        `Upload ${file.name} (${fileSizeMB.toFixed(2)} MB) to cloud storage?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Upload',
-            onPress: async () => {
-              try {
-                // Create a more user-friendly upload progress indicator
-                let uploadAlert = Alert.alert(
-                  'Uploading...',
-                  `Preparing to upload ${file.name}\n\n0% complete`,
-                  [],
-                  { cancelable: false }
-                );
-
-                // Update progress
-                const updateProgress = (progress) => {
-                  const percent = Math.round((progress.loaded / progress.total) * 100);
-                  Alert.alert(
-                    'Uploading...',
-                    `Uploading ${file.name}\n\n${percent}% complete`,
-                    [],
-                    { cancelable: false }
-                  );
-                };
-
-                // Determine file type
-                const fileExt = file.name.split('.').pop().toLowerCase();
-                let mimeType = 'application/octet-stream';
-                
-                // Map common file extensions to MIME types
-                const mimeTypes = {
-                  // Images
-                  jpg: 'image/jpeg',
-                  jpeg: 'image/jpeg',
-                  png: 'image/png',
-                  gif: 'image/gif',
-                  
-                  // Audio
-                  mp3: 'audio/mpeg',
-                  wav: 'audio/wav',
-                  ogg: 'audio/ogg',
-                  
-                  // Video
-                  mp4: 'video/mp4',
-                  m4v: 'video/x-m4v',
-                  mpg: 'video/mpeg',
-                  
-                  // Documents
-                  pdf: 'application/pdf',
-                  doc: 'application/msword',
-                  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                  xls: 'application/vnd.ms-excel',
-                  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                  ppt: 'application/vnd.ms-powerpoint',
-                  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-                  
-                  // Text
-                  txt: 'text/plain',
-                  json: 'application/json',
-                  
-                  // Archives
-                  zip: 'application/zip',
-                  rar: 'application/x-rar-compressed',
-                };
-                
-                if (mimeTypes[fileExt]) {
-                  mimeType = mimeTypes[fileExt];
-                }
-                
-                // Create form data for the upload
-                const formData = new FormData();
-                
-                // Create a file object that React Native's FormData can handle
-                const fileObject = {
-                  uri: file.path,
-                  name: file.name,
-                  type: mimeType,
-                };
-                
-                // Add the file to form data
-                formData.append('file', fileObject);
-                
-                // Create and add metadata as a string
-                const metadata = {
-                  fileName: file.name,
-                  fileType: mimeType,
-                  description: `Uploaded from mobile app on ${new Date().toISOString()}`
-                };
-                formData.append('metadata', JSON.stringify(metadata));
-                
-                // For debugging
-                console.log('FormData contents:', {
-                  file: fileObject,
-                  metadata: JSON.stringify(metadata)
-                });
-
-                // Get auth token
-                const token = await SecureStore.getItemAsync('auth_token');
-                if (!token) {
-                  throw new Error('Authentication required');
-                }
-
-                try {
-                  // Upload file to cloud using XMLHttpRequest for better progress tracking
-                  const xhr = new XMLHttpRequest();
-                  
-                  // Set up progress tracking
-                  xhr.upload.onprogress = (event) => {
-                    if (event.lengthComputable) {
-                      updateProgress({
-                        loaded: event.loaded,
-                        total: event.total
-                      });
-                    }
-                  };
-                  
-                  // Create a promise to handle the upload
-                  const uploadPromise = new Promise((resolve, reject) => {
-                    xhr.onload = () => {
-                      if (xhr.status >= 200 && xhr.status < 300) {
-                        try {
-                          resolve(JSON.parse(xhr.responseText));
-                        } catch (e) {
-                          resolve(xhr.responseText);
-                        }
-                      } else {
-                        reject(new Error(xhr.statusText || 'Upload failed'));
-                      }
-                    };
-                    xhr.onerror = () => {
-                      reject(new Error('Network Error'));
-                    };
-                  });
-                  
-                  // Open and send the request
-                  xhr.open('POST', 'https://vlc-spring-boot.onrender.com/storage/add');
-                  xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-                  xhr.setRequestHeader('Accept', 'application/json');
-                  xhr.send(formData);
-                  
-                  // Wait for the upload to complete
-                  const responseData = await uploadPromise;
-                  
-                  // Show success message
-                  Alert.alert(
-                    'Success',
-                    `${file.name} uploaded successfully!`,
-                    [
-                      { 
-                        text: 'OK',
-                        onPress: () => setShowStorageSheet(false)
-                      }
-                    ]
-                  );
-                  
-                  return { data: responseData };
-                } catch (error) {
-                  console.error('Upload error:', error);
-                  throw error; // Re-throw to be caught by the outer catch block
-                }
-              } catch (error) {
-                console.error('Upload error:', error);
-                let errorMessage = 'Failed to upload file';
-                
-                if (error.message === 'Network Error') {
-                  errorMessage = 'Unable to connect to the server. Please check your internet connection.';
-                } else if (error.response) {
-                  // Server responded with an error status code
-                  if (error.response.status === 401) {
-                    errorMessage = 'Session expired. Please log in again.';
-                    // Optionally redirect to login
-                    router.push('/(auth)/login');
-                  } else if (error.response.data && error.response.data.message) {
-                    errorMessage = error.response.data.message;
-                  }
-                }
-                
-                Alert.alert('Upload Failed', errorMessage);
-              }
-            },
-          },
-        ]
-      );
-    } catch (error) {
-      console.error('File selection error:', error);
-      Alert.alert(
-        'Error', 
-        error.message || 'Failed to process the selected file. Please try again.'
-      );
-    }
-  };
-
-  // Function to view cloud files
-  const viewCloudFiles = async () => {
-    try {
-      const response = await api.storage.getAll();
-      if (response.data.status && response.data.data) {
-        // Navigate to cloud files screen or show in a modal
-        Alert.alert(
-          'Cloud Files',
-          `Found ${response.data.data.length} files in your cloud storage`,
-          [
-            { text: 'OK', onPress: () => {
-              // Here you would typically navigate to a cloud files screen
-              // router.push('/(cloud)/files');
-            }}
-          ]
-        );
-      } else {
-        Alert.alert('Cloud Storage', 'No files found in your cloud storage');
-      }
-    } catch (error) {
-      console.error('Error fetching cloud files:', error);
-      Alert.alert('Error', 'Failed to load cloud files');
-    }
-  };
 
   useEffect(() => {
     loadRecentFiles();
@@ -792,7 +113,7 @@ const BrowseTab = ({ styles, themeColors }) => {
       '/storage/extSdCard/',
       '/storage/usbcard1/',
       '/storage/udisk/',
-      '/storage/','/mnt/media_rw/'
+      '/storage/', '/mnt/media_rw/'
     ];
     for (const base of sdCardPaths) {
       try {
@@ -804,7 +125,7 @@ const BrowseTab = ({ styles, themeColors }) => {
           ]);
           break;
         }
-      } catch {}
+      } catch { }
     }
   };
 
@@ -849,7 +170,7 @@ const BrowseTab = ({ styles, themeColors }) => {
 
   const handleCreateFolder = async () => {
     setOrganizeModalVisible(false);
-    
+
     // Prompt user for folder name
     Alert.prompt(
       'Create Folder',
@@ -863,12 +184,12 @@ const BrowseTab = ({ styles, themeColors }) => {
               try {
                 const newFolderPath = FileSystem.documentDirectory + folderName.trim();
                 const folderInfo = await FileSystem.getInfoAsync(newFolderPath);
-                
+
                 if (folderInfo.exists) {
                   Alert.alert('Error', 'A folder with this name already exists.');
                   return;
                 }
-                
+
                 await FileSystem.makeDirectoryAsync(newFolderPath, { intermediates: true });
                 Alert.alert('Success', `Folder "${folderName}" created successfully!`);
                 await loadRecentFiles(); // Refresh the file list
@@ -886,33 +207,8 @@ const BrowseTab = ({ styles, themeColors }) => {
   };
 
   const cloudServices = () => {
-    Alert.alert(
-      'Cloud Services',
-      'Choose a cloud service to connect:',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Google Drive', onPress: () => connectGoogleDrive() },
-        { text: 'Dropbox', onPress: () => connectDropbox() },
-        { text: 'OneDrive', onPress: () => connectOneDrive() },
-        { text: 'iCloud', onPress: () => connectICloud() }
-      ]
-    );
-  };
-
-  const connectGoogleDrive = () => {
-    Alert.alert('Google Drive', 'Google Drive integration is now available! You can sync your media files.');
-  };
-
-  const connectDropbox = () => {
-    Alert.alert('Dropbox', 'Dropbox integration is now available! You can sync your media files.');
-  };
-
-  const connectOneDrive = () => {
-    Alert.alert('OneDrive', 'OneDrive integration is now available! You can sync your media files.');
-  };
-
-  const connectICloud = () => {
-    Alert.alert('iCloud', 'iCloud integration is now available! You can sync your media files.');
+    // Open the StorageHub when cloud services is clicked
+    setShowStorageSheet(true);
   };
 
   const handleFilePress = (file) => {
@@ -986,10 +282,10 @@ const BrowseTab = ({ styles, themeColors }) => {
       onPress={() => handleFilePress(item)}
     >
       <View style={styles.fileInfo}>
-        <MaterialCommunityIcons 
-          name={getFileIcon(item.type)} 
-          size={24} 
-          color={getFileColor(item.type)} 
+        <MaterialCommunityIcons
+          name={getFileIcon(item.type)}
+          size={24}
+          color={getFileColor(item.type)}
         />
         <View style={styles.fileDetails}>
           <Text style={[styles.fileName, { color: themeColors.text }]} numberOfLines={1}>
@@ -1006,13 +302,13 @@ const BrowseTab = ({ styles, themeColors }) => {
 
   const renderQuickAction = ({ item }) => (
     <TouchableOpacity
-      style={[styles.quickActionCard, { backgroundColor: themeColors.card }]}
+      style={styles.quickActionCard}
       onPress={item.action}
     >
-      <MaterialCommunityIcons 
-        name={item.icon} 
-        size={28} 
-        color={themeColors.primary} 
+      <MaterialCommunityIcons
+        name={item.icon}
+        size={28}
+        color={themeColors.primary}
       />
       <Text style={[styles.quickActionText, { color: themeColors.text }]}>
         {item.name}
@@ -1058,26 +354,16 @@ const BrowseTab = ({ styles, themeColors }) => {
     }
   };
 
-
-
   return (
     <SafeAreaViewRN
       style={{ flex: 1, backgroundColor: themeColors.background }}
       edges={['top']}
     >
-      <View style={styles.headerContainer}>
-        <AudioHeader
-          onSearch={() => setShowSearch(s => !s)}
-          onMore={() => setShowMore(true)}
-          showIcons={false}
-        />
-        <TouchableOpacity 
-          style={styles.refreshButton}
-          onPress={handleRefreshStorage}
-        >
-          <MaterialCommunityIcons name="reload" size={24} color={themeColors.primary} />
-        </TouchableOpacity>
-      </View>
+      <AudioHeader
+        onSearch={() => setShowSearch(s => !s)}
+        onMore={() => setShowMore(true)}
+        showIcons={false}
+      />
       {/* Search Bar */}
       {showSearch && (
         <View style={[styles.searchContainer, { backgroundColor: themeColors.card }]}>
@@ -1102,8 +388,8 @@ const BrowseTab = ({ styles, themeColors }) => {
           <Text style={[styles.sectionTitle, { color: themeColors.primary }]}>
             Categories
           </Text>
-          <ScrollView 
-            horizontal 
+          <ScrollView
+            horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.categoriesList}
           >
@@ -1136,13 +422,20 @@ const BrowseTab = ({ styles, themeColors }) => {
             {quickActions.map((action) => (
               <TouchableOpacity
                 key={action.id}
-                style={styles.quickActionCard}
+                style={[
+                  styles.quickActionCard,
+                  action.id === 'scan' && {
+                    borderWidth: 1,
+                    borderColor: `${themeColors.primary}30`
+                  }
+                ]}
                 onPress={action.action}
               >
-                <MaterialCommunityIcons 
-                  name={action.icon} 
-                  size={24} 
-                  color={themeColors.primary} 
+                <MaterialCommunityIcons
+                  name={action.icon}
+                  size={28}
+                  color={themeColors.primary}
+                  style={{ marginBottom: 12 }}
                 />
                 <Text style={[styles.quickActionText, { color: themeColors.text }]}>
                   {action.name}
@@ -1164,19 +457,19 @@ const BrowseTab = ({ styles, themeColors }) => {
               </Text>
             </TouchableOpacity>
           </View>
-          
+
           {(selectedCategory === 'images' || selectedCategory === 'documents') ? (
             <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-              <Text style={{ 
-                color: themeColors.textSecondary, 
-                fontSize: 15, 
+              <Text style={{
+                color: themeColors.textSecondary,
+                fontSize: 15,
                 fontWeight: '500',
                 textAlign: 'center',
                 marginBottom: 16
               }}>
                 {selectedCategory === 'images' ? 'Image browsing' : 'Document browsing'} is now available!
               </Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[{
                   backgroundColor: themeColors.primary,
                   paddingHorizontal: 20,
@@ -1200,14 +493,14 @@ const BrowseTab = ({ styles, themeColors }) => {
                 .map((item) => (
                   <TouchableOpacity
                     key={item.id}
-                    style={styles.recentFileCard}
+                    style={styles.recentFileCard }
                     onPress={() => handleFilePress(item)}
                   >
                     <View style={styles.fileIconContainer}>
-                      <MaterialCommunityIcons 
-                        name={getFileIcon(item.type)} 
-                        size={20} 
-                        color={getFileColor(item.type)} 
+                      <MaterialCommunityIcons
+                        name={getFileIcon(item.type)}
+                        size={20}
+                        color={getFileColor(item.type)}
                       />
                     </View>
                     <View style={styles.fileInfo}>
@@ -1264,9 +557,9 @@ const BrowseTab = ({ styles, themeColors }) => {
                   </Text>
                 </View>
                 <View style={styles.storageBar}>
-                  <View style={[styles.storageProgress, { 
-                    backgroundColor: themeColors.primary, 
-                    width: `${Math.round(storageInfo.percent * 100)}%` 
+                  <View style={[styles.storageProgress, {
+                    backgroundColor: themeColors.primary,
+                    width: `${Math.round(storageInfo.percent * 100)}%`
                   }]} />
                 </View>
                 <Text style={[styles.storageText, { color: themeColors.textSecondary }]} numberOfLines={1}>
@@ -1278,26 +571,24 @@ const BrowseTab = ({ styles, themeColors }) => {
         </View>
         <RNModal
           visible={showStorageSheet}
-          transparent
+          transparent={false}
           animationType="slide"
           onRequestClose={() => setShowStorageSheet(false)}
         >
-          <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderColor: themeColors.card }}>
-              <TouchableOpacity onPress={() => setShowStorageSheet(false)}>
-                <MaterialIcons name="arrow-back" size={28} color={themeColors.text} />
-              </TouchableOpacity>
-              <Text style={{ fontSize: 20, fontWeight: 'bold', marginLeft: 16, color: themeColors.text }}>{storageTitle}</Text>
-            </View>
-            {storageRoot && (
-              <FileBrowser 
-                rootPath={storageRoot} 
-                filterTypes={['audio', 'video']} 
-                hideHeader={true} 
-                onFileSelect={handleFileSelect}
-              />
-            )}
-          </SafeAreaView>
+          <View style={{ flex: 1, backgroundColor: themeColors.background }}>
+            <StorageHubScreen 
+              onClose={() => setShowStorageSheet(false)}
+              onUpload={() => {
+                setShowStorageSheet(false);
+                setMediaSelectorVisible(true);
+              }}
+              onViewFiles={() => {
+                setShowStorageSheet(false);
+                // Navigate to the files view or show files in a different way
+                // For example: router.push('/(tabs)/(browse)/storage');
+              }}
+            />
+          </View>
         </RNModal>
 
         {/* Organize Modal */}
@@ -1307,9 +598,9 @@ const BrowseTab = ({ styles, themeColors }) => {
           animationType="slide"
           onRequestClose={() => setOrganizeModalVisible(false)}
         >
-          <TouchableOpacity 
-            style={styles.overlay} 
-            activeOpacity={1} 
+          <TouchableOpacity
+            style={styles.overlay}
+            activeOpacity={1}
             onPress={() => setOrganizeModalVisible(false)}
           />
           <View style={[styles.sheet, { backgroundColor: themeColors.background }]}>
@@ -1317,9 +608,9 @@ const BrowseTab = ({ styles, themeColors }) => {
             <View style={styles.handleContainer}>
               <View style={[styles.handle, { backgroundColor: themeColors.textSecondary + '40' }]} />
             </View>
-            
+
             {/* Title */}
-            <Text style={[styles.title, { 
+            <Text style={[styles.title, {
               color: themeColors.text,
               borderBottomWidth: 1,
               borderBottomColor: themeColors.border || 'rgba(0,0,0,0.1)',
@@ -1328,7 +619,7 @@ const BrowseTab = ({ styles, themeColors }) => {
             }]}>
               Organize
             </Text>
-            
+
             {/* Options */}
             <View style={styles.optionsContainer}>
               <TouchableOpacity
@@ -1346,7 +637,7 @@ const BrowseTab = ({ styles, themeColors }) => {
                   <Text style={styles.label}>Name (A-Z)</Text>
                 </View>
               </TouchableOpacity>
-              
+
               <TouchableOpacity
                 style={styles.option}
                 onPress={() => {
@@ -1362,7 +653,7 @@ const BrowseTab = ({ styles, themeColors }) => {
                   <Text style={styles.label}>Date (Newest First)</Text>
                 </View>
               </TouchableOpacity>
-              
+
               <TouchableOpacity
                 style={styles.option}
                 onPress={() => {
@@ -1383,28 +674,16 @@ const BrowseTab = ({ styles, themeColors }) => {
         </RNModal>
 
         {/* Stream Modal */}
-        <StreamModal 
-          visible={showStreamModal} 
-          onClose={() => setShowStreamModal(false)} 
+        <StreamModal
+          visible={showStreamModal}
+          onClose={() => setShowStreamModal(false)}
         />
       </ScrollView>
     </SafeAreaViewRN>
   );
 };
 
-const getStyles = (themeColors) => StyleSheet.create({
-  headerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingRight: 15,
-  },
-  refreshButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: themeColors.card,
-    marginLeft: 10,
-  },
+const getStyles = (themeColors, activeTheme) => StyleSheet.create({
   // Base screen styles
   screen: {
     flex: 1,
@@ -1448,16 +727,19 @@ const getStyles = (themeColors) => StyleSheet.create({
     marginBottom: 16,
   },
   sectionCard: {
-    backgroundColor: themeColors.card,
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: activeTheme === 'light'
+      ? 'rgba(255, 255, 255, 0.95)'
+      : themeColors.card,
+    borderRadius: 18,
+    padding: 18,
     marginBottom: 16,
-    shadowColor: themeColors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-    borderWidth: 0, // Remove border
+    shadowColor: themeColors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: activeTheme === 'light' ? 0.12 : 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+    borderWidth: activeTheme === 'light' ? 1 : 0,
+    borderColor: activeTheme === 'light' ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1523,12 +805,10 @@ const getStyles = (themeColors) => StyleSheet.create({
   quickActionCard: {
     width: '30%',
     alignItems: 'center',
-    padding: 12,
+    padding: 16,
     margin: 4,
-    borderRadius: 12,
-    backgroundColor: themeColors.surfaceVariant,
-    borderWidth: 1,
-    borderColor: themeColors.border,
+    borderRadius: 16,
+    backgroundColor: `${themeColors.primary}15`,
   },
   quickActionText: {
     fontSize: 13,
@@ -1541,22 +821,28 @@ const getStyles = (themeColors) => StyleSheet.create({
   // Recent files list
   recentFilesList: {
     marginTop: 8,
+    gap: 8,
   },
   recentFileCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: themeColors.border + '80',
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: `${themeColors.primary}15`,
+    marginBottom: 8,
   },
   fileIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.03)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: activeTheme === 'light'
+      ? 'rgba(255, 255, 255, 0.8)'
+      : 'rgba(255, 255, 255, 0.05)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 14,
+    borderWidth: activeTheme === 'light' ? 1 : 0,
+    borderColor: activeTheme === 'light' ? 'rgba(0, 0, 0, 0.04)' : 'transparent',
   },
   fileInfo: {
     flex: 1,
@@ -1668,13 +954,20 @@ const getStyles = (themeColors) => StyleSheet.create({
   streamCard: {
     width: '100%',
     padding: 20,
-    borderRadius: 12,
-    backgroundColor: themeColors.card,
+    borderRadius: 16,
+    backgroundColor: activeTheme === 'light'
+      ? 'rgba(248, 250, 252, 0.8)'
+      : themeColors.card,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
-    borderWidth: 1,
-    borderColor: themeColors.border,
+    borderWidth: activeTheme === 'light' ? 1 : 0,
+    borderColor: activeTheme === 'light' ? 'rgba(0, 0, 0, 0.06)' : themeColors.border,
+    shadowColor: themeColors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: activeTheme === 'light' ? 0.08 : 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   // Storage Grid
   storageGrid: {
@@ -1686,12 +979,19 @@ const getStyles = (themeColors) => StyleSheet.create({
   // Storage Card
   storageCard: {
     width: '100%',
-    padding: 16,
+    padding: 18,
     marginBottom: 12,
-    borderRadius: 12,
-    backgroundColor: themeColors.card,
-    borderWidth: 1,
-    borderColor: themeColors.border,
+    borderRadius: 16,
+    backgroundColor: activeTheme === 'light'
+      ? 'rgba(248, 250, 252, 0.8)'
+      : themeColors.card,
+    borderWidth: activeTheme === 'light' ? 1 : 0,
+    borderColor: activeTheme === 'light' ? 'rgba(0, 0, 0, 0.06)' : themeColors.border,
+    shadowColor: themeColors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: activeTheme === 'light' ? 0.08 : 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   storageIcon: {
     width: 36,
@@ -1773,9 +1073,9 @@ const getStyles = (themeColors) => StyleSheet.create({
 });
 // Create a wrapper component that provides theme colors to styles
 const BrowseTabWrapper = () => {
-  const { themeColors } = useThemeStore();
-  const styles = getStyles(themeColors);
-  
+  const { themeColors, activeTheme } = useThemeStore();
+  const styles = getStyles(themeColors, activeTheme);
+
   return <BrowseTab styles={styles} themeColors={themeColors} />;
 };
 

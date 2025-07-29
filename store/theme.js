@@ -64,46 +64,90 @@ const getThemeColors = (themeType, accentColorName) => {
   return themeType === "light"
     ? {
         ...baseTheme,
-        // Warmer, darker white theme for better eye comfort
-        background: "#F5F5F5",
-        sectionBackground: "#EEEEEE",
-        card: "#FAFAFA",
-        cardElevated: "#E0E0E0",
+        // Modern Light Theme with Better Contrast
+        background: "#F8FAFF",
+        sectionBackground: "#F0F4FF",
+        card: "#FFFFFF",
+        cardElevated: "#E6EDFF",
         tabIconColor: accentColor,
         ribbon: accentDark,
-        text: "#212121",
-        textSecondary: "#424242",
-        border: "#BDBDBD",
-        inputBackground: "#EEEEEE",
-        inputText: "#212121",
-        inputPlaceholder: "#757575",
-        success: "#059669",
-        warning: "#D97706",
-        error: "#DC2626",
-        info: "#2563EB",
+        
+        // Text with better contrast
+        text: "#1A1F36",
+        textSecondary: "#4A5568",
+        textTertiary: "718096",
+        
+        // UI Elements
+        border: "#E2E8F0",
+        inputBackground: "#FFFFFF",
+        inputText: "#1A1F36",
+        inputPlaceholder: "#A0AEC0",
+        
+        // Status Colors
+        success: "#00A86B",
+        warning: "#DD6B20",
+        error: "#E53E3E",
+        info: "#3182CE",
+        
+        // Modern Effects
+        overlay: 'rgba(248, 250, 255, 0.9)',
+        backdrop: 'rgba(248, 250, 255, 0.7)',
+        shadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+        shadowLight: '0 2px 10px rgba(0, 0, 0, 0.05)',
+        
+        // Modern UI Elements
+        cardShadow: '0 8px 30px rgba(0, 50, 150, 0.1)',
+        buttonHover: 'rgba(0, 0, 0, 0.04)',
+        buttonActive: 'rgba(0, 0, 0, 0.08)',
+        
+        // Gradients
+        gradientPrimary: 'linear-gradient(135deg, #4D8AFF 0%, #8A63FF 100%)',
+        gradientSecondary: 'linear-gradient(135deg, #00C2FF 0%, #00E0A0 100%)',
         // Typography and spacing
         ...typography,
         ...spacing,
       }
     : {
         ...baseTheme,
-        // Dark theme colors with accent color integration
-        background: "#0F172A",
-        sectionBackground: "#1E293B",
-        card: "#1E293B",
-        cardElevated: "#2D3748",
-        tabIconColor: accentLight, // Lighter accent for dark theme tabs
-        ribbon: accentDark, // Darker accent for ribbons
-        text: "#F8FAFC",
-        textSecondary: "#94A3B8",
-        border: "#2D3748",
-        inputBackground: "#1E293B",
-        inputText: "#F8FAFC",
-        inputPlaceholder: "#94A3B8",
-        success: "#10B981",
-        warning: accentLight, // Lighter accent for warnings in dark mode
-        error: "#EF4444",
-        info: accentLight, // Lighter accent for info in dark mode
+        // Vibrant Blue-Black Theme
+        background: "#0E1525",
+        sectionBackground: "#1A2238",
+        card: "#1E2A4A",
+        cardElevated: "#2A3A62",
+        tabIconColor: accentLight,
+        ribbon: accentDark,
+        
+        // Text with better contrast
+        text: "#FFFFFF",
+        textSecondary: "#C5D0FF",
+        textTertiary: "#7E8DB8",
+        
+        // UI Elements
+        border: "#3A4A7A",
+        inputBackground: "#1E2A4A",
+        inputText: "#FFFFFF",
+        inputPlaceholder: "#7E8DB8",
+        
+        // Status Colors
+        success: "#00F5A0",
+        warning: "#FFB74D",
+        error: "#FF5C8D",
+        info: "#4D8AFF",
+        
+        // Modern Effects
+        overlay: 'rgba(14, 21, 37, 0.9)',
+        backdrop: 'rgba(14, 21, 37, 0.7)',
+        shadow: '0 4px 20px rgba(0, 15, 50, 0.4)',
+        shadowLight: '0 2px 10px rgba(0, 15, 50, 0.25)',
+        
+        // Modern UI Elements
+        cardShadow: '0 8px 30px rgba(0, 20, 80, 0.35)',
+        buttonHover: 'rgba(100, 150, 255, 0.15)',
+        buttonActive: 'rgba(100, 150, 255, 0.25)',
+        
+        // Gradients
+        gradientPrimary: 'linear-gradient(135deg, #4D8AFF 0%, #8A63FF 100%)',
+        gradientSecondary: 'linear-gradient(135deg, #00F5A0 0%, #00D9FF 100%)',
         // Typography and spacing
         ...typography,
         ...spacing,

@@ -1,6 +1,18 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import * as FileSystem from 'expo-file-system';
+// Simple ID generator function
+const generateId = () => {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+};
 import API_CONFIG from '../config/api';
+import { webSocketService } from './websocketService';
+
+// Global upload state
+const activeUploads = new Map();
+
+// Global upload progress callback
+let globalUploadProgressCallback = null;
 
 // Default timeout in milliseconds
 const DEFAULT_TIMEOUT = 15000; // 15 seconds
@@ -47,43 +59,44 @@ api.interceptors.response.use(
   }
 );
 
-// Helper function to handle file uploads
-const uploadFile = async (url, file, data, onUploadProgress) => {
-  const formData = new FormData();
+// Helper function to handle file uploads with WebSocket progress tracking
+const uploadFile = async (formData, onProgress) => {
+  const fileId = `file_${generateId()}`;
   
-  // Add file
-  formData.append('file', {
-    uri: file.uri,
-    type: file.type || 'application/octet-stream',
-    name: file.name || 'file',
+  // Register progress callback with WebSocket service
+  const unsubscribe = webSocketService.registerProgressCallback(fileId, (progress) => {
+    onProgress?.({ loaded: progress, total: 100 });
   });
   
-  // Add additional data if provided
-  if (data) {
-    Object.keys(data).forEach(key => {
-      if (typeof data[key] === 'object') {
-        formData.append(key, JSON.stringify(data[key]));
-      } else {
-        formData.append(key, data[key]);
-      }
+  try {
+    // Add session ID to form data
+    const sessionId = webSocketService.getSessionId();
+    formData.append('sessionId', sessionId);
+    
+    const response = await api.post(API_CONFIG.ENDPOINTS.STORAGE.ADD, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      // Fallback progress if WebSocket fails
+      onUploadProgress: (progressEvent) => {
+        if (progressEvent.lengthComputable) {
+          onProgress?.({
+            loaded: (progressEvent.loaded / progressEvent.total) * 100,
+            total: 100
+          });
+        }
+      },
     });
+    
+    return response.data;
+  } finally {
+    // Clean up the progress callback
+    unsubscribe();
   }
-  
-  const config = {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  };
-  
-  if (onUploadProgress) {
-    config.onUploadProgress = onUploadProgress;
-  }
-  
-  return api.post(url, formData, config);
 };
 
 // Main API service
-export default {
+const apiService = {
   // Auth endpoints
   auth: {
     login: (credentials, config = {}) => api.post(API_CONFIG.ENDPOINTS.LOGIN, credentials, {
@@ -115,21 +128,18 @@ export default {
           // For React Native, we need to create a file object that matches the web File API
           const fileExtension = file.uri.split('.').pop() || 'jpg';
           const fileName = file.name || `profile_${Date.now()}.${fileExtension}`;
-          
-          // Create a file object that matches what the server expects
-          // The server expects a file object with uri, type, and name
+       
           const fileObj = {
             uri: file.uri,
             type: file.type || 'image/jpeg',
             name: fileName,
-            // Some servers might need these additional fields
             fileName: fileName,
             filepath: file.uri
           };
           
           console.log('Appending file to formData:', fileObj);
           
-          // Append the file to FormData with the exact field name the server expects
+          // Append the file to FormData 
           formData.append('file', {
             uri: file.uri,
             type: file.type || 'image/jpeg',
@@ -143,10 +153,8 @@ export default {
             'Accept': 'application/json',
           },
           transformRequest: (data) => {
-            // Let axios handle FormData
             return data;
           },
-          // Some servers need this to properly handle FormData
           timeout: 30000, // 30 seconds timeout
         };
         
@@ -186,12 +194,27 @@ export default {
   
   // Storage endpoints
   storage: {
-    getAll: () => api.get(API_CONFIG.ENDPOINTS.STORAGE),
-    getById: (id) => api.get(API_CONFIG.ENDPOINTS.STORAGE_BY_ID(id)),
-    upload: (file, metadata = {}, onUploadProgress) => {
-      return uploadFile(API_CONFIG.ENDPOINTS.STORAGE_ADD, file, metadata, onUploadProgress);
-    },
-    delete: (id) => api.delete(API_CONFIG.ENDPOINTS.STORAGE_BY_ID(id)),
+    getAll: () => api.get(API_CONFIG.ENDPOINTS.STORAGE.ALL),
+    getById: (id) => api.get(`${API_CONFIG.ENDPOINTS.STORAGE.BASE}/${id}`),
+    upload: (formData, onUploadProgress) => 
+      uploadFile(formData, onUploadProgress),
+    delete: (id) => api.delete(`${API_CONFIG.ENDPOINTS.STORAGE.BASE}/${id}`),
+    add: (formData, onUploadProgress) =>
+      uploadFile(formData, onUploadProgress),
+  },
+  
+  // Direct file upload method
+  uploadFile: (formData, onUploadProgress) => 
+    uploadFile(formData, onUploadProgress),
+    
+  // Setup axios interceptors for upload progress
+  setupAxiosInterceptors(progressCallback) {
+    globalUploadProgressCallback = progressCallback;
+    
+    // Return cleanup function
+    return () => {
+      globalUploadProgressCallback = null;
+    };
   },
   
   // Helper to set auth token
@@ -216,3 +239,6 @@ export default {
     return !!token;
   },
 };
+
+// Export the API service with all its methods
+export default apiService;
