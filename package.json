@@ -85,5 +85,12 @@
     "expo-module-scripts": "^4.1.7",
     "typescript": "~5.8.3"
   },
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "listUnknownPackages": false
+      }
+    }
+  },
   "private": true
 }
