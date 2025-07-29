@@ -2,10 +2,11 @@ import { Stack, SplashScreen } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import "../global.css";
-import { View, Text, InteractionManager } from 'react-native';
+import { View } from 'react-native';
 import { useFonts } from 'expo-font';
-import { useEffect, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Audio } from 'expo-av';
+import * as Notifications from 'expo-notifications';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import usePlaybackStore from '../store/playbackStore';
 import useAudioControl from '../store/useAudioControl';
@@ -34,7 +35,7 @@ class NavigationErrorBoundary extends React.Component {
 
 SplashScreen.preventAutoHideAsync();
 
-export default function RootLayout() {
+function RootLayoutContent() {
   const [fontsLoaded, fontError] = useFonts({
     'Inter-Regular': require('../assets/fonts/inter/extras/ttf/Inter-Regular.ttf'),
     'Inter-Medium': require('../assets/fonts/inter/extras/ttf/Inter-Medium.ttf'),
@@ -43,31 +44,49 @@ export default function RootLayout() {
   });
   const { backgroundPlay } = usePlaybackStore();
 
+  const { initializeAudio } = useAudioControl();
+
+  // Set up audio mode and notifications
+  useEffect(() => {
+    const setupAudio = async () => {
+      try {
+        // Configure notifications
+        await Notifications.setNotificationHandler({
+          handleNotification: async () => ({
+            shouldShowAlert: true,
+            shouldPlaySound: false,
+            shouldSetBadge: false,
+          }),
+        });
+
+        // Initialize audio
+        await initializeAudio();
+        
+        // Set audio mode
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: backgroundPlay,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+        });
+      } catch (error) {
+        console.warn('Error setting up audio:', error);
+      }
+    };
+
+    setupAudio();
+  }, [backgroundPlay, initializeAudio]);
+
+  // Hide splash screen when fonts are loaded
   useEffect(() => {
     if (fontsLoaded || fontError) {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded, fontError]);
 
-  const setupAudio = useCallback(async () => {
-    try {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: backgroundPlay,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
-      });
-    } catch (error) {
-      console.error('Audio setup error:', error);
-    }
-  }, [backgroundPlay]);
-
-  useEffect(() => {
-    InteractionManager.runAfterInteractions(setupAudio);
-  }, [setupAudio]);
-
-  if (!fontsLoaded && !fontError) {
+  // Don't render anything until fonts are loaded
+  if (!fontsLoaded) {
     return null;
   }
 
@@ -75,14 +94,14 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StatusBar hidden />
-        <NavigationErrorBoundary>
         <Stack
           screenOptions={{
-            animation: 'fade',
-            animationDuration: 200,
-            gestureEnabled: true,
-            // Don't detach screens to prevent reloading
-            detachInactiveScreens: false,
+            // Instant transitions for main navigation
+            animation: 'none',
+            animationDuration: 0,
+            // Performance optimizations
+            gestureEnabled: false,
+            detachInactiveScreens: true,
           }}
         >
           <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -98,8 +117,16 @@ export default function RootLayout() {
             }}
           />
         </Stack>
-        </NavigationErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>
+  );
+}
+
+// Main app component with theme provider
+export default function RootLayout() {
+  return (
+    <AppThemeProvider>
+      <RootLayoutContent />
+    </AppThemeProvider>
   );
 }

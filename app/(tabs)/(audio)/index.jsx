@@ -48,14 +48,8 @@ const AudioTabScreen = React.memo(() => {
 
   // Prevent unnecessary reloading on tab switches
   const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
-  
-  // Performance optimization - track if screen is focused
-  const [isFocused, setIsFocused] = useState(true);
-  
-  // Track if we've ever successfully loaded to prevent reloading when coming back from player
-  const hasLoadedRef = useRef(false);
 
-  // Run migration on first load (simplified like video)
+  // Run migration on first load
   useEffect(() => {
     const runMigration = async () => {
       try {
@@ -71,29 +65,19 @@ const AudioTabScreen = React.memo(() => {
 
   const audioSortOptions = [
     { label: 'Title (A-Z)', key: 'title', direction: 'asc', icon: Icons.ArrowDownAZ },
-    { label: 'Title (Z-A)', key: 'title', direction: 'desc', icon: Icons.ArrowUpAZ },
     { label: 'Artist (A-Z)', key: 'artist', direction: 'asc', icon: Icons.Users },
-    { label: 'Artist (Z-A)', key: 'artist', direction: 'desc', icon: Icons.Users },
-    { label: 'Duration (Shortest)', key: 'duration', direction: 'asc', icon: Icons.Clock },
-    { label: 'Duration (Longest)', key: 'duration', direction: 'desc', icon: Icons.Clock },
-    { label: 'Date Added (Newest)', key: 'modificationTime', direction: 'desc', icon: Icons.CalendarClock },
-    { label: 'Date Added (Oldest)', key: 'modificationTime', direction: 'asc', icon: Icons.CalendarClock },
+    { label: 'Duration (Shortest first)', key: 'duration', direction: 'asc', icon: Icons.Clock },
+    { label: 'Date Added (Newest first)', key: 'modificationTime', direction: 'desc', icon: Icons.CalendarClock },
   ];
 
-  // Optimized loading - prevent unnecessary reloads on tab switches (like video)
+  // Optimized loading - prevent unnecessary reloads on tab switches
   useFocusEffect(
     useCallback(() => {
-      setIsFocused(true);
-      
       // Only load if migration is complete and we haven't loaded yet
-      // Use ref to persist across navigation to prevent reloading when coming back from player
-      // Also check if we already have files in the store
-      if (migrationComplete && !hasInitiallyLoaded && !hasLoadedRef.current && audioFiles.length === 0) {
+      if (migrationComplete && !hasInitiallyLoaded && audioFiles.length === 0) {
         console.log('🚀 Loading audio files with fast loader...');
         const startTime = Date.now();
         setHasInitiallyLoaded(true);
-        hasLoadedRef.current = true; // Mark as loaded permanently
-        
         loadAudioFiles().then(() => {
           PerformanceAnalytics.trackLoadTime('AudioFiles', startTime, Date.now(), audioFiles.length);
           // Show metadata loading indicator when files are loaded
@@ -101,17 +85,8 @@ const AudioTabScreen = React.memo(() => {
             setShowMetadataLoading(true);
           }
         });
-      } else if (audioFiles.length > 0 && !hasLoadedRef.current) {
-        // If we already have files (from cache/persistence), mark as loaded
-        console.log('⚡ Audio files already available, marking as loaded');
-        setHasInitiallyLoaded(true);
-        hasLoadedRef.current = true;
       }
-      
-      return () => {
-        setIsFocused(false);
-      };
-    }, [migrationComplete, hasInitiallyLoaded, loadAudioFiles, audioFiles.length])
+    }, [migrationComplete, hasInitiallyLoaded, audioFiles.length, loadAudioFiles])
   );
 
   // Show metadata loading when files are initially loaded
@@ -182,7 +157,7 @@ const AudioTabScreen = React.memo(() => {
         activeOpacity={0.7}
       >
         <Image
-          source={item.artwork ? { uri: item.artwork } : require('../../../assets/images/icon.png')}
+          source={item.artwork ? { uri: item.artwork } : require('../../../assets/images/adaptive-icon.png')}
           style={styles.artwork}
         />
         <View style={styles.trackInfo}>
@@ -244,26 +219,16 @@ const AudioTabScreen = React.memo(() => {
     }
   }, [activeTab, getCurrentTabIndex, currentIndex, screenWidth]);
 
-  // Ultra-fast scroll handling with immediate feedback
+  // Handle scroll end to update active tab
   const handleScrollEnd = useCallback((event) => {
-    if (!isFocused) return; // Skip if not focused
-    
     const contentOffsetX = event.nativeEvent.contentOffset.x;
     const newIndex = Math.round(contentOffsetX / screenWidth);
     
     if (newIndex !== currentIndex && newIndex >= 0 && newIndex < tabs.length) {
       setCurrentIndex(newIndex);
-      
-      // Immediate state update for instant feedback
       toggleTabs(tabs[newIndex].name);
-      
-      // Preload next likely tab
-      const nextTabIndex = (newIndex + 1) % tabs.length;
-      if (tabs[nextTabIndex]) {
-        NavigationOptimizer.preloadTab(tabs[nextTabIndex].name);
-      }
     }
-  }, [screenWidth, currentIndex, toggleTabs, isFocused]);
+  }, [screenWidth, currentIndex, toggleTabs]);
 
   // Handle layout to get screen width
   const handleLayout = useCallback((event) => {
@@ -280,18 +245,8 @@ const AudioTabScreen = React.memo(() => {
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={handleScrollEnd}
         onLayout={handleLayout}
-        scrollEventThrottle={8} // Faster scroll updates
+        scrollEventThrottle={16}
         style={styles.scrollContainer}
-        decelerationRate="fast"
-        bounces={false}
-        overScrollMode="never"
-        // Performance optimizations
-        removeClippedSubviews={true}
-        keyboardShouldPersistTaps="handled"
-        // Faster scrolling
-        snapToInterval={screenWidth}
-        snapToAlignment="start"
-        directionalLockEnabled={true}
       >
         {tabs.map((tab, index) => {
           const TabComponent = tab.component;
@@ -329,24 +284,52 @@ const AudioTabScreen = React.memo(() => {
         />
       );
     }
-  
-    // Show empty state only when not loading, migration complete, and no files
-    if (!isLoading && migrationComplete && audioFiles.length === 0) {
+
+    // Show progressive loading with content only if actually loading
+    if (isLoading && !isInitialLoadComplete) {
       return (
-        <View style={styles.centered}>
-          <Music size={64} color={themeColors.textSecondary} />
-          <Text style={[styles.emptyText, { color: themeColors.text }]}>No music found</Text>
-          <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
-            Make sure you have granted storage permissions and have music on your device.
+        <>
+          <ProgressiveLoadingIndicator
+            isLoading={isLoading}
+            totalFiles={audioFiles.length}
+            loadedFiles={audioFiles.length}
+            isComplete={isInitialLoadComplete}
+            mediaType="audio files"
+          />
+          {/* Show loaded files while still loading */}
+          {audioFiles.length > 0 && renderScrollableContent()}
+        </>
+      );
+    }
+
+    // Metadata loading happens in background - no UI needed
+  
+    if (!isLoading && audioFiles.length === 0) {
+      return (
+        <View style={styles.emptyContainer}>
+          <View style={[styles.iconContainer, { backgroundColor: `${themeColors.primary}20` }]}>
+            <View style={[styles.iconGlow(themeColors)]}>
+              <Music 
+                size={64} 
+                color={themeColors.primary} 
+                style={styles.emptyIcon}
+              />
+            </View>
+          </View>
+          <Text style={[styles.emptyText, { color: themeColors.text }]}>
+            {searchQuery ? 'No songs found' : 'No music in your library'}
           </Text>
-          <TouchableOpacity onPress={() => loadAudioFiles(true)} style={[styles.retryButton, { backgroundColor: themeColors.primary }]}>
+          <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
+            {searchQuery ? 'Try adjusting your search' : 'Add some music to get started'}
+          </Text>
+          <TouchableOpacity onPress={loadAudioFiles} style={[styles.retryButton, { backgroundColor: themeColors.primary }]}>
             <Text style={styles.retryButtonText}>Retry Scan</Text>
           </TouchableOpacity>
         </View>
       );
     }
 
-    // Default fallback - show main content
+    // Show main content when loading is complete
     return renderScrollableContent();
   };
 
@@ -358,7 +341,7 @@ const AudioTabScreen = React.memo(() => {
       <AudioHeader
         onSearch={() => setShowSearch(s => !s)}
         onFilter={() => setShowSort(true)}
-        onMore={() => setShowMore(true)}
+        showIcons={{ search: true, filter: true }}
       />
       <ToggleBar />
       <View style={styles.contentArea}>
@@ -390,11 +373,31 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingBottom: Platform.OS === 'ios' ? 0 : 20,
   },
-  centered: {
+  emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
+  iconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    position: 'relative',
+  },
+  emptyIcon: {
+    opacity: 0.9,
+  },
+  iconGlow: (themeColors) => ({
+    shadowColor: themeColors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 15,
+    elevation: 5,
+  }),
   trackItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -433,30 +436,36 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginTop: 16,
+    textAlign: 'center',
   },
   emptySubtext: {
     fontSize: 14,
     marginTop: 8,
     textAlign: 'center',
     paddingHorizontal: 32,
+    lineHeight: 20,
+    opacity: 0.9,
   },
   retryButton: {
-    marginTop: 24,
+    marginTop: 32,
     paddingVertical: 12,
     paddingHorizontal: 32,
-    borderRadius: 25,
+    borderRadius: 24,
+    minWidth: 180,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
   },
   retryButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
-  },
-  scrollContainer: {
-    flex: 1,
-  },
-  tabScreen: {
-    flex: 1,
-  },
+    letterSpacing: 0.5,
+  }
 });
 
 export default AudioTabScreen;

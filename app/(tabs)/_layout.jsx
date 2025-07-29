@@ -14,7 +14,7 @@ const TabLayouts = React.memo(() => {
   const [currentTab, setCurrentTab] = React.useState('(audio)');
   const [isTransitioning, setIsTransitioning] = React.useState(false);
 
-  // Initialize navigation optimizer and prevent reloading
+  // Initialize navigation optimizer
   useEffect(() => {
     NavigationOptimizer.clearCache(); // Clear any old cache
     DeviceOptimizer.logDeviceInfo(); // Log device info for debugging

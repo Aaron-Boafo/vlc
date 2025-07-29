@@ -41,7 +41,6 @@ export default function VideoTabScreen() {
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [migrationComplete, setMigrationComplete] = useState(false);
-  const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
   const router = useRouter();
 
   // Run migration on first load
@@ -97,14 +96,13 @@ export default function VideoTabScreen() {
     },
   ];
 
-  // Optimized loading - prevent unnecessary reloads on tab switches
+  // Fast loading with the new optimized system
   useFocusEffect(
     useCallback(() => {
       // Only load if migration is complete and we haven't loaded yet
       if (migrationComplete && !hasInitiallyLoaded && videoFiles.length === 0) {
         console.log("🚀 Loading video files with fast loader...");
         const startTime = Date.now();
-        setHasInitiallyLoaded(true);
         loadVideoFiles().then(() => {
           PerformanceAnalytics.trackLoadTime(
             "VideoFiles",
@@ -288,8 +286,8 @@ export default function VideoTabScreen() {
         title="Video"
         onSearch={() => setShowSearch((s) => !s)}
         onFilter={() => setShowSort(true)}
-        onMore={() => setShowMore(true)}
         onRefresh={loadVideoFiles}
+        showIcons={{ search: true, filter: true, more: false }}
       />
 
       <VideoToggleBar />

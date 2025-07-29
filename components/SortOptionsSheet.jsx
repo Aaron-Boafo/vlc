@@ -5,7 +5,7 @@ import * as Icons from 'lucide-react-native';
 const ReusableSortOptionsSheet = ({
   visible,
   onClose,
-  title = "Sort and Filter",
+  title = "Sort by",
   sortOptions,
   currentSortOrder,
   onSort,
@@ -16,7 +16,9 @@ const ReusableSortOptionsSheet = ({
 
   const options = sortOptions.map(opt => ({
     label: opt.label,
-    icon: isSelected(opt.key, opt.direction) ? Icons.CheckCircle2 : opt.icon,
+    icon: opt.icon,
+    sortKey: opt.key,
+    direction: opt.direction,
     onPress: () => onSort(opt.key, opt.direction),
   }));
 
@@ -26,8 +28,9 @@ const ReusableSortOptionsSheet = ({
       onClose={onClose}
       title={title}
       options={options}
+      selectedOption={currentSortOrder}
     />
   );
 };
 
-export default ReusableSortOptionsSheet; 
+export default ReusableSortOptionsSheet;

@@ -9,11 +9,14 @@ import {
   StyleSheet,
   Animated,
   SafeAreaView,
+  ActivityIndicator,
 } from 'react-native';
 import * as Icons from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import PhoneInput from './PhoneInput';
 import useThemeStore from '../../store/theme';
+import useUserProfileStore from '../../store/userProfile';
+import api from '../../services/api';
 
 export default function AuthForm({
   visible,
@@ -22,6 +25,7 @@ export default function AuthForm({
   onSignup,
 }) {
   const { themeColors } = useThemeStore();
+  const { setUserProfile } = useUserProfileStore();
   const [isSignup, setIsSignup] = useState(false);
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -63,17 +67,49 @@ export default function AuthForm({
     setIsLoading(true);
     try {
       if (isSignup) {
-        await onSignup(phone.trim(), password);
+        // API Registration
+        const response = await api.auth.register({
+          phone: phone.trim(),
+          password: password,
+        });
+        
+        if (response.data.token) {
+          await api.setAuthToken(response.data.token);
+          setUserProfile({
+            name: response.data.user?.name || 'User',
+            avatar: response.data.user?.avatar || null,
+          });
+        }
+        
+        Alert.alert("Success", "Account created successfully!");
+        if (onSignup) await onSignup(phone.trim(), password);
       } else {
-        await onLogin(phone.trim(), password);
+        // API Login
+        const response = await api.auth.login({
+          phone: phone.trim(),
+          password: password,
+        });
+        
+        if (response.data.token) {
+          await api.setAuthToken(response.data.token);
+          setUserProfile({
+            name: response.data.user?.name || 'User',
+            avatar: response.data.user?.avatar || null,
+          });
+        }
+        
+        if (onLogin) await onLogin(phone.trim(), password);
       }
+      
       setPhone('');
       setPassword('');
       onClose();
     } catch (error) {
+      console.error('Auth error:', error);
+      const errorMessage = error.response?.data?.message || error.message || "Please try again.";
       Alert.alert(
         isSignup ? "Signup Failed" : "Login Failed",
-        error.message || "Please try again."
+        errorMessage
       );
     } finally {
       setIsLoading(false);

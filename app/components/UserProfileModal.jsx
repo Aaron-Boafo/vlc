@@ -1,18 +1,39 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { Modal, View, Text, Image, TouchableOpacity, ScrollView, KeyboardAvoidingView, Animated, Linking, Platform, TouchableNativeFeedback } from 'react-native';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { 
+  Modal, 
+  View, 
+  Text, 
+  TextInput,
+  Image, 
+  TouchableOpacity, 
+  ScrollView, 
+  KeyboardAvoidingView, 
+  Animated, 
+  Linking, 
+  Platform, 
+  TouchableNativeFeedback,
+  ActivityIndicator,
+  Alert,
+  Easing
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FontAwesome } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Icons from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
+import * as FileSystem from 'expo-file-system';
 import useThemeStore from '../../store/theme';
+import useUserProfileStore from '../../store/userProfile';
+import api from '../../services/api';
+import ProfileService from '../../services/profileService';
 
 const FUN_FACTS = [
   "Visura can play almost any media file format!",
-  "Visura stands for VideoLAN Client.",
+  "Visura means sight and sound in latin.",
   "Visura is open source and free!",
   "You can stream media over the network with Visura.",
-  "The Visura cone icon comes from a student project!"
+  "The Visura was created by 7 brillant student !"
 ];
 
 const FUN_FACT_ICONS = [
@@ -37,54 +58,289 @@ export default function UserProfileModal({
   onEditField, // (field) => {}
   onLogout,
 }) {
+  // Log the received profile data for debugging
+  console.log('UserProfileModal - Received profile:', profile);
   const { themeColors, accentColor, activeTheme } = useThemeStore();
-  const [avatarUri, setAvatarUri] = useState(profile.avatar || '');
+  const { 
+    userName, 
+    userAvatar, 
+    setUserName, 
+    setUserAvatar 
+  } = useUserProfileStore();
+  
+  const [avatarUri, setAvatarUri] = useState(userAvatar);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [name, setName] = useState(userName);
+  const [email, setEmail] = useState(profile.email || '');
+  const [phone, setPhone] = useState(profile.phone || '');
+  const [isLoading, setIsLoading] = useState(false);
   const avatarAnim = useRef(new Animated.Value(0)).current;
   const [funFactIdx, setFunFactIdx] = useState(Math.floor(Math.random() * FUN_FACTS.length));
-  const [factAnim] = useState(new Animated.Value(1));
+  const [isAnimating, setIsAnimating] = useState(false);
+  const rotateAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
   const [iconIdx, setIconIdx] = useState(Math.floor(Math.random() * FUN_FACT_ICONS.length));
+  
+  // Animation interpolations
+  const spin = rotateAnim.interpolate({
+    inputRange: [0, 0.6, 1],
+    outputRange: ['0deg', '180deg', '360deg']
+  });
+  
+  const scale = scaleAnim.interpolate({
+    inputRange: [0, 0.3, 0.6, 1],
+    outputRange: [1, 1.03, 0.98, 1]
+  });
+  
+  const fade = fadeAnim.interpolate({
+    inputRange: [0, 0.4, 0.6, 1],
+    outputRange: [1, 0.3, 0.3, 1]
+  });
+  
+  const iconScale = rotateAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [1, 1.2, 1]
+  });
 
+  // Update local state when profile prop changes
+  useEffect(() => {
+    if (profile) {
+      console.log('Updating profile data in modal:', profile);
+      
+      // Always update the name from profile prop to ensure it's in sync
+      const newName = profile.name || (profile.phone ? `User_${profile.phone.slice(-4)}` : 'User');
+      
+      setAvatarUri(profile.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(newName)}&background=0D8ABC&color=fff`);
+      setName(newName);
+      setEmail(profile.email || '');
+      setPhone(profile.phone || '');
+      
+      console.log('Updated modal state with name:', newName);
+    }
+  }, [profile]);
+
+  // Initialize the component with the user's saved avatar and name
   useEffect(() => {
     if (visible) {
-      setAvatarUri(profile.avatar || '');
+      // Set the name from the store or profile prop
+      if (userName) {
+        setName(userName);
+      } else if (profile.name) {
+        setName(profile.name);
+      }
+      
+      // Set the avatar from the store or profile prop
+      if (userAvatar) {
+        setAvatarUri(userAvatar);
+      } else if (profile.avatar) {
+        setAvatarUri(profile.avatar);
+      } else if (userName || profile.name) {
+        // Generate a default avatar based on the user's name
+        const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(userName || profile.name || 'U')}&background=0D8ABC&color=fff`;
+        setAvatarUri(defaultAvatar);
+      } else {
+        // Fallback to a generic avatar
+        setAvatarUri('https://ui-avatars.com/api/?name=U&background=0D8ABC&color=fff');
+      }
+      
+      // Animate the avatar
       avatarAnim.setValue(0);
       Animated.spring(avatarAnim, {
         toValue: 1,
         useNativeDriver: true,
-        friction: 6,
         tension: 70,
       }).start();
     }
-  }, [visible, profile.avatar]);
+  }, [visible, userAvatar]);
 
-  const pickImage = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-    });
-    if (!result.canceled && result.assets && result.assets[0].uri) {
-      setAvatarUri(result.assets[0].uri);
-      if (onUpdateAvatar) onUpdateAvatar(result.assets[0].uri);
+  const handleAvatarChange = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Request permission to access the media library
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Please allow access to your photos to change your profile picture.');
+        return;
+      }
+      
+      // Launch the image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const selectedAsset = result.assets[0];
+        
+        // Resize and compress the image
+        const manipResult = await ImageManipulator.manipulateAsync(
+          selectedAsset.uri,
+          [{ resize: { width: 400, height: 400 } }],
+          { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+        );
+        
+        // Create a file object for upload
+        const file = {
+          uri: manipResult.uri,
+          type: 'image/jpeg',
+          name: `profile-${Date.now()}.jpg`
+        };
+        
+        // Upload the profile picture
+        await ProfileService.updateProfilePicture(file);
+        
+        // Update local state with the new image
+        const base64Image = await FileSystem.readAsStringAsync(manipResult.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        const dataUrl = `data:image/jpeg;base64,${base64Image}`;
+        
+        // Save the avatar to the store
+        setUserAvatar(dataUrl);
+        setAvatarUri(dataUrl);
+        
+        // Call the onUpdateAvatar callback if provided
+        if (onUpdateAvatar) {
+          onUpdateAvatar(dataUrl);
+        }
+        
+        Alert.alert('Success', 'Profile picture updated successfully');
+      }
+    } catch (error) {
+      console.error('Error updating avatar:', error);
+      const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'U')}&background=222&color=fff&bold=true`;
+      setAvatarUri(defaultAvatar);
+      Alert.alert('Error', error.message || 'Failed to update profile picture. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+
+  const handleSaveName = async () => {
+    const trimmedName = name.trim();
+    
+    // Validate the name
+    if (!trimmedName) {
+      Alert.alert('Error', 'Name cannot be empty');
+      return;
+    }
+    
+    try {
+      setIsLoading(true);
+      
+      // Update the username using the profile service
+      await ProfileService.updateUsername(trimmedName);
+      
+      // Update local state
+      setUserName(trimmedName);
+      
+      // Update the avatar with the new name if no custom avatar is set
+      if (!userAvatar || userAvatar.startsWith('https://ui-avatars.com/')) {
+        const newAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(trimmedName)}&background=0D8ABC&color=fff`;
+        setUserAvatar(newAvatar);
+        setAvatarUri(newAvatar);
+      }
+      
+      // Call the onEditField callback if provided
+      if (onEditField) {
+        await onEditField('name', trimmedName);
+      }
+      
+      // Close the editing mode
+      setIsEditingName(false);
+      
+      // Show success message
+      Alert.alert('Success', 'Name updated successfully');
+    } catch (error) {
+      console.error('Error updating name:', error);
+      Alert.alert('Error', error.message || 'Failed to update name. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleNextFunFact = () => {
-    let nextIdx, nextIconIdx;
+
+  const handleNextFunFact = useCallback(() => {
+    if (isAnimating) return;
+    
+    setIsAnimating(true);
+    
+    // Generate new random indices
+    let newIdx, newIconIdx;
     do {
-      nextIdx = Math.floor(Math.random() * FUN_FACTS.length);
-    } while (nextIdx === funFactIdx && FUN_FACTS.length > 1);
+      newIdx = Math.floor(Math.random() * FUN_FACTS.length);
+    } while (newIdx === funFactIdx && FUN_FACTS.length > 1);
+    
     do {
-      nextIconIdx = Math.floor(Math.random() * FUN_FACT_ICONS.length);
-    } while (nextIconIdx === iconIdx && FUN_FACT_ICONS.length > 1);
-    // Animate fade out, change, then fade in
-    Animated.timing(factAnim, { toValue: 0, duration: 150, useNativeDriver: true }).start(() => {
-      setFunFactIdx(nextIdx);
-      setIconIdx(nextIconIdx);
-      Animated.timing(factAnim, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+      newIconIdx = Math.floor(Math.random() * FUN_FACT_ICONS.length);
+    } while (newIconIdx === iconIdx && FUN_FACT_ICONS.length > 1);
+    
+    // Reset animations
+    fadeAnim.setValue(1);
+    rotateAnim.setValue(0);
+    scaleAnim.setValue(1);
+    
+    // First phase: Shrink and fade out slightly
+    Animated.parallel([
+      Animated.timing(scaleAnim, {
+        toValue: 0.9,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 0.8,
+        duration: 100,
+        useNativeDriver: true,
+      })
+    ]).start(() => {
+      // Update content immediately after first phase
+      setFunFactIdx(newIdx);
+      setIconIdx(newIconIdx);
+      
+      // Second phase: Rotate and scale up
+      Animated.parallel([
+        Animated.spring(rotateAnim, {
+          toValue: 1,
+          friction: 5,
+          tension: 30,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1.05,
+          friction: 5,
+          tension: 30,
+          useNativeDriver: true,
+        })
+      ]).start(() => {
+        // Final phase: Return to normal
+        Animated.parallel([
+          Animated.spring(scaleAnim, {
+            toValue: 1,
+            friction: 5,
+            tension: 60,
+            useNativeDriver: true,
+          }),
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 100,
+            useNativeDriver: true,
+          })
+        ]).start(() => {
+          // Reset animation values
+          rotateAnim.setValue(0);
+          scaleAnim.setValue(1);
+          fadeAnim.setValue(1);
+          setIsAnimating(false);
+        });
+      });
     });
-  };
+  }, [funFactIdx, iconIdx, isAnimating, rotateAnim, scaleAnim, fadeAnim]);
 
   // Scale animation for fun fact card
   const funFactScale = useRef(new Animated.Value(1)).current;
@@ -99,19 +355,19 @@ export default function UserProfileModal({
   {
     label: 'Instagram',
     icon: <FontAwesome name="instagram" size={24} color="#fff" style={{ marginRight: 12 }} />,
-    url: 'https://instagram.com/yourprofile',
+    url: 'https://www.instagram.com/visuraver1/',
     bg: '#E1306C',
   },
   {
     label: 'Facebook',
     icon: <FontAwesome name="facebook-square" size={24} color="#fff" style={{ marginRight: 12 }} />,
-    url: 'https://facebook.com/yourprofile',
+    url: 'https://www.facebook.com/profile.php?id=61578731392728',
     bg: '#1877F3',
   },
   {
     label: 'Twitter',
     icon: <FontAwesome name="twitter" size={24} color="#fff" style={{ marginRight: 12 }} />,
-    url: 'https://twitter.com/yourprofile',
+    url: 'https://x.com/Visuraver1',
     bg: '#1DA1F2',
   },
 ];
@@ -137,26 +393,37 @@ export default function UserProfileModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)' }}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }}>
           <SafeAreaView style={{ flex: 1 }}>
-            <View style={{ flex: 1, backgroundColor: modalBg }}>
-              {/* Header (no title) */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', padding: 18 }}>
-                <TouchableOpacity onPress={onClose} accessibilityLabel="Close profile modal">
-                  <Icons.ArrowLeft size={28} color={themeColors.text} />
+            <View style={{ flex: 1, backgroundColor: themeColors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden', marginTop: 40 }}>
+              {/* Header */}
+              <LinearGradient
+                colors={[themeColors.card, themeColors.background]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: 16,
+                  paddingTop: 20,
+                  borderBottomWidth: 1,
+                  borderColor: themeColors.sectionBackground
+                }}
+              >
+                <TouchableOpacity onPress={onClose} accessibilityLabel="Close profile modal" style={{ padding: 4 }}>
+                  <Icons.X size={26} color={themeColors.text} />
                 </TouchableOpacity>
-              </View>
+                <Text style={{ color: themeColors.text, fontSize: 20, fontWeight: 'bold' }}>Profile</Text>
+                <View style={{ width: 30 }} />
+              </LinearGradient>
 
               <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-                {/* Avatar */}
-                <View style={{ alignItems: 'center', marginTop: 12, marginBottom: 18 }}>
-                  <TouchableOpacity onPress={pickImage} activeOpacity={0.8} accessibilityLabel="Edit photo">
+                {/* Avatar Section */}
+                <View style={{ alignItems: 'center', paddingVertical: 24, backgroundColor: themeColors.sectionBackground }}>
+                  <TouchableOpacity onPress={handleAvatarChange} activeOpacity={0.9} accessibilityLabel="Edit photo">
                     <Animated.View style={{
-                      shadowColor: accentColor,
-                      shadowOpacity: 0.18,
-                      shadowRadius: 8,
-                      elevation: 4,
                       transform: [
                         {
                           scale: avatarAnim.interpolate({
@@ -169,239 +436,246 @@ export default function UserProfileModal({
                       <Image
                         source={avatarUri ? { uri: avatarUri } : { uri: defaultAvatarUrl }}
                         style={{
-                          width: 110,
-                          height: 110,
-                          borderRadius: 55,
-                          borderWidth: 2,
-                          borderColor: themeColors.sectionBackground,
-                          backgroundColor: themeColors.sectionBackground,
+                          width: 120,
+                          height: 120,
+                          borderRadius: 60,
+                          borderWidth: 3,
+                          borderColor: accentColor,
+                          backgroundColor: themeColors.card,
                         }}
                         accessibilityLabel="User avatar"
                       />
+                      <View style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        right: 0,
+                        backgroundColor: themeColors.background,
+                        padding: 8,
+                        borderRadius: 20,
+                        borderWidth: 2,
+                        borderColor: accentColor
+                      }}>
+                        <Icons.Camera size={20} color={accentColor} />
+                      </View>
                     </Animated.View>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={pickImage} accessibilityLabel="Edit photo">
-                    <Text style={{ color: accentColor, fontWeight: '600', fontSize: 15, marginTop: 10 }}>Edit photo</Text>
                   </TouchableOpacity>
                 </View>
               
-                {/* Name Field */}
-                <View style={[cardStyle, { borderWidth: 0 }]}>
-                  <TouchableOpacity
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                    }}
-                    onPress={() => onEditField && onEditField('name')}
-                    accessibilityLabel="Edit name"
-                    activeOpacity={0.7}
-                  >
-                    <View>
-                      <Text style={{ color: themeColors.tabIconColor, fontSize: 13 }}>Name</Text>
-                      <Text style={{ color: themeColors.text, fontSize: 16, fontWeight: '500', marginTop: 2 }}>{profile.name || 'User'}</Text>
+                <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+                  {/* Name & Phone Section */}
+                  <View style={{ backgroundColor: themeColors.card, borderRadius: 18, marginBottom: 24, overflow: 'hidden' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderColor: themeColors.sectionBackground }}>
+                      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+                        <Icons.User size={22} color={accentColor} />
+                        {isEditingName ? (
+                          <TextInput
+                            style={{
+                              flex: 1,
+                              color: themeColors.text,
+                              fontSize: 16,
+                              marginLeft: 12,
+                              padding: 8,
+                              backgroundColor: themeColors.sectionBackground,
+                              borderRadius: 8,
+                            }}
+                            value={name}
+                            onChangeText={setName}
+                            autoFocus
+                            onSubmitEditing={handleSaveName}
+                            placeholder="Enter your name"
+                            placeholderTextColor={themeColors.textSecondary}
+                          />
+                        ) : (
+                          <Text 
+                            style={{ 
+                              color: themeColors.text, 
+                              fontSize: 16, 
+                              fontWeight: '500', 
+                              marginLeft: 12,
+                              padding: 8,
+                              flex: 1
+                            }}
+                          >
+                            {name || 'User'}
+                          </Text>
+                        )}
+                      </View>
+                      {isEditingName ? (
+                        <TouchableOpacity onPress={handleSaveName} style={{ marginLeft: 8 }}>
+                          <Icons.Check size={22} color={accentColor} />
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity onPress={() => setIsEditingName(true)}>
+                          <Icons.Edit3 size={18} color={themeColors.textSecondary} />
+                        </TouchableOpacity>
+                      )}
                     </View>
-                    <Icons.User size={22} color={themeColors.tabIconColor} />
-                  </TouchableOpacity>
-                </View>
-                {/* Phone Number Field - Matches Name field style */}
-<View style={[cardStyle, { marginTop: 12, borderWidth: 0 }]}>
-  <View
-    style={{
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    }}
-  >
-    <View>
-        <Text style={{ color: themeColors.tabIconColor, fontSize: 13 }}>Phone Number</Text>
-        <Text style={{ 
-        color: themeColors.text, 
-        fontSize: 16, 
-        fontWeight: '500', 
-        marginTop: 2 
-      }}>
-        {profile.phone || 'Not available'}
-      </Text>
-      </View>
-     <Icons.Phone size={22} color={themeColors.tabIconColor} />
-    </View>
-  </View>
-                {/* Fun Fact Card */}
-                <Animated.View style={{
-                  transform: [{ scale: funFactScale }],
-                  marginVertical: 18,
-                }}>
-                  <TouchableOpacity
-                    onPress={handleNextFunFact}
-                    onPressIn={handleFunFactPressIn}
-                    onPressOut={handleFunFactPressOut}
-                    activeOpacity={0.85}
-                    accessibilityLabel="Show another fun fact"
-                    style={{ padding: 0, borderRadius: 18 }}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Icons.Phone size={22} color={accentColor} />
+                        <Text style={{ color: themeColors.text, fontSize: 16, fontWeight: '500', marginLeft: 12 }}>{profile.phone || 'Not available'}</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Diagnostics & Actions */}
+                  <View style={{ backgroundColor: themeColors.card, borderRadius: 18, marginBottom: 24, overflow: 'hidden' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderColor: themeColors.sectionBackground }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Icons.Info size={22} color={accentColor} />
+                        <Text style={{ color: themeColors.text, fontSize: 16, fontWeight: '500', marginLeft: 12 }}>App Version</Text>
+                      </View>
+                      <Text style={{ color: themeColors.textSecondary, fontSize: 16 }}>{DIAGNOSTICS.appVersion}</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => Alert.alert("Clear Cache", "This feature is coming soon!")}
+                      activeOpacity={0.7}
+                      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderColor: themeColors.sectionBackground }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Icons.Trash2 size={22} color={accentColor} />
+                        <Text style={{ color: themeColors.text, fontSize: 16, fontWeight: '500', marginLeft: 12 }}>Clear Cache</Text>
+                      </View>
+                      <Icons.ChevronRight size={22} color={themeColors.textSecondary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => Linking.openURL("https://www.videolan.org/")}
+                      activeOpacity={0.7}
+                      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Icons.Star size={22} color={accentColor} />
+                        <Text style={{ color: themeColors.text, fontSize: 16, fontWeight: '500', marginLeft: 12 }}>Rate App</Text>
+                      </View>
+                      <Icons.ChevronRight size={22} color={themeColors.textSecondary} />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Social Links */}
+                  <View style={{ backgroundColor: themeColors.card, borderRadius: 18, marginBottom: 24, overflow: 'hidden' }}>
+                    {socialLinks.map((link, index) => (
+                      <TouchableOpacity
+                        key={link.label}
+                        onPress={() => Linking.openURL(link.url)}
+                        activeOpacity={0.7}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          padding: 16,
+                          borderBottomWidth: index === socialLinks.length - 1 ? 0 : 1,
+                          borderColor: themeColors.sectionBackground
+                        }}
+                      >
+                        <View style={{ backgroundColor: link.bg, borderRadius: 8, padding: 6, marginRight: 12 }}>
+                          {React.cloneElement(link.icon, { size: 20, style: { marginRight: 0 } })}
+                        </View>
+                        <Text style={{ color: themeColors.text, fontSize: 16, fontWeight: '500', flex: 1 }}>{link.label}</Text>
+                        <Icons.ChevronRight size={22} color={themeColors.textSecondary} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {/* Fun Fact Card */}
+                  <Animated.View 
+                    style={[{
+                      backgroundColor: themeColors.card,
+                      borderRadius: 16,
+                      padding: 16,
+                      margin: 16,
+                      marginTop: 0,
+                      marginBottom: 24,
+                      borderWidth: 1,
+                      borderColor: themeColors.sectionBackground,
+                      shadowColor: accentColor,
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.1,
+                      shadowRadius: 6,
+                      elevation: 3,
+                      transform: [{ scale }],
+                      opacity: fade
+                    }]}
                   >
-                    <LinearGradient
-                      colors={[accentColor + '16', themeColors.sectionBackground]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={{
-                        ...cardStyle,
+                    <TouchableOpacity
+                      onPress={handleNextFunFact}
+                      activeOpacity={0.85}
+                      style={{ 
+                        flexDirection: 'row', 
                         alignItems: 'center',
-                        marginVertical: 0,
-                        paddingVertical: 22,
-                        paddingHorizontal: 18,
-                        marginBottom: 0,
+                        transform: [{ scale: 0.98 }] // Subtle press effect
+                      }}
+                      disabled={isAnimating}
+                    >
+                      <Animated.View 
+                        style={{
+                          backgroundColor: accentColor + '20',
+                          width: 40,
+                          height: 40,
+                          borderRadius: 20,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          marginRight: 14,
+                          transform: [
+                            { rotate: spin },
+                            { scale: iconScale }
+                          ]
+                        }}
+                      >
+                        <Animated.View style={{ 
+                          transform: [
+                            { rotate: spin },
+                            { scale: iconScale }
+                          ]
+                        }}>
+                          {FUN_FACT_ICONS[iconIdx](accentColor)}
+                        </Animated.View>
+                      </Animated.View>
+                      <Text style={{
+                        color: themeColors.text,
+                        fontSize: 14,
+                        flex: 1,
+                        lineHeight: 20,
+                        fontStyle: 'italic',
+                        marginRight: 8
+                      }}>
+                        {FUN_FACTS[funFactIdx]}
+                      </Text>
+                    </TouchableOpacity>
+                  </Animated.View>
+
+                  {/* Logout Button */}
+                  <View style={{ paddingHorizontal: 16, marginBottom: 24 }}>
+                    <TouchableOpacity
+                      onPress={onLogout}
+                      accessibilityLabel="Log out"
+                      activeOpacity={0.9}
+                      style={{
+                        backgroundColor: '#DC2626',
+                        borderRadius: 12,
+                        paddingVertical: 16,
                         borderWidth: 0,
-                        shadowOpacity: 0.10,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        shadowColor: '#DC2626',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 4,
+                        elevation: 3
                       }}
                     >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                        {FUN_FACT_ICONS[iconIdx](accentColor)}
-                        <Text style={{
-                          color: accentColor,
-                          fontWeight: 'bold',
-                          fontSize: 15,
-                          letterSpacing: 1.2,
-                          textTransform: 'uppercase',
-                        }}>
-                          Fun Fact
-                        </Text>
-                      </View>
-                      <View style={{
-                        width: 32,
-                        height: 2,
-                        backgroundColor: accentColor + '33',
-                        borderRadius: 1,
-                        marginBottom: 12,
-                      }} />
-                      <Animated.Text style={{
-                        color: themeColors.text,
-                        fontSize: 17,
-                        fontStyle: 'italic',
-                        textAlign: 'center',
-                        marginBottom: 6,
-                        lineHeight: 25,
-                        fontWeight: '500',
-                        opacity: factAnim,
-                        transform: [{ translateY: factAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
+                      <Icons.LogOut size={18} color="white" style={{ marginRight: 10 }} />
+                      <Text style={{ 
+                        color: 'white', 
+                        fontWeight: '600', 
+                        fontSize: 16,
+                        letterSpacing: 0.5
                       }}>
-                        “{FUN_FACTS[funFactIdx]}”
-                      </Animated.Text>
-                      <Text style={{
-                        color: themeColors.tabIconColor,
-                        fontSize: 12,
-                        marginTop: 8,
-                        opacity: 0.7,
-                        textAlign: 'center',
-                      }}>
-                        Tap for another fact
+                        Log Out
                       </Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </Animated.View>
-
-                {/* App Links Card */}
-                <LinearGradient
-  colors={[themeColors.sectionBackground, accentColor + '0D']}
-  start={{ x: 0, y: 0.2 }}
-  end={{ x: 1, y: 1 }}
-  style={{
-    borderRadius: 24,
-    marginHorizontal: 14,
-    marginBottom: 32,
-    paddingVertical: 18,
-    paddingHorizontal: 16,
-  }}
->
-  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-    <FontAwesome name="link" size={18} color={accentColor} style={{ marginRight: 8 }} />
-    <Text style={{
-      color: accentColor,
-      fontWeight: 'bold',
-      fontSize: 15,
-      letterSpacing: 1,
-      textTransform: 'uppercase',
-    }}>
-      Social Links
-    </Text>
-  </View>
-  <View style={{
-    width: 32,
-    height: 2,
-    backgroundColor: accentColor + '22',
-    borderRadius: 1,
-    marginBottom: 16,
-    marginLeft: 1,
-  }} />
-  <View>
-    {socialLinks.map(link => {
-      const ButtonContent = (
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            borderRadius: 22,
-            paddingVertical: 12,
-            paddingHorizontal: 16,
-            backgroundColor: link.bg,
-            borderWidth: 1,
-            borderColor: link.bg,
-            marginBottom: 14,
-          }}
-        >
-          {link.icon}
-          <Text
-            style={{
-              color: '#fff',
-              fontSize: 16,
-              marginLeft: 10,
-              fontWeight: 'bold',
-              letterSpacing: 0.2,
-            }}
-          >
-            {link.label}
-          </Text>
-        </View>
-      );
-      return Platform.OS === 'android' ? (
-        <TouchableNativeFeedback
-          key={link.label}
-          onPress={() => Linking.openURL(link.url)}
-          background={TouchableNativeFeedback.Ripple('#fff', false)}
-          accessibilityLabel={`Visit our ${link.label} page`}
-        >
-          {ButtonContent}
-        </TouchableNativeFeedback>
-      ) : (
-        <TouchableOpacity
-          key={link.label}
-          onPress={() => Linking.openURL(link.url)}
-          activeOpacity={0.7}
-          accessibilityLabel={`Visit our ${link.label} page`}
-          style={{ borderRadius: 22, overflow: 'hidden', marginBottom: 14 }}
-        >
-          {ButtonContent}
-        </TouchableOpacity>
-      );
-    })}
-  </View>
-</LinearGradient>
+                    </TouchableOpacity>
+                  </View>
+                </View>
               </ScrollView>
-
-              {/* Sticky Footer Buttons */}
-              <View style={{
-                flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
-                padding: 18, borderTopWidth: 1, borderColor: themeColors.sectionBackground, backgroundColor: modalBg
-              }}>
-                <TouchableOpacity
-                  onPress={onLogout}
-                  accessibilityLabel="Log out"
-                  style={{
-                    backgroundColor: 'rgba(228, 15, 15, 0.81)', borderRadius: 22, paddingVertical: 12, paddingHorizontal: 32
-                  }}>
-                  <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Log Out</Text>
-                </TouchableOpacity>
-              </View>
             </View>
           </SafeAreaView>
         </View>

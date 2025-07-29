@@ -115,7 +115,7 @@ const TrackSelectItem = ({ item, selected, onToggle, themeColors, playlistType }
           </View>
         )}
       </View>
-      
+
       <View style={styles.trackSelectInfo}>
         <Text style={[styles.trackSelectTitle, { color: themeColors.text }]} numberOfLines={1}>
           {item.title || item.filename?.replace(/\.[^/.]+$/, "") || 'Unknown Track'}
@@ -138,7 +138,7 @@ const PlaylistScreen = () => {
   const { playlists, createPlaylist, deletePlaylist, addTrackToPlaylist, removeTrackFromPlaylist, clearPlaylists } = usePlaylistStore();
   const audioControl = useAudioControl();
   const router = useRouter();
-  
+
   // Get cached data from stores
   const { audioFiles, loadAudioFiles, isLoading: audioLoading } = useOptimizedAudioStore();
   const { videoFiles, loadVideoFiles, isLoading: videoLoading } = useOptimizedVideoStore();
@@ -147,8 +147,8 @@ const PlaylistScreen = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
   const [createModal, setCreateModal] = useState(false);
+  const [playlistType, setPlaylistType] = useState(tab === 'video' ? 'video' : 'audio');
   const [newPlaylistName, setNewPlaylistName] = useState("");
-  const [playlistType, setPlaylistType] = useState('audio');
   const [selectedTracks, setSelectedTracks] = useState([]);
   const [optionsVisible, setOptionsVisible] = useState(false);
   const [optionsPlaylist, setOptionsPlaylist] = useState(null);
@@ -168,16 +168,16 @@ const PlaylistScreen = () => {
   // Filter tracks based on search query
   const filteredTracks = useMemo(() => {
     if (!trackSearchQuery.trim()) return availableTracks;
-    
+
     const query = trackSearchQuery.toLowerCase();
     return availableTracks.filter(track => {
       const title = track.title || track.filename || '';
       const artist = track.artist || '';
       const album = track.album || '';
-      
+
       return title.toLowerCase().includes(query) ||
-             artist.toLowerCase().includes(query) ||
-             album.toLowerCase().includes(query);
+        artist.toLowerCase().includes(query) ||
+        album.toLowerCase().includes(query);
     });
   }, [availableTracks, trackSearchQuery]);
 
@@ -243,7 +243,7 @@ const PlaylistScreen = () => {
     if (!newPlaylistName.trim() || selectedTracks.length === 0) return;
     const id = createPlaylist(newPlaylistName.trim(), playlistType);
     selectedTracks.forEach(track => addTrackToPlaylist(id, track));
-    
+
     // Reset modal state
     setNewPlaylistName("");
     setSelectedTracks([]);
@@ -376,20 +376,8 @@ const PlaylistScreen = () => {
       <AudioHeader
         onSearch={() => setShowSearch(s => !s)}
         onMore={() => setShowMore(true)}
+        showIcons={{ search: true, filter: false, more: false }}
       />
-      <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: themeColors.text }]}>Playlists</Text>
-        <View style={styles.headerActions}>
-          {playlists.length > 0 && (
-            <TouchableOpacity
-              style={[styles.headerButton, { backgroundColor: themeColors.card }]}
-              onPress={handleClearAllPlaylists}
-            >
-              <Trash2 size={18} color={themeColors.primary} />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
 
       {/* Search Bar */}
       {showSearch && (
@@ -481,9 +469,9 @@ const PlaylistScreen = () => {
             <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
               Select {playlistType === 'audio' ? 'Audio' : 'Video'} Tracks ({filteredTracks.length})
             </Text>
-            
+
             {/* Search input for tracks */}
-            <View style={[styles.trackSearchContainer, { 
+            <View style={[styles.trackSearchContainer, {
               backgroundColor: themeColors.sectionBackground,
               borderColor: themeColors.border || 'rgba(255,255,255,0.1)'
             }]}>
@@ -507,7 +495,7 @@ const PlaylistScreen = () => {
           ) : filteredTracks.length === 0 ? (
             <View style={styles.loadingContainer}>
               <Text style={[styles.loadingText, { color: themeColors.textSecondary }]}>
-                {trackSearchQuery.trim() 
+                {trackSearchQuery.trim()
                   ? `No ${playlistType} tracks found matching "${trackSearchQuery}"`
                   : `No ${playlistType} tracks available`
                 }
@@ -635,14 +623,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 32,
+    paddingHorizontal: 16,
+    paddingTop: 8,
     paddingBottom: 12,
+    backgroundColor: 'transparent',
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
+    marginLeft: 8,
   },
   headerActions: {
     flexDirection: 'row',
@@ -655,6 +645,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 8,
+    backgroundColor: 'transparent',
   },
   playlistCard: {
     flexDirection: 'row',

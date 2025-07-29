@@ -25,8 +25,6 @@ const useOptimizedAudioStore = create(
           });
         },
 
-
-
         // Simplified loading like video system - proven to work on real devices
         loadAudioFiles: async (forceRefresh = false) => {
           const state = get();

@@ -23,6 +23,7 @@ import { SafeAreaView as SafeAreaViewRN } from 'react-native-safe-area-context';
 import FileBrowser from '../../../components/FileBrowser';
 import * as DocumentPicker from 'expo-document-picker';
 import StreamModal from '../../../components/StreamModal';
+import StorageHubScreen from '../../../components/StorageHubScreen';
 
 const BrowseTab = ({ styles, themeColors }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -206,33 +207,8 @@ const BrowseTab = ({ styles, themeColors }) => {
   };
 
   const cloudServices = () => {
-    Alert.alert(
-      'Cloud Services',
-      'Choose a cloud service to connect:',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Google Drive', onPress: () => connectGoogleDrive() },
-        { text: 'Dropbox', onPress: () => connectDropbox() },
-        { text: 'OneDrive', onPress: () => connectOneDrive() },
-        { text: 'iCloud', onPress: () => connectICloud() }
-      ]
-    );
-  };
-
-  const connectGoogleDrive = () => {
-    Alert.alert('Google Drive', 'Google Drive integration is now available! You can sync your media files.');
-  };
-
-  const connectDropbox = () => {
-    Alert.alert('Dropbox', 'Dropbox integration is now available! You can sync your media files.');
-  };
-
-  const connectOneDrive = () => {
-    Alert.alert('OneDrive', 'OneDrive integration is now available! You can sync your media files.');
-  };
-
-  const connectICloud = () => {
-    Alert.alert('iCloud', 'iCloud integration is now available! You can sync your media files.');
+    // Open the StorageHub when cloud services is clicked
+    setShowStorageSheet(true);
   };
 
   const handleFilePress = (file) => {
@@ -595,21 +571,24 @@ const BrowseTab = ({ styles, themeColors }) => {
         </View>
         <RNModal
           visible={showStorageSheet}
-          transparent
+          transparent={false}
           animationType="slide"
           onRequestClose={() => setShowStorageSheet(false)}
         >
-          <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderColor: themeColors.card }}>
-              <TouchableOpacity onPress={() => setShowStorageSheet(false)}>
-                <MaterialIcons name="arrow-back" size={28} color={themeColors.text} />
-              </TouchableOpacity>
-              <Text style={{ fontSize: 20, fontWeight: 'bold', marginLeft: 16, color: themeColors.text }}>{storageTitle}</Text>
-            </View>
-            {storageRoot && (
-              <FileBrowser rootPath={storageRoot} filterTypes={['audio', 'video']} hideHeader={true} />
-            )}
-          </SafeAreaView>
+          <View style={{ flex: 1, backgroundColor: themeColors.background }}>
+            <StorageHubScreen 
+              onClose={() => setShowStorageSheet(false)}
+              onUpload={() => {
+                setShowStorageSheet(false);
+                setMediaSelectorVisible(true);
+              }}
+              onViewFiles={() => {
+                setShowStorageSheet(false);
+                // Navigate to the files view or show files in a different way
+                // For example: router.push('/(tabs)/(browse)/storage');
+              }}
+            />
+          </View>
         </RNModal>
 
         {/* Organize Modal */}

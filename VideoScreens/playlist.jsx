@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import useOptimizedVideoStore from '../store/optimizedVideoStore';
+import usePlaylistStore from '../store/playlistStore';
 import useThemeStore from '../store/theme';
 import { router } from 'expo-router';
 import * as VideoThumbnails from 'expo-video-thumbnails';
@@ -21,7 +22,14 @@ import SearchBar from '../components/SearchBar';
 
 const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearchQuery }) => {
   const { themeColors } = useThemeStore();
-  const { videoFiles, setCurrentVideo, videoPlaylists, createVideoPlaylist, addVideoToPlaylist, clearVideoPlaylists } = useOptimizedVideoStore();
+  const { videoFiles, setCurrentVideo } = useOptimizedVideoStore();
+  const { playlists, createPlaylist, addTrackToPlaylist, clearPlaylists } = usePlaylistStore();
+  
+  // Filter playlists to only show video playlists
+  const videoPlaylists = useMemo(() => 
+    playlists.filter(playlist => playlist.type === 'video'),
+    [playlists]
+  );
   const [modalVisible, setModalVisible] = useState(false);
   const [playlistName, setPlaylistName] = useState('');
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
@@ -60,22 +68,30 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
       'Are you sure you want to delete all video playlists? This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Clear All', style: 'destructive', onPress: () => clearVideoPlaylists() }
+        { text: 'Clear All', style: 'destructive', onPress: () => clearPlaylists() }
       ]
     );
   };
 
   const handleCreatePlaylist = () => {
     if (playlistName.trim() && selectedVideos.length > 0) {
-      createVideoPlaylist(playlistName);
-      // Add videos to the newly created playlist
-      const newPlaylistId = Date.now().toString();
-      selectedVideos.forEach(video => {
-        addVideoToPlaylist(newPlaylistId, video);
-      });
+      // Create a new playlist in the main playlist store
+      const newPlaylistId = createPlaylist(playlistName, 'video', selectedVideos);
+      
+      // Reset the form
       setPlaylistName('');
       setSelectedVideos([]);
       setModalVisible(false);
+      
+      // Navigate to the main playlist screen with the video tab active
+      // The playlist will be selected there
+      router.push({
+        pathname: "/(tabs)/(playlist)/",
+        params: { 
+          tab: 'video',
+          playlistId: newPlaylistId
+        }
+      });
     }
   };
 
@@ -199,9 +215,26 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
         numColumns={2}
         contentContainerStyle={styles.container}
         ListEmptyComponent={
-          <Text style={{ color: themeColors.text, textAlign: 'center', marginTop: 32 }}>
-            No playlists found.
-          </Text>
+          <View style={styles.emptyContainer}>
+            <View style={[styles.iconContainer, { backgroundColor: `${themeColors.primary}20` }]}>
+              <View style={styles.iconGlow(themeColors)}>
+                <MaterialIcons 
+                  name="playlist-add" 
+                  size={64} 
+                  color={themeColors.primary} 
+                  style={styles.emptyIcon}
+                />
+              </View>
+            </View>
+            <Text style={[styles.emptyText, { color: themeColors.text }]}>
+              {searchQuery ? 'No matching playlists' : 'No video playlists yet'}
+            </Text>
+            <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
+              {searchQuery 
+                ? 'Try a different search term' 
+                : 'Create a new playlist to get started'}
+            </Text>
+          </View>
         }
       />
 
@@ -214,7 +247,7 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
 
       {/* Create Playlist Modal */}
       {modalVisible && (
-        <View style={styles.modalOverlay}>
+        <View style={styles.modalOverlay(themeColors)}>
           <View style={[styles.modalContent, { backgroundColor: themeColors.background }]}>
             <Text style={{ color: themeColors.text, fontSize: 20, fontWeight: 'bold', marginBottom: 12 }}>
               Create Playlist
@@ -231,7 +264,7 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
               onChangeText={setPlaylistName}
             />
             <Text style={{ color: themeColors.text, marginVertical: 8, fontWeight: '600' }}>Select Videos</Text>
-            <View style={{ maxHeight: 220 }}>
+            <View style={{ flex: 1, marginTop: 16, marginBottom: 16 }}>
               <FlatList
                 data={videoFiles}
                 keyExtractor={item => item.id}
@@ -275,7 +308,7 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
                 ListEmptyComponent={<Text style={{ color: themeColors.textSecondary, textAlign: 'center' }}>No videos found.</Text>}
               />
             </View>
-            <View style={{ gap: 12, marginTop: 20 }}>
+            <View style={{ gap: 12, marginTop: 'auto', paddingTop: 16 }}>
               <TouchableOpacity
                 style={{
                   height: 48,
@@ -329,7 +362,7 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
 
       {/* Playlist Details Modal */}
       {playlistModalVisible && selectedPlaylist && (
-        <View style={styles.modalOverlay}>
+        <View style={styles.modalOverlay(themeColors)}>
           <View style={[styles.modalContent, { backgroundColor: themeColors.background }]}> 
             <Text style={{ color: themeColors.text, fontSize: 22, fontWeight: 'bold', marginBottom: 12 }}>
               {selectedPlaylist.name}
@@ -377,6 +410,45 @@ const styles = StyleSheet.create({
   container: {
     padding: 16,
   },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  iconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    position: 'relative',
+  },
+  emptyIcon: {
+    opacity: 0.9,
+  },
+  iconGlow: (themeColors) => ({
+    shadowColor: themeColors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 15,
+    elevation: 5,
+  }),
+  emptyText: {
+    fontSize: 20,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 15,
+    textAlign: 'center',
+    paddingHorizontal: 32,
+    lineHeight: 20,
+    opacity: 0.9,
+    maxWidth: 280,
+  },
   card: {
     flex: 1,
     margin: 8,
@@ -412,22 +484,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     elevation: 4,
   },
-  modalOverlay: {
+  modalOverlay: (themeColors) => ({
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+    backgroundColor: themeColors.background,
+    flex: 1,
+  }),
   modalContent: {
-    width: '90%',
-    maxHeight: '80%',
-    borderRadius: 16,
+    flex: 1,
+    width: '100%',
     padding: 20,
-    elevation: 5,
+    paddingTop: 50,
   },
   input: {
     height: 48,
