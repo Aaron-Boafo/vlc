@@ -172,7 +172,10 @@ const useOptimizedVideoStore = create(
                 addToHistory: (video) => {
                     set(state => ({
                         videoHistory: [
-                            video,
+                            {
+                                ...video,
+                                playedAt: Date.now() // Add timestamp for when video was actually played
+                            },
                             ...state.videoHistory.filter(v => v.id !== video.id)
                         ].slice(0, 100) // Keep only last 100 items
                     }));
@@ -359,14 +362,24 @@ const useOptimizedVideoStore = create(
                 },
 
                 forceReloadVideos: async () => {
-                    console.log('Force reloading videos...');
+                    console.log('🔄 Force reloading videos...');
                     set({ 
                         videoFiles: [], 
                         isLoading: true, 
                         isInitialLoadComplete: false,
                         lastLoadTime: null 
                     });
-                    return get().loadVideoFiles(true); // Force refresh
+                    
+                    try {
+                        const result = await get().loadVideoFiles(true); // Force refresh
+                        console.log('✅ Force reload completed successfully');
+                        return result;
+                    } catch (error) {
+                        console.error('❌ Force reload failed:', error);
+                        // Ensure loading state is reset even if there's an error
+                        set({ isLoading: false, isInitialLoadComplete: true });
+                        throw error;
+                    }
                 },
 
                 // Clear cache and force reload

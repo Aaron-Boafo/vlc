@@ -48,7 +48,7 @@ const ArtistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }
   const handlePlayTrack = async (track) => {
     const index = artistTracks.findIndex(t => t.id === track.id);
     if (index !== -1 && track.uri) {
-      await audioControl.setAndPlayPlaylist(artistTracks, index);
+      await audioControl.setAndPlayPlaylist(artistTracks, index, true); // Show mini player
       setModalVisible(false);
     } else {
       alert('This track has no valid audio file.');

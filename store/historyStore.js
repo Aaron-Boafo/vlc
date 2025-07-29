@@ -9,9 +9,17 @@ const useHistoryStore = create(persist((set, get) => ({
     const { saveHistory, history } = get();
     if (!saveHistory) return;
     
-    // Remove if already exists, then add to front
+    // Remove if already exists, then add to front with timestamp
     const filtered = history.filter(t => t.id !== track.id);
-    set({ history: [track, ...filtered] });
+    set({ 
+      history: [
+        {
+          ...track,
+          playedAt: Date.now() // Add timestamp for when track was actually played
+        }, 
+        ...filtered
+      ] 
+    });
   },
   removeFromHistory: (id) => set(state => ({
     history: state.history.filter(t => t.id !== id)

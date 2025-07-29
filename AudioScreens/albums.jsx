@@ -50,7 +50,7 @@ const Albums = ({ showSearch, searchQuery, setSearchQuery }) => {
   const handlePlayTrack = async (track) => {
     const index = albumTracks.findIndex(t => t.id === track.id);
     if (index !== -1 && track.uri) {
-      await audioControl.setAndPlayPlaylist(albumTracks, index);
+      await audioControl.setAndPlayPlaylist(albumTracks, index, true); // Show mini player
       setModalVisible(false);
     } else {
       alert('This track has no valid audio file.');

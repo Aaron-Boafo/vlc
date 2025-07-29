@@ -63,7 +63,13 @@ const useVideoStore = create(
       videoHistory: [],
       addToHistory: (video) => 
         set((state) => ({
-          videoHistory: [video, ...state.videoHistory.filter(v => v.id !== video.id)]
+          videoHistory: [
+            {
+              ...video,
+              playedAt: Date.now() // Add timestamp for when video was actually played
+            }, 
+            ...state.videoHistory.filter(v => v.id !== video.id)
+          ]
         })),
       removeFromHistory: (videoId) =>
         set((state) => ({

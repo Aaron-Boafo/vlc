@@ -25,31 +25,24 @@ const useOptimizedAudioStore = create(
           });
         },
 
-        // Fast loading with progressive updates - Enhanced caching
+
+
+        // Simplified loading like video system - proven to work on real devices
         loadAudioFiles: async (forceRefresh = false) => {
           const state = get();
           
-          // First check memory cache
-          if (!forceRefresh && state.cachedFiles) {
-            console.log('⚡ Using memory-cached audio files');
-            set({ audioFiles: state.cachedFiles });
-            return state.cachedFiles;
-          }
-          
-          // Then check persisted files
+          // Enhanced caching: Skip if files exist and not forcing refresh
           if (!forceRefresh && state.audioFiles.length > 0) {
-            // Only reload if files are very old (5 minutes) or explicitly forced
+            // Only reload if files are very old (30 minutes) or explicitly forced
             if (state.lastLoadTime) {
               const timeSinceLoad = Date.now() - state.lastLoadTime;
-              if (timeSinceLoad < 5 * 60 * 1000) { // 5 minutes
-                console.log('⚡ Using persisted audio files');
-                get().updateCache(state.audioFiles);
+              if (timeSinceLoad < 30 * 60 * 1000) { // 30 minutes
+                console.log('⚡ Audio files cached, skipping reload');
                 return state.audioFiles;
               }
             } else {
               // If we have files but no timestamp, assume they're fresh
-              console.log('⚡ Using existing audio files');
-              get().updateCache(state.audioFiles);
+              console.log('⚡ Audio files exist, skipping reload');
               return state.audioFiles;
             }
           }
@@ -59,17 +52,14 @@ const useOptimizedAudioStore = create(
           try {
             const files = await ProgressiveMediaLoader.loadMediaProgressively('audio', (progressFiles, isComplete) => {
               // Update UI immediately as files are loaded progressively
-              set({ 
+              set({
                 audioFiles: progressFiles,
                 isInitialLoadComplete: isComplete,
                 isLoading: !isComplete,
               });
-              if (isComplete) {
-                get().updateCache(progressFiles);
-              }
             });
 
-            set({ 
+            set({
               lastLoadTime: Date.now(),
               isLoading: false,
               isInitialLoadComplete: true,
@@ -77,7 +67,7 @@ const useOptimizedAudioStore = create(
 
             return files;
           } catch (error) {
-            console.error('❌ Fast audio loading failed:', error);
+            console.error('❌ Audio loading failed:', error);
             set({ isLoading: false, isInitialLoadComplete: true });
             throw error;
           }
@@ -142,7 +132,7 @@ const useOptimizedAudioStore = create(
           activeTab: state.activeTab,
           sortOrder: state.sortOrder,
           lastLoadTime: state.lastLoadTime,
-          // Persist activeTab to maintain tab state between sessions
+          // Don't persist audioFiles - let them load fresh for better performance like video
         }),
       }
     )

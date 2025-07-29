@@ -24,7 +24,7 @@ const FavouriteScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearc
   }, [favourites, searchQuery]);
 
   const handlePlaySong = async (item) => {
-    await audioControl.setAndPlayPlaylist([item]);
+    await audioControl.setAndPlayPlaylist([item], 0, false); // Don't show mini player
     router.push('/player/audio');
   };
 

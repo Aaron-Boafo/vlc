@@ -198,7 +198,7 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
       console.log('🎨 Artwork URI:', enrichedTracks[index].artwork?.substring(0, 50) + '...');
       
       // Start playing the track and navigate to player
-      await audioControl.setAndPlayPlaylist(enrichedTracks, index);
+      await audioControl.setAndPlayPlaylist(enrichedTracks, index, false); // Don't show mini player
       router.push('/player/audio');
     } catch (error) {
       console.error("Error playing song:", error);
@@ -231,7 +231,7 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
     
     // Create a shuffled copy of the audio files
     const shuffledFiles = [...audioFiles].sort(() => Math.random() - 0.5);
-    audioControl.setAndPlayPlaylist(shuffledFiles, 0);
+    audioControl.setAndPlayPlaylist(shuffledFiles, 0, false); // Don't show mini player
     router.push("/(audio)/player");
   };
 

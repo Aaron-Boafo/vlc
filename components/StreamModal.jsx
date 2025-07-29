@@ -136,7 +136,7 @@ const StreamModal = ({ visible, onClose }) => {
           artist: "Unknown",
           artwork: null,
         };
-        await audioControl.setAndPlayPlaylist([audioTrack]);
+        await audioControl.setAndPlayPlaylist([audioTrack], 0, false); // Don't show mini player
         router.push('/player/audio');
       }
 

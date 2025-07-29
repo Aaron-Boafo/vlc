@@ -61,7 +61,9 @@ const PhoneInput = ({
   onChange, 
   style, 
   placeholder = 'Phone number',
-  defaultCountry = 'GH'
+  defaultCountry = 'GH',
+  themeColors,
+  editable = true
 }) => {
   const [selectedCountry, setSelectedCountry] = useState(
     countryCodes.find(c => c.code === defaultCountry) || countryCodes[0]
@@ -91,23 +93,33 @@ const PhoneInput = ({
     <View style={[styles.container, style]}>
       {/* Country Code Button */}
       <TouchableOpacity 
-        style={styles.countryCodeButton}
-        onPress={() => setModalVisible(true)}
+        style={[styles.countryCodeButton, { 
+          borderRightColor: themeColors?.border || 'rgba(255,255,255,0.2)',
+          opacity: editable ? 1 : 0.6
+        }]}
+        onPress={() => editable && setModalVisible(true)}
+        disabled={!editable}
       >
         <Text style={styles.flagText}>{selectedCountry.flag}</Text>
-        <Text style={styles.dialCodeText}>{selectedCountry.dialCode}</Text>
-        <Icons.ChevronDown size={16} color="#666" />
+        <Text style={[styles.dialCodeText, { 
+          color: themeColors?.text || '#fff' 
+        }]}>{selectedCountry.dialCode}</Text>
+        <Icons.ChevronDown size={16} color={themeColors?.textSecondary || '#666'} />
       </TouchableOpacity>
 
       {/* Phone Number Input */}
       <TextInput
-        style={styles.phoneInput}
+        style={[styles.phoneInput, { 
+          color: themeColors?.text || '#fff',
+          opacity: editable ? 1 : 0.6
+        }]}
         placeholder={placeholder}
-        placeholderTextColor="#999"
+        placeholderTextColor={themeColors?.textSecondary || '#999'}
         keyboardType="phone-pad"
         value={phoneNumber}
         onChangeText={formatPhoneNumber}
         maxLength={15}
+        editable={editable}
       />
 
       {/* Country Selector Modal */}
@@ -121,19 +133,37 @@ const PhoneInput = ({
           <View style={styles.modalOverlay} />
         </TouchableWithoutFeedback>
         
-        <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Select Country</Text>
+        <View style={[styles.modalContent, { 
+          backgroundColor: themeColors?.card || '#1E1E1E' 
+        }]}>
+          <View style={styles.modalHeader}>
+            <Text style={[styles.modalTitle, { 
+              color: themeColors?.text || '#fff' 
+            }]}>Select Country</Text>
+            <TouchableOpacity 
+              onPress={() => setModalVisible(false)}
+              style={styles.modalCloseButton}
+            >
+              <Icons.X size={24} color={themeColors?.textSecondary || '#888'} />
+            </TouchableOpacity>
+          </View>
           <FlatList
             data={countryCodes}
             keyExtractor={(item) => item.code}
             renderItem={({ item }) => (
               <TouchableOpacity
-                style={styles.countryItem}
+                style={[styles.countryItem, { 
+                  borderBottomColor: themeColors?.border || 'rgba(255,255,255,0.05)' 
+                }]}
                 onPress={() => handleCountrySelect(item)}
               >
                 <Text style={styles.countryFlag}>{item.flag}</Text>
-                <Text style={styles.countryName}>{item.name}</Text>
-                <Text style={styles.countryDialCode}>{item.dialCode}</Text>
+                <Text style={[styles.countryName, { 
+                  color: themeColors?.text || '#fff' 
+                }]}>{item.name}</Text>
+                <Text style={[styles.countryDialCode, { 
+                  color: themeColors?.textSecondary || '#888' 
+                }]}>{item.dialCode}</Text>
               </TouchableOpacity>
             )}
             style={styles.countryList}
@@ -148,18 +178,18 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 50,
+    // Remove background color - let parent handle it
+    paddingHorizontal: 0,
+    height: '100%', // Use full height of parent
   },
   countryCodeButton: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingRight: 12,
     borderRightWidth: 1,
-    borderRightColor: 'rgba(255,255,255,0.1)',
     marginRight: 12,
+    height: '100%',
+    justifyContent: 'center',
   },
   flagText: {
     fontSize: 20,
@@ -189,12 +219,21 @@ const styles = StyleSheet.create({
     maxHeight: '70%',
     marginTop: 'auto',
   },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   modalTitle: {
     color: '#fff',
     fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 16,
+    flex: 1,
     textAlign: 'center',
+  },
+  modalCloseButton: {
+    padding: 4,
   },
   countryList: {
     width: '100%',

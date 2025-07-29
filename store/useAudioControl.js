@@ -50,7 +50,7 @@ const useAudioControl = create(
     return true; // For now, assume it's initialized if no error was thrown
   },
 
-  setAndPlayPlaylist: async (tracks, startIndex = 0) => {
+  setAndPlayPlaylist: async (tracks, startIndex = 0, showMiniPlayer = true) => {
     // Prevent multiple simultaneous plays
     const { isTransitioning, isLoading } = get();
     if (isTransitioning || isLoading) {
@@ -97,7 +97,7 @@ const useAudioControl = create(
         currentIndex: validStartIndex,
         currentTrack: enrichedTrack,
         sound: null,
-        isMiniPlayerVisible: true,
+        isMiniPlayerVisible: showMiniPlayer,
       });
       
       console.log('🎵 Loading and playing track:', enrichedTrack.title);
@@ -569,6 +569,8 @@ const useAudioControl = create(
   },
 
   hideMiniPlayer: () => set({ isMiniPlayerVisible: false }),
+  
+  showMiniPlayer: () => set({ isMiniPlayerVisible: true }),
 
   // 🎨 Enrich track with metadata including artwork
   _enrichTrackMetadata: async (track) => {

@@ -34,7 +34,7 @@ const onboardingData = [
     subtitle: "Next Generation Media Player",
     description: "Experience your entertainment in a whole new way",
     icon: "play",
-    gradient: ["#FF00FF", "#00FFFF"],
+    gradient: ["#8B5CF6", "#A855F7", "#EC4899"], // Added pink for more vibrant gradient
     pattern: "diagonal",
   },
   {
@@ -43,7 +43,7 @@ const onboardingData = [
     description:
       "Your media, automatically categorized and beautifully presented",
     icon: "media",
-    gradient: ["#FF00FF", "#FF8C00"],
+    gradient: ["#8B5CF6", "#9333EA", "#7C3AED"], // Enhanced purple gradient
     pattern: "grid",
   },
   {
@@ -51,7 +51,7 @@ const onboardingData = [
     subtitle: "Play Everything",
     description: "Any format, any device, anytime - without limits",
     icon: "folder",
-    gradient: ["#00FFFF", "#FF00FF"],
+    gradient: ["#A855F7", "#8B5CF6", "#06B6D4"], // Added cyan for dynamic effect
     pattern: "circles",
   },
   {
@@ -59,7 +59,7 @@ const onboardingData = [
     subtitle: "Your Journey Starts Now",
     description: "Dive into a world of unlimited entertainment",
     icon: "complete",
-    gradient: ["#FF8C00", "#FF00FF"],
+    gradient: ["#9333EA", "#8B5CF6", "#10B981"], // Added green for completion feel
     pattern: "waves",
   },
 ];
@@ -206,7 +206,7 @@ const OnboardingScreen = () => {
     const router = useRouter();
     const scrollX = useRef(new Animated.Value(0)).current;
     const slideRef = useRef(null);
-    const { isDark } = useThemeStore();
+    const { themeColors } = useThemeStore();
     const [isChecking, setIsChecking] = useState(true);
 
     useEffect(() => {
@@ -285,9 +285,9 @@ const OnboardingScreen = () => {
 
     if (isChecking) {
         return (
-            <View style={[styles.container, {justifyContent: 'center', alignItems: 'center'}]}>
+            <View style={[styles.container, {justifyContent: 'center', alignItems: 'center', backgroundColor: themeColors.background}]}>
               <StatusBar hidden />
-              <ActivityIndicator size="large" color="#FFF" />
+              <ActivityIndicator size="large" color={themeColors.primary} />
             </View>
         )
     }
@@ -295,11 +295,18 @@ const OnboardingScreen = () => {
     return (
         <>
             <StatusBar
-              barStyle={isDark ? "light-content" : "dark-content"}
+              barStyle="light-content"
               backgroundColor="transparent"
               translucent
             />
-            <View style={styles.container}>
+            <View style={[styles.container, {backgroundColor: themeColors.background}]}>
+                {/* Subtle gradient overlay for the entire background */}
+                <LinearGradient
+                    colors={['rgba(139, 92, 246, 0.05)', 'transparent', 'rgba(139, 92, 246, 0.08)']}
+                    style={styles.backgroundOverlay}
+                    start={{x: 0, y: 0}}
+                    end={{x: 1, y: 1}}
+                />
                 <Animated.FlatList
                     ref={slideRef}
                     data={onboardingData}
@@ -309,9 +316,9 @@ const OnboardingScreen = () => {
                             <View style={styles.contentContainer}>
                                 <AnimatedIcon icon={item.icon} size={80} isActive={index === currentIndex} />
                                 <View style={styles.textContainer}>
-                                    <Text style={[styles.subtitle, { color: item.gradient[0] }]}>{item.subtitle}</Text>
-                                    <Text style={styles.title} weight="Bold">{item.title}</Text>
-                                    <Text style={styles.description}>{item.description}</Text>
+                                    <Text style={[styles.subtitle, { color: themeColors.primary }]}>{item.subtitle}</Text>
+                                    <Text style={[styles.title, { color: themeColors.text }]} weight="Bold">{item.title}</Text>
+                                    <Text style={[styles.description, { color: themeColors.textSecondary }]}>{item.description}</Text>
                                 </View>
                             </View>
                         </View>
@@ -334,19 +341,26 @@ const OnboardingScreen = () => {
                     <Paginator data={onboardingData} scrollX={scrollX} />
                     <View style={styles.buttonContainer}>
                         <Pressable style={[styles.button, styles.skipButton]} onPress={skip}>
-                            <Text style={styles.buttonText} weight="Bold">Skip</Text>
+                            <LinearGradient
+                                colors={['rgba(139, 92, 246, 0.1)', 'rgba(139, 92, 246, 0.05)']}
+                                style={styles.skipButtonGradient}
+                                start={{x: 0, y: 0}}
+                                end={{x: 1, y: 1}}
+                            >
+                                <Text style={[styles.buttonText, {color: themeColors.text}]} weight="Bold">Skip</Text>
+                            </LinearGradient>
                         </Pressable>
                         <TouchableOpacity
                             onPress={handleMainButtonPress}
                             activeOpacity={0.8}
                         >
                             <LinearGradient
-                                colors={onboardingData[currentIndex].gradient}
+                                colors={['#8B5CF6', '#A855F7', '#EC4899']} // More vibrant gradient
                                 start={{x: 0, y: 0}}
                                 end={{x: 1, y: 1}}
-                                style={styles.button}
+                                style={[styles.button, styles.gradientButton]}
                             >
-                                <Text style={styles.buttonText} weight="Bold">{currentIndex === onboardingData.length - 1 ? "Get Started" : "Next"}</Text>
+                                <Text style={[styles.buttonText, {color: '#FFFFFF'}]} weight="Bold">{currentIndex === onboardingData.length - 1 ? "Get Started" : "Next"}</Text>
                             </LinearGradient>
                         </TouchableOpacity>
                     </View>
@@ -359,7 +373,7 @@ const OnboardingScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#121212",
+    // backgroundColor will be set dynamically using themeColors.background
   },
   slide: {
     width,
@@ -375,7 +389,7 @@ const styles = StyleSheet.create({
   },
   pattern: {
     ...StyleSheet.absoluteFillObject,
-    opacity: 0.15,
+    opacity: 0.4, // Increased from 0.15 to make gradients more visible
   },
   patternGradient: {
     width: width * 2,
@@ -398,10 +412,17 @@ const styles = StyleSheet.create({
     width: 160,
     height: 160,
     borderRadius: 80,
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    backgroundColor: "rgba(139, 92, 246, 0.3)", // Increased opacity
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 40,
+    borderWidth: 3, // Thicker border
+    borderColor: "rgba(139, 92, 246, 0.6)", // More visible border
+    shadowColor: "#8B5CF6",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8, // Android shadow
   },
   textContainer: {
     alignItems: "center",
@@ -416,13 +437,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: "bold",
-    color: "#FFFFFF",
+    // color will be set dynamically using themeColors.text
     textAlign: "center",
     marginBottom: 16,
   },
   description: {
     fontSize: 16,
-    color: "#CCCCCC",
+    // color will be set dynamically using themeColors.textSecondary
     textAlign: "center",
     lineHeight: 24,
     maxWidth: "80%",
@@ -448,13 +469,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   skipButton: {
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    overflow: 'hidden', // For gradient border radius
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.2)',
+  },
+  skipButtonGradient: {
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   buttonText: {
-    color: "#FFFFFF",
+    // color will be set dynamically
     fontSize: 16,
     fontWeight: "600",
     textAlign: 'center'
+  },
+  gradientButton: {
+    shadowColor: "#8B5CF6",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 6, // Android shadow
+  },
+  backgroundOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1,
   },
 });
 

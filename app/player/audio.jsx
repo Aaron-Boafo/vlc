@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useEffect } from "react";
+import React, { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -14,7 +14,8 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   PanResponder,
-  Linking
+  Linking,
+  BackHandler
 } from "react-native";
 import {
   ChevronDown,
@@ -37,7 +38,7 @@ import {
 } from "lucide-react-native";
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
 import useThemeStore from "../../store/theme";
 import useAudioControl from "../../store/useAudioControl";
 import useAudioStore from "../../store/AudioHeadStore";
@@ -80,6 +81,7 @@ const PlayerScreen = () => {
     setPlaybackSpeed: useAudioControlSetPlaybackSpeed,
     isTransitioning: useAudioControlIsTransitioning,
     isLoading: useAudioControlIsLoading,
+    showMiniPlayer: useAudioControlShowMiniPlayer,
   } = useAudioControl();
   const { playbackRate } = usePlaybackStore();
   const { playlists, addTrackToPlaylist } = usePlaylistStore();
@@ -136,9 +138,31 @@ const PlayerScreen = () => {
     // Prevent multiple rapid clicks
     if (useAudioControlIsTransitioning) return;
     
+    // Show mini player when leaving main player (if there's a current track)
+    if (useAudioControlCurrentTrack) {
+      useAudioControlShowMiniPlayer();
+    }
+    
     // Always use replace to ensure we go to the correct tab
     router.replace('/(tabs)/(audio)');
   };
+
+  // Handle Android hardware back button
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        // Call the existing handleClose function instead of letting the app close
+        handleClose();
+        return true; // Prevent default behavior (closing the app)
+      };
+
+      // Add the back handler when the screen is focused
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      // Remove the back handler when the screen loses focus
+      return () => backHandler.remove();
+    }, [handleClose]) // Include handleClose in dependencies
+  );
 
   const handleRepeatPress = () => {
     const modes = ['off', 'single', 'playlist'];

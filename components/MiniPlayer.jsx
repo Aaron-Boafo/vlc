@@ -6,8 +6,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import Svg, { Circle, G } from 'react-native-svg';
 import useThemeStore from '../store/theme';
 import useAudioControl from '../store/useAudioControl';
-import { useRouter, useSegments } from 'expo-router';
-import useAudioStore from '../store/AudioHeadStore';
+import { useRouter, useSegments, usePathname } from 'expo-router';
 
 const MiniPlayer = memo(() => {
   const { themeColors } = useThemeStore();
@@ -25,6 +24,7 @@ const MiniPlayer = memo(() => {
   } = useAudioControl();
   const router = useRouter();
   const segments = useSegments();
+  const pathname = usePathname();
 
   // 🎨 Stable artwork URI to prevent blinking
   const artworkUri = useMemo(() => {
@@ -68,11 +68,7 @@ const MiniPlayer = memo(() => {
     console.log('🎵 Mini player main area pressed - opening full player');
     setIsNavigating(true);
     
-    const state = useAudioStore.getState();
-    router.push({
-      pathname: '/player/audio',
-      params: { activeTab: state.activeTab }
-    });
+    router.push('/player/audio');
     
     // Reset navigation state after a delay
     setTimeout(() => setIsNavigating(false), 1000);
@@ -122,8 +118,11 @@ const MiniPlayer = memo(() => {
     };
   });
 
-  // Check if the current screen is the player screen
-  const isPlayerScreen = segments.includes('player');
+  // Check if we're specifically on the audio player screen
+  const isAudioPlayerScreen = pathname === '/player/audio';
+  
+  // Check if we're on the video player screen (to hide audio mini player)
+  const isVideoPlayerScreen = pathname === '/player/video';
 
   // 🚀 Optimized progress circle calculations - memoized for performance
   const circleProps = useMemo(() => {
@@ -146,8 +145,8 @@ const MiniPlayer = memo(() => {
 
 
 
-  // Don't render the mini player if there's no track, if it's hidden, or if we are on the player screen
-  if (!currentTrack || !isMiniPlayerVisible || isPlayerScreen) {
+  // Don't render the mini player if there's no track, if it's hidden, on audio player screen, or on video player screen
+  if (!currentTrack || !isMiniPlayerVisible || isAudioPlayerScreen || isVideoPlayerScreen) {
     return null;
   }
 

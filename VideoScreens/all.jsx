@@ -62,6 +62,29 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
     }
   }, [loadVideoFiles]);
 
+  // Safety check to ensure refreshing doesn't get stuck
+  useEffect(() => {
+    if (refreshing) {
+      console.log('🔄 Refresh started, monitoring...');
+      const safetyTimeout = setTimeout(() => {
+        console.log('⚠️ Safety timeout triggered - forcing refresh to stop');
+        setRefreshing(false);
+      }, 45000); // 45 second safety timeout
+      
+      return () => {
+        clearTimeout(safetyTimeout);
+      };
+    }
+  }, [refreshing]);
+
+  // Monitor store loading state and sync with local refreshing state
+  useEffect(() => {
+    if (!isLoading && refreshing) {
+      console.log('📊 Store finished loading, stopping refresh indicator');
+      setRefreshing(false);
+    }
+  }, [isLoading, refreshing]);
+
   // 🧠 Register thumbnail cache with memory manager (only once on mount)
   useEffect(() => {
     MemoryManager.registerCache('videoThumbnails', thumbnailCache.current, maxThumbnailCache.current);
@@ -97,18 +120,29 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
     }
   }, [videoFiles.length]);
 
-  const onRefresh = async () => {
+  const onRefresh = useCallback(async () => {
+    console.log('🔄 Starting video refresh...');
     setRefreshing(true);
     setLoadingError(null);
+    
+    // Add timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      console.log('⚠️ Video refresh timeout - forcing refresh to stop');
+      setRefreshing(false);
+    }, 30000); // 30 second timeout
+    
     try {
       await forceReloadVideos();
+      console.log('✅ Video refresh completed successfully');
     } catch (error) {
-      console.error('Error refreshing videos:', error);
-      setLoadingError(error.message);
+      console.error('❌ Error refreshing videos:', error);
+      setLoadingError(error.message || 'Failed to refresh videos');
     } finally {
+      clearTimeout(timeoutId);
+      console.log('🔄 Setting refreshing to false');
       setRefreshing(false);
     }
-  };
+  }, [forceReloadVideos]);
 
   const handleRetryLoad = async () => {
     setLoadingError(null);

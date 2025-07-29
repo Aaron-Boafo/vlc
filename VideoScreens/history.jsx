@@ -29,14 +29,26 @@ const VideoHistoryScreen = ({ showSearch, setShowSearch, searchQuery, setSearchQ
   };
 
   const formatTimeAgo = (timestamp) => {
-    const now = new Date();
-    const videoTime = new Date(timestamp);
-    const diffInHours = Math.floor((now - videoTime) / (1000 * 60 * 60));
+    if (!timestamp) return 'Unknown';
     
-    if (diffInHours < 1) return 'Just now';
+    const now = Date.now();
+    const videoTime = typeof timestamp === 'number' ? timestamp : new Date(timestamp).getTime();
+    const diffInMs = now - videoTime;
+    
+    // Handle invalid timestamps
+    if (diffInMs < 0) return 'Just now';
+    
+    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+    const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
+    const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
     if (diffInHours < 24) return `${diffInHours}h ago`;
-    if (diffInHours < 168) return `${Math.floor(diffInHours / 24)}d ago`;
-    return `${Math.floor(diffInHours / 168)}w ago`;
+    if (diffInDays < 7) return `${diffInDays}d ago`;
+    if (diffInDays < 30) return `${Math.floor(diffInDays / 7)}w ago`;
+    if (diffInDays < 365) return `${Math.floor(diffInDays / 30)}mo ago`;
+    return `${Math.floor(diffInDays / 365)}y ago`;
   };
 
   const handleVideoPress = useCallback((video) => {
@@ -82,7 +94,7 @@ const VideoHistoryScreen = ({ showSearch, setShowSearch, searchQuery, setSearchQ
           {item.width}x{item.height} • {formatDuration(item.duration)}
         </Text>
         <Text style={[styles.videoTime, { color: themeColors.textSecondary }]}>
-          {formatTimeAgo(item.creationTime)}
+          {formatTimeAgo(item.playedAt || item.creationTime)}
         </Text>
       </View>
       

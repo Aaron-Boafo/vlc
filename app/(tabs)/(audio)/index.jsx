@@ -1,5 +1,5 @@
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Platform, ActivityIndicator, ScrollView, Image } from "react-native";
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import useOptimizedAudioStore from "../../../store/optimizedAudioStore";
 import useThemeStore from "../../../store/theme";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -33,7 +33,7 @@ const AudioTabScreen = React.memo(() => {
     sortOrder, 
     sortAudioFiles,
     activeTab,
-    toggleTabs 
+    toggleTabs
   } = useOptimizedAudioStore();
   const { themeColors } = useThemeStore();
   const audioControl = useAudioControl();
@@ -51,15 +51,18 @@ const AudioTabScreen = React.memo(() => {
   
   // Performance optimization - track if screen is focused
   const [isFocused, setIsFocused] = useState(true);
+  
+  // Track if we've ever successfully loaded to prevent reloading when coming back from player
+  const hasLoadedRef = useRef(false);
 
-  // Run migration on first load
+  // Run migration on first load (simplified like video)
   useEffect(() => {
     const runMigration = async () => {
       try {
         await StoreMigration.migrateAudioStore();
         setMigrationComplete(true);
       } catch (error) {
-        console.error('Migration failed:', error);
+        console.error('Audio migration failed:', error);
         setMigrationComplete(true); // Continue anyway
       }
     };
@@ -77,33 +80,38 @@ const AudioTabScreen = React.memo(() => {
     { label: 'Date Added (Oldest)', key: 'modificationTime', direction: 'asc', icon: Icons.CalendarClock },
   ];
 
-  // Ultra-fast loading with focus optimization
+  // Optimized loading - prevent unnecessary reloads on tab switches (like video)
   useFocusEffect(
     useCallback(() => {
       setIsFocused(true);
       
       // Only load if migration is complete and we haven't loaded yet
-      if (migrationComplete && !hasInitiallyLoaded && audioFiles.length === 0) {
+      // Use ref to persist across navigation to prevent reloading when coming back from player
+      // Also check if we already have files in the store
+      if (migrationComplete && !hasInitiallyLoaded && !hasLoadedRef.current && audioFiles.length === 0) {
         console.log('🚀 Loading audio files with fast loader...');
         const startTime = Date.now();
         setHasInitiallyLoaded(true);
+        hasLoadedRef.current = true; // Mark as loaded permanently
         
-        // Use NavigationOptimizer for faster loading
-        NavigationOptimizer.preWarmScreen('audio').then(() => {
-          loadAudioFiles().then(() => {
-            PerformanceAnalytics.trackLoadTime('AudioFiles', startTime, Date.now(), audioFiles.length);
-            // Show metadata loading indicator when files are loaded
-            if (audioFiles.length > 0) {
-              setShowMetadataLoading(true);
-            }
-          });
+        loadAudioFiles().then(() => {
+          PerformanceAnalytics.trackLoadTime('AudioFiles', startTime, Date.now(), audioFiles.length);
+          // Show metadata loading indicator when files are loaded
+          if (audioFiles.length > 0) {
+            setShowMetadataLoading(true);
+          }
         });
+      } else if (audioFiles.length > 0 && !hasLoadedRef.current) {
+        // If we already have files (from cache/persistence), mark as loaded
+        console.log('⚡ Audio files already available, marking as loaded');
+        setHasInitiallyLoaded(true);
+        hasLoadedRef.current = true;
       }
       
       return () => {
         setIsFocused(false);
       };
-    }, [migrationComplete, hasInitiallyLoaded, audioFiles.length, loadAudioFiles])
+    }, [migrationComplete, hasInitiallyLoaded, loadAudioFiles, audioFiles.length])
   );
 
   // Show metadata loading when files are initially loaded
@@ -139,7 +147,7 @@ const AudioTabScreen = React.memo(() => {
     console.log('🎵 Starting playlist with', allTracks.length, 'tracks at index', startIndex);
     
     try {
-      await audioControl.setAndPlayPlaylist(allTracks, startIndex);
+      await audioControl.setAndPlayPlaylist(allTracks, startIndex, true); // Show mini player
       console.log('🎵 Playlist set and playback started');
       
       // Use replace for smoother navigation
@@ -304,6 +312,11 @@ const AudioTabScreen = React.memo(() => {
   }, [sharedProps, screenWidth, currentIndex, handleScrollEnd, handleLayout]);
 
   const renderContent = () => {
+    // If we have files, show them immediately (even if still loading in background)
+    if (audioFiles.length > 0) {
+      return renderScrollableContent();
+    }
+
     // Show progressive loading indicator only during initial load with no files
     if (isLoading && audioFiles.length === 0) {
       return (
@@ -316,14 +329,9 @@ const AudioTabScreen = React.memo(() => {
         />
       );
     }
-
-    // If we have files, show them (even if still loading in background)
-    if (audioFiles.length > 0) {
-      return renderScrollableContent();
-    }
   
-    // Show empty state only when not loading and no files
-    if (!isLoading && audioFiles.length === 0) {
+    // Show empty state only when not loading, migration complete, and no files
+    if (!isLoading && migrationComplete && audioFiles.length === 0) {
       return (
         <View style={styles.centered}>
           <Music size={64} color={themeColors.textSecondary} />
@@ -331,7 +339,7 @@ const AudioTabScreen = React.memo(() => {
           <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
             Make sure you have granted storage permissions and have music on your device.
           </Text>
-          <TouchableOpacity onPress={loadAudioFiles} style={[styles.retryButton, { backgroundColor: themeColors.primary }]}>
+          <TouchableOpacity onPress={() => loadAudioFiles(true)} style={[styles.retryButton, { backgroundColor: themeColors.primary }]}>
             <Text style={styles.retryButtonText}>Retry Scan</Text>
           </TouchableOpacity>
         </View>

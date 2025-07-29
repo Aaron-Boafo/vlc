@@ -80,11 +80,15 @@ class NavigationOptimizer {
       const { useOptimizedAudioStore } = await import('../store/optimizedAudioStore');
       const store = useOptimizedAudioStore.getState();
       
-      if (store.audioFiles.length === 0 && !store.isLoading) {
+      // Only load if we have no files AND no recent load time (prevent reloading after player)
+      if (store.audioFiles.length === 0 && !store.isLoading && !store.lastLoadTime) {
+        console.log('🔄 Navigation optimizer: Pre-warming audio screen...');
         // Trigger background loading
         setTimeout(() => {
           store.loadAudioFiles();
         }, 0);
+      } else if (store.audioFiles.length > 0) {
+        console.log('⚡ Navigation optimizer: Audio files already cached, skipping pre-warm');
       }
       
       return store.audioFiles;

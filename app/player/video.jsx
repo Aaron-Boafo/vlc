@@ -1,13 +1,14 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, TouchableOpacity, StyleSheet, SafeAreaView, Text, TouchableWithoutFeedback, Dimensions } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, SafeAreaView, Text, TouchableWithoutFeedback, Dimensions, BackHandler } from 'react-native';
 import { MaterialIcons, Entypo } from '@expo/vector-icons';
 import { ChevronDown } from 'lucide-react-native';
 import Slider from '@react-native-community/slider';
 import useOptimizedVideoStore from '../../store/optimizedVideoStore';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import BottomSheet from '../../components/BottomSheet';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import VideoPlayerFallback from '../../components/VideoPlayerFallback';
+import { useCallback } from 'react';
 // Removed reanimated imports to fix casting error
 
 // Try to import expo-video with fallback
@@ -243,6 +244,23 @@ const MinimalVideoPlayer = () => {
       setTimeout(() => setIsTransitioning(false), 150);
     }
   };
+
+  // Handle Android hardware back button
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        // Call the existing handleBack function instead of letting the app close
+        handleBack();
+        return true; // Prevent default behavior (closing the app)
+      };
+
+      // Add the back handler when the screen is focused
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      // Remove the back handler when the screen loses focus
+      return () => backHandler.remove();
+    }, [handleBack]) // Include handleBack in dependencies
+  );
 
   // Previous/Next logic
   const getCurrentList = () => (playlist && playlist.length > 0 ? playlist : videoFiles);

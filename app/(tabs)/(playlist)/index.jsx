@@ -1,10 +1,10 @@
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Modal, TextInput, Alert, Image, ActivityIndicator, ScrollView } from "react-native";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import useThemeStore from "../../../store/theme";
 import usePlaylistStore from '../../../store/playlistStore';
 import useAudioControl from '../../../store/useAudioControl';
-import * as MediaLibrary from "expo-media-library";
-import { getAudioMetadata } from "@missingcore/audio-metadata";
+import useOptimizedAudioStore from '../../../store/optimizedAudioStore';
+import useOptimizedVideoStore from '../../../store/optimizedVideoStore';
 import { Plus, Trash2, Music4, Play, Shuffle, MoreVertical, Edit3, Video as VideoIcon, FileAudio, ListMusic } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import AudioHeader from '../../../AudioComponents/title';
@@ -95,8 +95,7 @@ const PlaylistCard = React.memo(({ playlist, onPress, onOptions, onPlay, onShuff
   );
 });
 
-const TrackSelectItem = ({ item, meta, selected, onToggle, themeColors, fetchMetadataForTrack, playlistType }) => {
-  useEffect(() => { fetchMetadataForTrack(item); }, [item]);
+const TrackSelectItem = ({ item, selected, onToggle, themeColors, playlistType }) => {
   return (
     <TouchableOpacity
       style={[styles.trackSelectCard, {
@@ -106,17 +105,28 @@ const TrackSelectItem = ({ item, meta, selected, onToggle, themeColors, fetchMet
       }]}
       onPress={() => onToggle(item)}
     >
+      {/* Track artwork */}
+      <View style={styles.trackSelectArtwork}>
+        {item.artwork ? (
+          <Image source={{ uri: item.artwork }} style={styles.trackSelectArtworkImage} />
+        ) : (
+          <View style={[styles.trackSelectArtworkPlaceholder, { backgroundColor: themeColors.primary + '20' }]}>
+            {playlistType === 'audio' ? <Music4 size={16} color={themeColors.primary} /> : <VideoIcon size={16} color={themeColors.primary} />}
+          </View>
+        )}
+      </View>
+      
       <View style={styles.trackSelectInfo}>
         <Text style={[styles.trackSelectTitle, { color: themeColors.text }]} numberOfLines={1}>
-          {meta.title || item.filename.replace(/\.[^/.]+$/, "")}
+          {item.title || item.filename?.replace(/\.[^/.]+$/, "") || 'Unknown Track'}
         </Text>
         <Text style={[styles.trackSelectArtist, { color: themeColors.textSecondary }]} numberOfLines={1}>
-          {meta.artist || "Unknown Artist"}
+          {item.artist || "Unknown Artist"}
         </Text>
       </View>
       {selected && (
         <View style={[styles.checkmark, { backgroundColor: themeColors.primary }]}>
-          <Text style={{ color: themeColors.background, fontSize: 12 }}>✓</Text>
+          <Text style={{ color: themeColors.background, fontSize: 12, fontWeight: 'bold' }}>✓</Text>
         </View>
       )}
     </TouchableOpacity>
@@ -128,6 +138,10 @@ const PlaylistScreen = () => {
   const { playlists, createPlaylist, deletePlaylist, addTrackToPlaylist, removeTrackFromPlaylist, clearPlaylists } = usePlaylistStore();
   const audioControl = useAudioControl();
   const router = useRouter();
+  
+  // Get cached data from stores
+  const { audioFiles, loadAudioFiles, isLoading: audioLoading } = useOptimizedAudioStore();
+  const { videoFiles, loadVideoFiles, isLoading: videoLoading } = useOptimizedVideoStore();
 
   // State
   const [modalVisible, setModalVisible] = useState(false);
@@ -135,13 +149,6 @@ const PlaylistScreen = () => {
   const [createModal, setCreateModal] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [playlistType, setPlaylistType] = useState('audio');
-  const [tracks, setTracks] = useState([]); // Only basic info
-  const [trackMetadata, setTrackMetadata] = useState({}); // id -> metadata
-  const [loadingTracks, setLoadingTracks] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMoreTracks, setHasMoreTracks] = useState(true);
-  const tracksOffset = useRef(0);
-  const TRACKS_PAGE_SIZE = 50;
   const [selectedTracks, setSelectedTracks] = useState([]);
   const [optionsVisible, setOptionsVisible] = useState(false);
   const [optionsPlaylist, setOptionsPlaylist] = useState(null);
@@ -151,81 +158,46 @@ const PlaylistScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showMore, setShowMore] = useState(false);
   const [sortOrder, setSortOrder] = useState('az'); // 'az', 'za', 'tracks'
+  const [trackSearchQuery, setTrackSearchQuery] = useState(''); // Search within tracks modal
 
-  // Load all tracks from device for create modal
-  const fetchTracks = async (reset = false) => {
-    if (loadingTracks || loadingMore) return;
-    if (!reset && !hasMoreTracks) return;
-    if (reset) {
-      setTracks([]);
-      setTrackMetadata({});
-      tracksOffset.current = 0;
-      setHasMoreTracks(true);
-    }
-    const setLoading = reset ? setLoadingTracks : setLoadingMore;
-    setLoading(true);
-    try {
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status !== "granted") {
-        setTracks([]);
-        setHasMoreTracks(false);
-        setLoading(false);
-        return;
-      }
-      const media = await MediaLibrary.getAssetsAsync({
-        mediaType: playlistType === 'audio' ? MediaLibrary.MediaType.audio : MediaLibrary.MediaType.video,
-        first: TRACKS_PAGE_SIZE,
-        sortBy: [MediaLibrary.SortBy.creationTime],
-        after: tracksOffset.current ? tracks[tracks.length - 1]?.id : undefined,
-      });
-      if (reset) {
-        setTracks(media.assets);
-      } else {
-        setTracks(prev => [...prev, ...media.assets]);
-      }
-      tracksOffset.current += media.assets.length;
-      setHasMoreTracks(media.hasNextPage);
-    } catch (e) {
-      setTracks([]);
-      setHasMoreTracks(false);
-    }
-    setLoading(false);
-    setLoadingMore(false);
-  };
+  // Get tracks from cached stores instead of reloading
+  const availableTracks = useMemo(() => {
+    return playlistType === 'audio' ? audioFiles : videoFiles;
+  }, [playlistType, audioFiles, videoFiles]);
 
-  // Fetch initial tracks or when playlistType changes
+  // Filter tracks based on search query
+  const filteredTracks = useMemo(() => {
+    if (!trackSearchQuery.trim()) return availableTracks;
+    
+    const query = trackSearchQuery.toLowerCase();
+    return availableTracks.filter(track => {
+      const title = track.title || track.filename || '';
+      const artist = track.artist || '';
+      const album = track.album || '';
+      
+      return title.toLowerCase().includes(query) ||
+             artist.toLowerCase().includes(query) ||
+             album.toLowerCase().includes(query);
+    });
+  }, [availableTracks, trackSearchQuery]);
+
+  // Load tracks from stores when modal opens or type changes
   useEffect(() => {
-    if (createModal) fetchTracks(true);
-  }, [createModal, playlistType]);
-
-  // Lazy metadata fetching for visible tracks
-  const fetchMetadataForTrack = async (track) => {
-    if (trackMetadata[track.id]) return;
-    try {
-      const data = await getAudioMetadata(track.uri, ["album", "artist", "name", "year", "artwork"]);
-      let artworkUri = null;
-      const metadata = data.metadata || {};
-      if (metadata.artwork) {
-        if (metadata.artwork.startsWith('data:image')) {
-          artworkUri = metadata.artwork;
-        } else if (/^[A-Za-z0-9+/=]+$/.test(metadata.artwork)) {
-          artworkUri = `data:image/png;base64,${metadata.artwork}`;
-        } else {
-          artworkUri = metadata.artwork;
-        }
+    if (createModal) {
+      if (playlistType === 'audio' && audioFiles.length === 0) {
+        console.log('🎵 Loading audio files for playlist creation...');
+        loadAudioFiles();
+      } else if (playlistType === 'video' && videoFiles.length === 0) {
+        console.log('🎥 Loading video files for playlist creation...');
+        loadVideoFiles();
       }
-      setTrackMetadata(prev => ({
-        ...prev,
-        [track.id]: {
-          album: metadata.album || "Unknown Album",
-          artist: metadata.artist || "Unknown Artist",
-          title: metadata.name || track.filename.replace(/\.[^/.]+$/, ""),
-          year: metadata.year || null,
-          artwork: artworkUri,
-        }
-      }));
-    } catch { }
-  };
+    }
+  }, [createModal, playlistType, audioFiles.length, videoFiles.length, loadAudioFiles, loadVideoFiles]);
+
+  // Check if we're currently loading
+  const isLoadingTracks = useMemo(() => {
+    return playlistType === 'audio' ? audioLoading : videoLoading;
+  }, [playlistType, audioLoading, videoLoading]);
 
   // Handlers
   const openPlaylist = useCallback((playlist) => {
@@ -256,7 +228,7 @@ const PlaylistScreen = () => {
   }, [removeTrackFromPlaylist, selectedPlaylist]);
 
   const handlePlayTrack = useCallback((track) => {
-    audioControl.setAndPlayPlaylist([track]);
+    audioControl.setAndPlayPlaylist([track], 0, true); // Show mini player for individual tracks
   }, [audioControl]);
 
   const toggleTrack = useCallback((track) => {
@@ -271,11 +243,23 @@ const PlaylistScreen = () => {
     if (!newPlaylistName.trim() || selectedTracks.length === 0) return;
     const id = createPlaylist(newPlaylistName.trim(), playlistType);
     selectedTracks.forEach(track => addTrackToPlaylist(id, track));
+    
+    // Reset modal state
     setNewPlaylistName("");
     setSelectedTracks([]);
+    setTrackSearchQuery('');
     setPlaylistType('audio');
     setCreateModal(false);
   }, [newPlaylistName, selectedTracks, createPlaylist, addTrackToPlaylist, playlistType]);
+
+  const handleCloseCreateModal = useCallback(() => {
+    // Reset all modal state when closing
+    setNewPlaylistName("");
+    setSelectedTracks([]);
+    setTrackSearchQuery('');
+    setPlaylistType('audio');
+    setCreateModal(false);
+  }, []);
 
   const handleOpenOptions = useCallback((playlist) => {
     setOptionsPlaylist(playlist);
@@ -289,7 +273,7 @@ const PlaylistScreen = () => {
 
   const handlePlayPlaylist = useCallback((playlist) => {
     if (playlist.tracks.length > 0) {
-      audioControl.setAndPlayPlaylist(playlist.tracks);
+      audioControl.setAndPlayPlaylist(playlist.tracks, 0, false); // Don't show mini player
       router.push(playlist.type === 'audio' ? '/player/audio' : '/player/video');
     } else {
       Alert.alert('No tracks', 'This playlist has no tracks to play.');
@@ -299,7 +283,7 @@ const PlaylistScreen = () => {
   const handleShufflePlaylist = useCallback((playlist) => {
     if (playlist.tracks.length > 0) {
       const shuffled = [...playlist.tracks].sort(() => Math.random() - 0.5);
-      audioControl.setAndPlayPlaylist(shuffled);
+      audioControl.setAndPlayPlaylist(shuffled, 0, false); // Don't show mini player
       router.push(playlist.type === 'audio' ? '/player/audio' : '/player/video');
     } else {
       Alert.alert('No tracks', 'This playlist has no tracks to play.');
@@ -467,12 +451,12 @@ const PlaylistScreen = () => {
         visible={createModal}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setCreateModal(false)}
+        onRequestClose={handleCloseCreateModal}
       >
         <View style={[styles.modalContainer, { backgroundColor: themeColors.background }]}>
           <View style={styles.modalHeader}>
             <Text style={[styles.modalTitle, { color: themeColors.text }]}>Create Playlist</Text>
-            <TouchableOpacity onPress={() => setCreateModal(false)}>
+            <TouchableOpacity onPress={handleCloseCreateModal}>
               <Text style={[styles.closeButton, { color: themeColors.primary }]}>Cancel</Text>
             </TouchableOpacity>
           </View>
@@ -493,33 +477,67 @@ const PlaylistScreen = () => {
             autoFocus
           />
 
-          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>Select {playlistType === 'audio' ? 'Audio' : 'Video'} Tracks</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
+              Select {playlistType === 'audio' ? 'Audio' : 'Video'} Tracks ({filteredTracks.length})
+            </Text>
+            
+            {/* Search input for tracks */}
+            <View style={[styles.trackSearchContainer, { 
+              backgroundColor: themeColors.sectionBackground,
+              borderColor: themeColors.border || 'rgba(255,255,255,0.1)'
+            }]}>
+              <TextInput
+                style={[styles.trackSearchInput, { color: themeColors.text }]}
+                placeholder={`Search ${playlistType} tracks...`}
+                placeholderTextColor={themeColors.textSecondary}
+                value={trackSearchQuery}
+                onChangeText={setTrackSearchQuery}
+              />
+            </View>
+          </View>
 
-          {loadingTracks ? (
+          {isLoadingTracks ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={themeColors.primary} />
-              <Text style={[styles.loadingText, { color: themeColors.textSecondary }]}>Loading tracks...</Text>
+              <Text style={[styles.loadingText, { color: themeColors.textSecondary }]}>
+                Loading {playlistType} tracks...
+              </Text>
+            </View>
+          ) : filteredTracks.length === 0 ? (
+            <View style={styles.loadingContainer}>
+              <Text style={[styles.loadingText, { color: themeColors.textSecondary }]}>
+                {trackSearchQuery.trim() 
+                  ? `No ${playlistType} tracks found matching "${trackSearchQuery}"`
+                  : `No ${playlistType} tracks available`
+                }
+              </Text>
             </View>
           ) : (
             <FlatList
-              data={tracks}
+              data={filteredTracks}
               keyExtractor={item => item.id}
               renderItem={({ item }) => (
                 <TrackSelectItem
                   item={item}
-                  meta={trackMetadata[item.id] || {}}
                   selected={selectedTracks.some(t => t.id === item.id)}
                   onToggle={toggleTrack}
                   themeColors={themeColors}
-                  fetchMetadataForTrack={fetchMetadataForTrack}
                   playlistType={playlistType}
                 />
               )}
               style={{ flex: 1 }}
-              contentContainerStyle={{ padding: 16 }}
-              onEndReached={() => fetchTracks(false)}
-              onEndReachedThreshold={0.5}
-              ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color={themeColors.primary} /> : null}
+              contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
+              initialNumToRender={20}
+              windowSize={10}
+              removeClippedSubviews={true}
+              maxToRenderPerBatch={10}
+              updateCellsBatchingPeriod={50}
+              getItemLayout={(data, index) => ({
+                length: 70, // Approximate item height
+                offset: 70 * index,
+                index,
+              })}
             />
           )}
 
@@ -794,11 +812,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
   },
+  sectionHeader: {
+    paddingHorizontal: 20,
+    marginBottom: 12,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    marginHorizontal: 20,
     marginBottom: 12,
+  },
+  trackSearchContainer: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    height: 44,
+    justifyContent: 'center',
+  },
+  trackSearchInput: {
+    fontSize: 16,
+    height: '100%',
   },
   loadingContainer: {
     flex: 1,
@@ -812,10 +844,30 @@ const styles = StyleSheet.create({
   trackSelectCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    marginHorizontal: 20,
+    padding: 12,
     marginBottom: 8,
     borderRadius: 12,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  trackSelectArtwork: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginRight: 12,
+  },
+  trackSelectArtworkImage: {
+    width: '100%',
+    height: '100%',
+  },
+  trackSelectArtworkPlaceholder: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   trackSelectInfo: {
     flex: 1,
@@ -830,11 +882,16 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   checkmark: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 12,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
   },
   createPlaylistButton: {
     margin: 20,

@@ -64,7 +64,7 @@ const PlaylistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch
               "artwork",
             ]);
             metadata = data.metadata || {};
-          } catch (error) {}
+          } catch (error) { }
           let artworkUri = null;
           if (metadata.artwork) {
             if (metadata.artwork.startsWith('data:image')) {
@@ -132,7 +132,7 @@ const PlaylistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch
 
   // Play a track
   const handlePlayTrack = (track) => {
-    audioControl.setAndPlayPlaylist([track]);
+    audioControl.setAndPlayPlaylist([track], 0, true); // Show mini player for individual tracks
   };
 
   // Multi-select logic
@@ -166,7 +166,7 @@ const PlaylistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch
 
   const handlePlayPlaylist = (playlist) => {
     if (playlist.tracks.length > 0) {
-      audioControl.setAndPlayPlaylist(playlist.tracks);
+      audioControl.setAndPlayPlaylist(playlist.tracks, 0, false); // Don't show mini player
       router.push('/player/audio');
     } else {
       Alert.alert('No tracks', 'This playlist has no tracks to play.');
@@ -176,7 +176,7 @@ const PlaylistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch
   const handleShufflePlaylist = (playlist) => {
     if (playlist.tracks.length > 0) {
       const shuffled = [...playlist.tracks].sort(() => Math.random() - 0.5);
-      audioControl.setAndPlayPlaylist(shuffled);
+      audioControl.setAndPlayPlaylist(shuffled, 0, false); // Don't show mini player
       router.push('/player/audio');
     } else {
       Alert.alert('No tracks', 'This playlist has no tracks to play.');
@@ -370,7 +370,7 @@ const PlaylistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch
           }}
         />
       )}
-      
+
       {/* Clear All Button - only show when there are playlists */}
       {playlists.length > 0 && !searchQuery && (
         <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
@@ -393,7 +393,7 @@ const PlaylistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch
           </TouchableOpacity>
         </View>
       )}
-      
+
       <FlatList
         data={filteredPlaylists}
         renderItem={renderPlaylist}
@@ -609,14 +609,14 @@ const PlaylistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch
               style={styles.input(themeColors)}
             />
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 }}>
-              <TouchableOpacity 
-                style={[styles.modalButton, { backgroundColor: themeColors.card }]} 
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: themeColors.card }]}
                 onPress={() => setRenameModal(false)}
               >
                 <Text style={{ color: themeColors.text }}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.modalButton, { backgroundColor: themeColors.primary }]} 
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: themeColors.primary }]}
                 onPress={handleRenamePlaylist}
               >
                 <Text style={{ color: 'white' }}>Rename</Text>
