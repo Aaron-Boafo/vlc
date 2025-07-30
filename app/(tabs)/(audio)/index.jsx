@@ -76,10 +76,46 @@ export default function UnifiedAudioApp() {
     const [showFullPlayer, setShowFullPlayer] = useState(false);
     const [isLoadingTrack, setIsLoadingTrack] = useState(false);
 
-    // UI state
-    const [showSearch, setShowSearch] = useState(false);
-    const [searchQuery, setSearchQuery] = useState('');
+    // UI state - separate search state for each tab
+    const [searchStates, setSearchStates] = useState({
+        all: { showSearch: false, searchQuery: '' },
+        playlist: { showSearch: false, searchQuery: '' },
+        album: { showSearch: false, searchQuery: '' },
+        artist: { showSearch: false, searchQuery: '' },
+        favourite: { showSearch: false, searchQuery: '' },
+    });
     const [heightView, setHeightView] = useState(0);
+
+    // Get current tab's search state
+    const currentSearchState = searchStates[activeTab] || { showSearch: false, searchQuery: '' };
+    const showSearch = currentSearchState.showSearch;
+    const searchQuery = currentSearchState.searchQuery;
+
+    // Functions to update search state for current tab
+    const setShowSearch = useCallback((show) => {
+        isSearchingRef.current = true;
+        setSearchStates(prev => ({
+            ...prev,
+            [activeTab]: {
+                ...prev[activeTab],
+                showSearch: show
+            }
+        }));
+        // Reset the flag after a short delay
+        setTimeout(() => {
+            isSearchingRef.current = false;
+        }, 100);
+    }, [activeTab]);
+
+    const setSearchQuery = useCallback((query) => {
+        setSearchStates(prev => ({
+            ...prev,
+            [activeTab]: {
+                ...prev[activeTab],
+                searchQuery: query
+            }
+        }));
+    }, [activeTab]);
 
     // Animations
     const playComponentAnim = useRef(new Animated.Value(1)).current;
@@ -90,6 +126,7 @@ export default function UnifiedAudioApp() {
     const scrollViewRef = useRef(null);
     const [screenWidth, setScreenWidth] = useState(0);
     const [currentIndex, setCurrentIndex] = useState(0);
+    const isSearchingRef = useRef(false);
 
     // ==================== AUDIO LOADING ====================
     const loadAllAudioFiles = async () => {
@@ -496,7 +533,8 @@ export default function UnifiedAudioApp() {
 
     // ==================== FILTERED DATA ====================
     const filteredAudioFiles = useMemo(() => {
-        if (!searchQuery.trim()) return audioFiles;
+        // Only filter for 'all' tab, other tabs handle their own filtering
+        if (activeTab !== 'all' || !searchQuery.trim()) return audioFiles;
 
         const query = searchQuery.toLowerCase();
         return audioFiles.filter(file =>
@@ -504,7 +542,7 @@ export default function UnifiedAudioApp() {
             file.artist?.toLowerCase().includes(query) ||
             file.album?.toLowerCase().includes(query)
         );
-    }, [audioFiles, searchQuery]);
+    }, [audioFiles, searchQuery, activeTab]);
 
     // ==================== SWIPE FUNCTIONALITY ====================
     // Tab configuration (like video tab)
@@ -516,21 +554,40 @@ export default function UnifiedAudioApp() {
         { name: "favourite", label: "Favourite" },
     ];
 
-    // Shared props for all screens
+    // Shared props for all screens - tab-specific search state
     const sharedSearchProps = useMemo(() => ({
-        showSearch,
-        setShowSearch,
-        searchQuery,
-        setSearchQuery,
-    }), [showSearch, setShowSearch, searchQuery, setSearchQuery]);
+        showSearch: searchStates[activeTab]?.showSearch || false,
+        setShowSearch: (show) => {
+            setSearchStates(prev => ({
+                ...prev,
+                [activeTab]: {
+                    ...prev[activeTab],
+                    showSearch: show
+                }
+            }));
+        },
+        searchQuery: searchStates[activeTab]?.searchQuery || '',
+        setSearchQuery: (query) => {
+            setSearchStates(prev => ({
+                ...prev,
+                [activeTab]: {
+                    ...prev[activeTab],
+                    searchQuery: query
+                }
+            }));
+        },
+    }), [searchStates, activeTab]);
 
     // Get current tab index
     const getCurrentTabIndex = useCallback(() => {
         return tabs.findIndex((tab) => tab.name === activeTab);
     }, [activeTab]);
 
-    // Update current index when activeTab changes
+    // Update current index when activeTab changes (but not when search changes)
     useEffect(() => {
+        // Don't update scroll position if we're in the middle of a search operation
+        if (isSearchingRef.current) return;
+
         const newIndex = getCurrentTabIndex();
         if (newIndex !== -1 && newIndex !== currentIndex) {
             setCurrentIndex(newIndex);
@@ -546,6 +603,9 @@ export default function UnifiedAudioApp() {
 
     // Handle scroll end to update active tab
     const handleScrollEnd = useCallback((event) => {
+        // Don't handle scroll events if we're in the middle of a search operation
+        if (isSearchingRef.current) return;
+
         const contentOffsetX = event.nativeEvent.contentOffset.x;
         const newIndex = Math.round(contentOffsetX / screenWidth);
 

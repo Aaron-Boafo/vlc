@@ -13,6 +13,7 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import SearchBar from '../components/SearchBar';
 import * as DocumentPicker from 'expo-document-picker';
+import useOptimizedPlaylistLoader from '../hooks/useOptimizedPlaylistLoader';
 
 const PlaylistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) => {
   const { themeColors } = useThemeStore();
@@ -39,61 +40,31 @@ const PlaylistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch
     }
   }, [createModal]);
 
+  // Use optimized loader for better performance
+  const {
+    audioFiles: optimizedAudioFiles,
+    loading: optimizedLoading,
+    loadAudioFiles: loadOptimizedAudio
+  } = useOptimizedPlaylistLoader();
+
   const loadAllTracks = async () => {
     setLoadingTracks(true);
     try {
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status !== "granted") {
-        setAllTracks([]);
-        setLoadingTracks(false);
-        return;
-      }
-      const media = await MediaLibrary.getAssetsAsync({
-        mediaType: MediaLibrary.MediaType.audio,
-        first: 1000,
-      });
-      const filesWithMetadata = await Promise.all(
-        media.assets.map(async (asset) => {
-          let metadata = {};
-          try {
-            const data = await getAudioMetadata(asset.uri, [
-              "album",
-              "artist",
-              "name",
-              "year",
-              "artwork",
-            ]);
-            metadata = data.metadata || {};
-          } catch (error) { }
-          let artworkUri = null;
-          if (metadata.artwork) {
-            if (metadata.artwork.startsWith('data:image')) {
-              artworkUri = metadata.artwork;
-            } else if (/^[A-Za-z0-9+/=]+$/.test(metadata.artwork)) {
-              artworkUri = `data:image/png;base64,${metadata.artwork}`;
-            } else {
-              artworkUri = metadata.artwork;
-            }
-          }
-          return {
-            id: asset.id,
-            uri: asset.uri,
-            filename: asset.filename,
-            duration: asset.duration,
-            album: metadata.album || "Unknown Album",
-            artist: metadata.artist || "Unknown Artist",
-            title: metadata.name || asset.filename.replace(/\.[^/.]+$/, ""),
-            year: metadata.year || null,
-            artwork: artworkUri,
-          };
-        })
-      );
-      setAllTracks(filesWithMetadata);
+      await loadOptimizedAudio();
+      setAllTracks(optimizedAudioFiles);
     } catch (e) {
       setAllTracks([]);
     }
     setLoadingTracks(false);
   };
+
+  // Update tracks when optimized files change
+  useEffect(() => {
+    if (optimizedAudioFiles.length > 0) {
+      setAllTracks(optimizedAudioFiles);
+      setLoadingTracks(optimizedLoading);
+    }
+  }, [optimizedAudioFiles, optimizedLoading]);
 
   // Filter playlists based on search query
   const filteredPlaylists = playlists.filter(playlist =>

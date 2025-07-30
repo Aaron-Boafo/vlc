@@ -12,6 +12,7 @@ import { SafeAreaView as SafeAreaViewSafeAreaContext } from 'react-native-safe-a
 import MoreOptionsMenu from '../../../components/MoreOptionsMenu';
 import SearchBar from '../../../components/SearchBar';
 import { useRef } from "react";
+import useOptimizedPlaylistLoader from '../../../hooks/useOptimizedPlaylistLoader';
 
 const SegmentedControl = ({ value, onChange }) => {
   const { themeColors } = useThemeStore();
@@ -142,6 +143,15 @@ const PlaylistScreen = () => {
   // Get cached data from stores
   const { audioFiles, initialize, isLoading: audioLoading } = useGlobalAudioStore();
   const { videoFiles, loadVideoFiles, isLoading: videoLoading } = useOptimizedVideoStore();
+  
+  // Use optimized loader for playlist creation
+  const {
+    audioFiles: playlistAudioFiles,
+    videoFiles: playlistVideoFiles,
+    loading: playlistLoading,
+    progress: playlistProgress,
+    loadAllMedia: loadPlaylistMedia
+  } = useOptimizedPlaylistLoader();
 
   // State
   const [modalVisible, setModalVisible] = useState(false);
@@ -160,10 +170,10 @@ const PlaylistScreen = () => {
   const [sortOrder, setSortOrder] = useState('az'); // 'az', 'za', 'tracks'
   const [trackSearchQuery, setTrackSearchQuery] = useState(''); // Search within tracks modal
 
-  // Get tracks from cached stores instead of reloading
+  // Get tracks from optimized loader for better performance
   const availableTracks = useMemo(() => {
-    return playlistType === 'audio' ? audioFiles : videoFiles;
-  }, [playlistType, audioFiles, videoFiles]);
+    return playlistType === 'audio' ? playlistAudioFiles : playlistVideoFiles;
+  }, [playlistType, playlistAudioFiles, playlistVideoFiles]);
 
   // Filter tracks based on search query
   const filteredTracks = useMemo(() => {
@@ -182,22 +192,18 @@ const PlaylistScreen = () => {
   }, [availableTracks, trackSearchQuery]);
 
   // Load tracks from stores when modal opens or type changes
+  // Load files when create modal opens - using optimized loader
   useEffect(() => {
     if (createModal) {
-      if (playlistType === 'audio' && audioFiles.length === 0) {
-        console.log('🎵 Loading audio files for playlist creation...');
-        initialize();
-      } else if (playlistType === 'video' && videoFiles.length === 0) {
-        console.log('🎥 Loading video files for playlist creation...');
-        loadVideoFiles();
-      }
+      console.log('⚡ Loading media files with optimized loader...');
+      loadPlaylistMedia(); // This loads both audio and video efficiently
     }
-  }, [createModal, playlistType, audioFiles.length, videoFiles.length, initialize, loadVideoFiles]);
+  }, [createModal, loadPlaylistMedia]);
 
-  // Check if we're currently loading
+  // Check if we're currently loading - using optimized loader
   const isLoadingTracks = useMemo(() => {
-    return playlistType === 'audio' ? audioLoading : videoLoading;
-  }, [playlistType, audioLoading, videoLoading]);
+    return playlistLoading || playlistProgress.audio.phase !== 'idle' || playlistProgress.video.phase !== 'idle';
+  }, [playlistLoading, playlistProgress]);
 
   // Handlers
   const openPlaylist = useCallback((playlist) => {
@@ -489,8 +495,21 @@ const PlaylistScreen = () => {
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={themeColors.primary} />
               <Text style={[styles.loadingText, { color: themeColors.textSecondary }]}>
-                Loading {playlistType} tracks...
+                {playlistType === 'audio' 
+                  ? `Loading audio files... ${playlistProgress.audio.loaded}/${playlistProgress.audio.total || '?'}`
+                  : `Loading video files... ${playlistProgress.video.loaded}/${playlistProgress.video.total || '?'}`
+                }
               </Text>
+              {playlistProgress.audio.phase === 'loading_metadata' && (
+                <Text style={[styles.subLoadingText, { color: themeColors.textSecondary }]}>
+                  Extracting metadata...
+                </Text>
+              )}
+              {playlistProgress.video.phase === 'generating_thumbnails' && (
+                <Text style={[styles.subLoadingText, { color: themeColors.textSecondary }]}>
+                  Generating thumbnails...
+                </Text>
+              )}
             </View>
           ) : filteredTracks.length === 0 ? (
             <View style={styles.loadingContainer}>
@@ -831,6 +850,11 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 16,
+  },
+  subLoadingText: {
+    marginTop: 4,
+    fontSize: 14,
+    fontStyle: 'italic',
   },
   trackSelectCard: {
     flexDirection: 'row',

@@ -19,10 +19,19 @@ import useThemeStore from '../store/theme';
 import { router } from 'expo-router';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import SearchBar from '../components/SearchBar';
+import useOptimizedPlaylistLoader from '../hooks/useOptimizedPlaylistLoader';
 
 const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearchQuery }) => {
   const { themeColors } = useThemeStore();
   const { videoFiles, setCurrentVideo } = useOptimizedVideoStore();
+  
+  // Use optimized loader for playlist creation
+  const {
+    videoFiles: optimizedVideoFiles,
+    loading: optimizedLoading,
+    progress: videoProgress,
+    loadVideoFiles: loadOptimizedVideos
+  } = useOptimizedPlaylistLoader();
   const { playlists, createPlaylist, addTrackToPlaylist, clearPlaylists } = usePlaylistStore();
   
   // Filter playlists to only show video playlists
@@ -37,30 +46,15 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
   const [selectedVideos, setSelectedVideos] = useState([]);
   const [optionsVisible, setOptionsVisible] = useState(false);
   const [optionsPlaylist, setOptionsPlaylist] = useState(null);
-  const [videoThumbnails, setVideoThumbnails] = useState({});
   const [isTransitioning, setIsTransitioning] = useState(false);
 
+  // Load optimized video files when modal opens
   useEffect(() => {
-    const generateThumbnails = async () => {
-      const thumbs = {};
-      for (const video of videoFiles) {
-        if (!videoThumbnails[video.id]) {
-          try {
-            const { uri } = await VideoThumbnails.getThumbnailAsync(video.uri, { time: 1000 });
-            thumbs[video.id] = uri;
-          } catch (e) {
-            thumbs[video.id] = null;
-          }
-        } else {
-          thumbs[video.id] = videoThumbnails[video.id];
-        }
-      }
-      setVideoThumbnails(thumbs);
-    };
-    if (modalVisible && videoFiles && Array.isArray(videoFiles) && videoFiles.length > 0) {
-      generateThumbnails();
+    if (modalVisible) {
+      console.log('⚡ Loading optimized video files for playlist...');
+      loadOptimizedVideos();
     }
-  }, [modalVisible, videoFiles]);
+  }, [modalVisible, loadOptimizedVideos]);
 
   const handleClearAllPlaylists = () => {
     Alert.alert(
@@ -265,35 +259,52 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
             />
             <Text style={{ color: themeColors.text, marginVertical: 8, fontWeight: '600' }}>Select Videos</Text>
             <View style={{ flex: 1, marginTop: 16, marginBottom: 16 }}>
-              <FlatList
-                data={videoFiles}
-                keyExtractor={item => item.id}
-                numColumns={3}
-                renderItem={({ item }) => {
-                  const selected = selectedVideos.some(v => v.id === item.id);
-                  return (
-                    <TouchableOpacity
-                      style={{
-                        width: '30%',
-                        margin: '1.5%',
-                        borderRadius: 12,
-                        backgroundColor: selected ? themeColors.primary + '22' : 'rgba(255,255,255,0.08)',
-                        alignItems: 'center',
-                        borderWidth: selected ? 2 : 0,
-                        borderColor: selected ? themeColors.primary : 'transparent',
-                        position: 'relative',
-                        padding: 8,
-                      }}
-                      onPress={() => handleToggleVideo(item)}
-                      activeOpacity={0.7}
-                    >
-                      {/* Thumbnail or icon */}
-                      {videoThumbnails[item.id] ? (
-                        <Image source={{ uri: videoThumbnails[item.id] }} style={{ width: 56, height: 56, borderRadius: 8, marginBottom: 2 }} />
-                      ) : (
-                        <View style={{ width: 56, height: 56, borderRadius: 8, backgroundColor: 'rgba(0,0,0,0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 2 }}>
-                          <MaterialIcons name="video-library" size={28} color={themeColors.primary} />
-                        </View>
+              {optimizedLoading ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 }}>
+                  <ActivityIndicator size="large" color={themeColors.primary} />
+                  <Text style={{ color: themeColors.textSecondary, marginTop: 12, fontSize: 16 }}>
+                    Loading videos... {videoProgress.loaded}/{videoProgress.total || '?'}
+                  </Text>
+                  {videoProgress.phase === 'generating_thumbnails' && (
+                    <Text style={{ color: themeColors.textSecondary, marginTop: 4, fontSize: 14, fontStyle: 'italic' }}>
+                      Generating thumbnails...
+                    </Text>
+                  )}
+                </View>
+              ) : (
+                <FlatList
+                  data={optimizedVideoFiles}
+                  keyExtractor={item => item.id}
+                  numColumns={3}
+                  renderItem={({ item }) => {
+                    const selected = selectedVideos.some(v => v.id === item.id);
+                    return (
+                      <TouchableOpacity
+                        style={{
+                          width: '30%',
+                          margin: '1.5%',
+                          borderRadius: 12,
+                          backgroundColor: selected ? themeColors.primary + '22' : 'rgba(255,255,255,0.08)',
+                          alignItems: 'center',
+                          borderWidth: selected ? 2 : 0,
+                          borderColor: selected ? themeColors.primary : 'transparent',
+                          position: 'relative',
+                          padding: 8,
+                        }}
+                        onPress={() => handleToggleVideo(item)}
+                        activeOpacity={0.7}
+                      >
+                        {/* Optimized thumbnail */}
+                        {item.thumbnail ? (
+                          <Image source={{ uri: item.thumbnail }} style={{ width: 56, height: 56, borderRadius: 8, marginBottom: 2 }} />
+                        ) : item.thumbnailLoaded ? (
+                          <View style={{ width: 56, height: 56, borderRadius: 8, backgroundColor: 'rgba(0,0,0,0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 2 }}>
+                            <MaterialIcons name="video-library" size={28} color={themeColors.primary} />
+                          </View>
+                        ) : (
+                          <View style={{ width: 56, height: 56, borderRadius: 8, backgroundColor: 'rgba(0,0,0,0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 2 }}>
+                            <ActivityIndicator size="small" color={themeColors.primary} />
+                          </View>
                       )}
                       <Text numberOfLines={1} style={{ color: themeColors.text, fontSize: 13, marginTop: 4 }}>{item.title || item.filename}</Text>
                       <Text numberOfLines={1} style={{ color: themeColors.textSecondary, fontSize: 11 }}>{item.artist || ''}</Text>
@@ -305,8 +316,9 @@ const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearch
                     </TouchableOpacity>
                   );
                 }}
-                ListEmptyComponent={<Text style={{ color: themeColors.textSecondary, textAlign: 'center' }}>No videos found.</Text>}
-              />
+                  ListEmptyComponent={<Text style={{ color: themeColors.textSecondary, textAlign: 'center' }}>No videos found.</Text>}
+                />
+              )}
             </View>
             <View style={{ gap: 12, marginTop: 'auto', paddingTop: 16 }}>
               <TouchableOpacity
