@@ -28,10 +28,10 @@ const ToggleBar = memo(() => {
           >
             <tag.icon 
               size={22} 
-              color={isActive ? "white" : themeColors.textSecondary} 
+              color={isActive ? themeColors.background : themeColors.textSecondary} 
             />
             {isActive && (
-              <Text style={styles.toggleTextActive}>
+              <Text style={[styles.toggleTextActive, { color: themeColors.background }]}>
                 {tag.name.charAt(0).toUpperCase() + tag.name.slice(1)}
               </Text>
             )}
@@ -76,7 +76,6 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
   },
   toggleTextActive: {
-    color: 'white',
     fontWeight: '600',
     fontSize: 13,
     marginLeft: 6,

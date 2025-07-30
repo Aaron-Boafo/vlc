@@ -415,7 +415,7 @@ const PlaylistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch
 
       {/* FAB */}
       <TouchableOpacity style={[styles.fab, { backgroundColor: themeColors.primary }]} onPress={() => setCreateModal(true)}>
-        <AntDesign name="plus" size={24} color="white" />
+        <AntDesign name="plus" size={24} color={themeColors.background} />
       </TouchableOpacity>
 
       {createModal && (
@@ -619,7 +619,7 @@ const PlaylistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch
                 style={[styles.modalButton, { backgroundColor: themeColors.primary }]}
                 onPress={handleRenamePlaylist}
               >
-                <Text style={{ color: 'white' }}>Rename</Text>
+                <Text style={{ color: themeColors.background }}>Rename</Text>
               </TouchableOpacity>
             </View>
           </View>

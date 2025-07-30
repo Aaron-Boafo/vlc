@@ -963,7 +963,7 @@ export default function UnifiedAudioApp() {
                     ]}
                 >
                     <TouchableOpacity onPress={handleShuffle}>
-                        <Shuffle size={30} color="#FFF" />
+                        <Shuffle size={30} color={themeColors.background} />
                     </TouchableOpacity>
                 </Animated.View>
             )}
@@ -1023,7 +1023,7 @@ const styles = StyleSheet.create({
         borderRadius: 25,
     },
     permissionButtonText: {
-        color: '#fff',
+        color: '#fff', // Keep white for contrast on primary button
         fontSize: 16,
         fontWeight: '600',
     },

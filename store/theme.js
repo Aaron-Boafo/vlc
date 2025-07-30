@@ -50,20 +50,20 @@ const spacing = {
 
 const getThemeColors = (theme, accentColor) => {
   const accent = accentColors[accentColor] || accentColors.purple;
-  
+
   // Create a slightly lighter and darker version for hover/press states
-  const accentLight = tinycolor(accentColor).lighten(15).toString();
-  const accentDark = tinycolor(accentColor).darken(15).toString();
-  
+  const accentLight = tinycolor(accent).lighten(15).toString();
+  const accentDark = tinycolor(accent).darken(15).toString();
+
   const baseTheme = {
     // Primary colors
     primary: accent,
     primaryLight: accentLight,
     primaryDark: accentDark,
-    
+
     // Secondary colors (complementary to primary)
-    secondary: tinycolor(accentColor).complement().toString(),
-    
+    secondary: tinycolor(accent).complement().toString(),
+
     // Accent color (same as primary for consistency)
     accent: accent,
   };
@@ -76,31 +76,31 @@ const getThemeColors = (theme, accentColor) => {
       backgroundSecondary: '#1A1A2E',
       card: '#16213E',
       surface: '#1E1E3F',
-      
+
       // Text colors
       text: '#FFFFFF',
       textSecondary: '#B0B0C3',
       textTertiary: '#8A8A9E',
-      
+
       // Border and divider colors
       border: '#2A2A4A',
       divider: '#2A2A4A',
-      
+
       // Status colors
       success: '#10B981',
       warning: '#F59E0B',
       error: '#EF4444',
       info: '#3B82F6',
-      
+
       // Shadow and overlay
       shadow: '#000000',
       overlay: 'rgba(0, 0, 0, 0.5)',
-      
+
       // Interactive states
       hover: 'rgba(139, 92, 246, 0.1)',
       pressed: 'rgba(139, 92, 246, 0.2)',
       disabled: '#4A4A6A',
-      
+
       // Gradients
       gradientPrimary: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)',
       gradientSecondary: 'linear-gradient(135deg, #00F5A0 0%, #00D9FF 100%)',
@@ -116,31 +116,31 @@ const getThemeColors = (theme, accentColor) => {
       backgroundSecondary: '#F8FAFC',
       card: '#FFFFFF',
       surface: '#F1F5F9',
-      
+
       // Text colors
       text: '#1E293B',
       textSecondary: '#64748B',
       textTertiary: '#94A3B8',
-      
+
       // Border and divider colors
       border: '#E2E8F0',
       divider: '#E2E8F0',
-      
+
       // Status colors
       success: '#10B981',
       warning: '#F59E0B',
       error: '#EF4444',
       info: '#3B82F6',
-      
+
       // Shadow and overlay
       shadow: '#000000',
       overlay: 'rgba(0, 0, 0, 0.3)',
-      
+
       // Interactive states
       hover: 'rgba(139, 92, 246, 0.1)',
       pressed: 'rgba(139, 92, 246, 0.2)',
       disabled: '#CBD5E1',
-      
+
       // Gradients
       gradientPrimary: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)',
       gradientSecondary: 'linear-gradient(135deg, #00F5A0 0%, #00D9FF 100%)',
@@ -159,7 +159,7 @@ const createThemeStore = (set, get) => ({
   themeColors: getThemeColors("dark", "purple"),
   selectedBackground: null,
   _hasHydrated: false,
-  
+
   // Actions
   toggleTheme: () => {
     const state = get();
@@ -172,16 +172,18 @@ const createThemeStore = (set, get) => ({
 
   setAccentColor: (color) => {
     const state = get();
+    const newThemeColors = getThemeColors(state.activeTheme, color);
     set({
       accentColor: color,
-      themeColors: getThemeColors(state.activeTheme, color),
+      themeColors: newThemeColors,
     });
+    console.log('🎨 Accent color changed to:', color, 'Primary color:', newThemeColors.primary);
   },
 
   setBackground: (background) => {
     set({ selectedBackground: background });
   },
-    
+
   // Initialize theme with system preferences
   initializeTheme: () => {
     const state = get();
@@ -190,7 +192,7 @@ const createThemeStore = (set, get) => ({
       _hasHydrated: true
     });
   },
-  
+
   // Reset to default theme - keeping your preferences
   resetTheme: () => {
     set({
