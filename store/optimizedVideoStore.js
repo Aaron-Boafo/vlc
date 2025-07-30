@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import ProgressiveMediaLoader from '../utils/progressiveMediaLoader';
+import * as MediaLibrary from 'expo-media-library';
 
 const useOptimizedVideoStore = create(
     subscribeWithSelector(
@@ -48,22 +48,60 @@ const useOptimizedVideoStore = create(
                     set({ isLoading: true, isInitialLoadComplete: false });
 
                     try {
-                        const files = await ProgressiveMediaLoader.loadMediaProgressively('video', (progressFiles, isComplete) => {
-                            // Update UI immediately as files are loaded progressively
-                            set({
-                                videoFiles: progressFiles,
-                                isInitialLoadComplete: isComplete,
-                                isLoading: !isComplete,
-                            });
+                        console.log('🎥 Loading video files...');
+
+                        // Get video files from media library
+                        const media = await MediaLibrary.getAssetsAsync({
+                            mediaType: MediaLibrary.MediaType.video,
+                            first: 1000, // Get a large batch
                         });
 
+                        console.log(`📱 Found ${media.assets.length} video files`);
+
+                        // Filter out unwanted files
+                        const excludedFolders = [
+                            '/WhatsApp/Media/WhatsApp Video/Sent',
+                            '/WhatsApp/Media/WhatsApp Video/Private',
+                            '/WhatsApp/Media/.Statuses',
+                            '/WhatsApp/Private',
+                            '/Telegram',
+                            '/Instagram',
+                            '/Snapchat',
+                            '/.nomedia',
+                            '/Android/data',
+                            '/system/',
+                            '/cache/',
+                        ];
+
+                        const filtered = media.assets.filter(asset => {
+                            return !excludedFolders.some(folder => asset.uri.includes(folder));
+                        });
+
+                        console.log(`🔍 Filtered to ${filtered.length} video files`);
+
+                        // Process files
+                        const videoFiles = filtered.map(asset => ({
+                            id: asset.id,
+                            uri: asset.uri,
+                            filename: asset.filename,
+                            duration: asset.duration,
+                            width: asset.width,
+                            height: asset.height,
+                            creationTime: asset.creationTime,
+                            modificationTime: asset.modificationTime,
+                        }));
+
+                        // Sort by filename
+                        const sortedFiles = videoFiles.sort((a, b) => a.filename.localeCompare(b.filename));
+
                         set({
+                            videoFiles: sortedFiles,
                             lastLoadTime: Date.now(),
                             isLoading: false,
                             isInitialLoadComplete: true,
                         });
 
-                        return files;
+                        return sortedFiles;
                     } catch (error) {
                         console.error('❌ Fast video loading failed:', error);
                         set({ isLoading: false, isInitialLoadComplete: true });
@@ -99,7 +137,7 @@ const useOptimizedVideoStore = create(
                         console.error("Invalid video provided to setAndPlayVideo:", video);
                         return;
                     }
-                    
+
                     console.log('🎥 setAndPlayVideo called with:', {
                         video: video,
                         hasUri: !!video?.uri,
@@ -107,10 +145,10 @@ const useOptimizedVideoStore = create(
                         filename: video?.filename,
                         sourceTab: sourceTab
                     });
-                    
+
                     const videoFiles = get().videoFiles || [];
                     const index = videoFiles.findIndex(v => v.id === video.id);
-                    
+
                     set({
                         currentVideo: video,
                         currentVideoIndex: index,
@@ -247,7 +285,7 @@ const useOptimizedVideoStore = create(
                         miniPlayerVideo: null,
                         miniPlayerPosition: 0,
                     });
-                    
+
                     // Force a small delay to ensure UI updates
                     setTimeout(() => {
                         const state = get();
@@ -296,7 +334,7 @@ const useOptimizedVideoStore = create(
                 // Navigation helper
                 getReturnRoute: () => {
                     const { sourceTab, activeTab } = get();
-                    
+
                     // If we have a specific source tab, return to the appropriate tab
                     if (sourceTab) {
                         switch (sourceTab) {
@@ -312,12 +350,12 @@ const useOptimizedVideoStore = create(
                                 return '/(tabs)/(video)';
                         }
                     }
-                    
+
                     // If we have an active tab, return to video tab
                     if (activeTab) {
                         return '/(tabs)/(video)';
                     }
-                    
+
                     // Default fallback to video tab (changed from browse)
                     return '/(tabs)/(video)';
                 },
@@ -348,7 +386,7 @@ const useOptimizedVideoStore = create(
                     console.log('Rename video:', videoId, 'to:', newFileName);
                     // For now, just update the filename in the store
                     set(state => ({
-                        videoFiles: state.videoFiles.map(v => 
+                        videoFiles: state.videoFiles.map(v =>
                             v.id === videoId ? { ...v, filename: newFileName } : v
                         )
                     }));
@@ -356,13 +394,13 @@ const useOptimizedVideoStore = create(
 
                 forceReloadVideos: async () => {
                     console.log('🔄 Force reloading videos...');
-                    set({ 
-                        videoFiles: [], 
-                        isLoading: true, 
+                    set({
+                        videoFiles: [],
+                        isLoading: true,
                         isInitialLoadComplete: false,
-                        lastLoadTime: null 
+                        lastLoadTime: null
                     });
-                    
+
                     try {
                         const result = await get().loadVideoFiles(true); // Force refresh
                         console.log('✅ Force reload completed successfully');

@@ -41,7 +41,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
 import useThemeStore from "../../store/theme";
 import useAudioControl from "../../store/useAudioControl";
-import useAudioStore from "../../store/AudioHeadStore";
+import useSimpleAudioStore from "../../store/simpleAudioStore";
 import useFavouriteStore from "../../store/favouriteStore";
 import usePlaybackStore from "../../store/playbackStore";
 import * as NavigationBar from 'expo-navigation-bar';
@@ -55,14 +55,14 @@ const { width } = Dimensions.get("window");
 const PlayerScreen = () => {
   const { themeColors } = useThemeStore();
   const { activeTab } = useLocalSearchParams();
-  const toggleTabs = useAudioStore(state => state.toggleTabs);
+  const setActiveTab = useSimpleAudioStore(state => state.setActiveTab);
 
   // Set the active tab when the component mounts
   useEffect(() => {
     if (activeTab) {
-      toggleTabs(activeTab);
+      setActiveTab(activeTab);
     }
-  }, [activeTab, toggleTabs]);
+  }, [activeTab, setActiveTab]);
   const {
     currentTrack: useAudioControlCurrentTrack,
     isPlaying: useAudioControlIsPlaying,
@@ -81,7 +81,7 @@ const PlayerScreen = () => {
     setPlaybackSpeed: useAudioControlSetPlaybackSpeed,
     isTransitioning: useAudioControlIsTransitioning,
     isLoading: useAudioControlIsLoading,
-    showMiniPlayer: useAudioControlShowMiniPlayer,
+    showBottomPlayer,
   } = useAudioControl();
   const { playbackRate } = usePlaybackStore();
   const { playlists, addTrackToPlaylist } = usePlaylistStore();
@@ -138,9 +138,9 @@ const PlayerScreen = () => {
     // Prevent multiple rapid clicks
     if (useAudioControlIsTransitioning) return;
     
-    // Show mini player when leaving main player (if there's a current track)
+    // Show bottom player when leaving main player (if there's a current track)
     if (useAudioControlCurrentTrack) {
-      useAudioControlShowMiniPlayer();
+      showBottomPlayer();
     }
     
     // Always use replace to ensure we go to the correct tab

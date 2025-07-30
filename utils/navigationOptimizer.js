@@ -8,7 +8,7 @@ class NavigationOptimizer {
     this.isTransitioning = false;
     this.pendingTransitions = [];
     this.deviceSettings = DeviceOptimizer.getRenderingSettings();
-    
+
     // Navigation-specific optimizations
     this.TRANSITION_DELAY = this.deviceSettings.performanceTier === 'low' ? 100 : 50;
     this.CACHE_TIMEOUT = 5 * 60 * 1000; // 5 minutes
@@ -44,7 +44,7 @@ class NavigationOptimizer {
 
     } finally {
       this.isTransitioning = false;
-      
+
       // Process any pending transitions
       if (this.pendingTransitions.length > 0) {
         const next = this.pendingTransitions.shift();
@@ -77,20 +77,20 @@ class NavigationOptimizer {
   async preWarmAudioScreen() {
     // Pre-warm audio data if not already loaded
     try {
-      const { useOptimizedAudioStore } = await import('../store/optimizedAudioStore');
-      const store = useOptimizedAudioStore.getState();
-      
+      const { default: useSimpleAudioStore } = await import('../store/simpleAudioStore');
+      const store = useSimpleAudioStore.getState();
+
       // Only load if we have no files AND no recent load time (prevent reloading after player)
       if (store.audioFiles.length === 0 && !store.isLoading && !store.lastLoadTime) {
         console.log('🔄 Navigation optimizer: Pre-warming audio screen...');
         // Trigger background loading
         setTimeout(() => {
-          store.loadAudioFiles();
+          store.loadAllAudioFiles();
         }, 0);
       } else if (store.audioFiles.length > 0) {
         console.log('⚡ Navigation optimizer: Audio files already cached, skipping pre-warm');
       }
-      
+
       return store.audioFiles;
     } catch (error) {
       console.log('Audio pre-warm failed:', error);
@@ -103,14 +103,14 @@ class NavigationOptimizer {
     try {
       const { useOptimizedVideoStore } = await import('../store/optimizedVideoStore');
       const store = useOptimizedVideoStore.getState();
-      
+
       if (store.videoFiles.length === 0 && !store.isLoading) {
         // Trigger background loading
         setTimeout(() => {
           store.loadVideoFiles();
         }, 0);
       }
-      
+
       return store.videoFiles;
     } catch (error) {
       console.log('Video pre-warm failed:', error);
@@ -153,16 +153,16 @@ class NavigationOptimizer {
       maxToRenderPerBatch: this.deviceSettings.maxToRenderPerBatch,
       updateCellsBatchingPeriod: this.deviceSettings.updateCellsBatchingPeriod,
       removeClippedSubviews: this.deviceSettings.removeClippedSubviews,
-      
+
       // Performance optimizations
       getItemLayout: this.deviceSettings.getItemLayout,
       keyExtractor: (item, index) => item.id?.toString() || index.toString(),
-      
+
       // Interaction optimizations
       scrollEventThrottle: 16,
       onScrollBeginDrag: this.handleScrollStart,
       onScrollEndDrag: this.handleScrollEnd,
-      
+
       // Memory optimizations
       disableVirtualization: false,
       legacyImplementation: false,
@@ -201,7 +201,7 @@ class NavigationOptimizer {
   async preloadTab(tabName) {
     // Don't preload if already transitioning
     if (this.isTransitioning) return;
-    
+
     // Use InteractionManager to avoid blocking UI
     InteractionManager.runAfterInteractions(async () => {
       try {

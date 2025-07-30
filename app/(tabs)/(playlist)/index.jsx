@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import useThemeStore from "../../../store/theme";
 import usePlaylistStore from '../../../store/playlistStore';
 import useAudioControl from '../../../store/useAudioControl';
-import useOptimizedAudioStore from '../../../store/optimizedAudioStore';
+import useGlobalAudioStore from '../../../store/globalAudioStore';
 import useOptimizedVideoStore from '../../../store/optimizedVideoStore';
 import { Plus, Trash2, Music4, Play, Shuffle, MoreVertical, Edit3, Video as VideoIcon, FileAudio, ListMusic } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
@@ -140,7 +140,7 @@ const PlaylistScreen = () => {
   const router = useRouter();
 
   // Get cached data from stores
-  const { audioFiles, loadAudioFiles, isLoading: audioLoading } = useOptimizedAudioStore();
+  const { audioFiles, initialize, isLoading: audioLoading } = useGlobalAudioStore();
   const { videoFiles, loadVideoFiles, isLoading: videoLoading } = useOptimizedVideoStore();
 
   // State
@@ -186,13 +186,13 @@ const PlaylistScreen = () => {
     if (createModal) {
       if (playlistType === 'audio' && audioFiles.length === 0) {
         console.log('🎵 Loading audio files for playlist creation...');
-        loadAudioFiles();
+        initialize();
       } else if (playlistType === 'video' && videoFiles.length === 0) {
         console.log('🎥 Loading video files for playlist creation...');
         loadVideoFiles();
       }
     }
-  }, [createModal, playlistType, audioFiles.length, videoFiles.length, loadAudioFiles, loadVideoFiles]);
+  }, [createModal, playlistType, audioFiles.length, videoFiles.length, initialize, loadVideoFiles]);
 
   // Check if we're currently loading
   const isLoadingTracks = useMemo(() => {
@@ -228,7 +228,7 @@ const PlaylistScreen = () => {
   }, [removeTrackFromPlaylist, selectedPlaylist]);
 
   const handlePlayTrack = useCallback((track) => {
-    audioControl.setAndPlayPlaylist([track], 0, true); // Show mini player for individual tracks
+    audioControl.setAndPlayPlaylist([track], 0, true); // Show bottom player for individual tracks
   }, [audioControl]);
 
   const toggleTrack = useCallback((track) => {

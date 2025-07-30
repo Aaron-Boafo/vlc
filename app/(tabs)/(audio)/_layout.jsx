@@ -15,6 +15,7 @@ const AudioLayout = () => {
         }}
       >
         <Stack.Screen name="index" options={{headerShown: false}} />
+        <Stack.Screen name="unified" options={{headerShown: false}} />
         <Stack.Screen 
           name="player" 
           options={{

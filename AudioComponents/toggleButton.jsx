@@ -2,16 +2,16 @@ import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { memo, useCallback } from "react";
 import * as Icons from "lucide-react-native";
 import useThemeStore from "../store/theme";
-import useOptimizedAudioStore from "../store/optimizedAudioStore";
+import useGlobalAudioStore from "../store/globalAudioStore";
 
 const ToggleBar = memo(() => {
   const themeColors = useThemeStore(state => state.themeColors);
-  const activeTab = useOptimizedAudioStore(state => state.activeTab);
-  const toggleTabs = useOptimizedAudioStore(state => state.toggleTabs);
+  const activeTab = useGlobalAudioStore(state => state.activeTab);
+  const setActiveTab = useGlobalAudioStore(state => state.setActiveTab);
 
   const handleToggle = useCallback((tagName) => {
-    toggleTabs(tagName);
-  }, [toggleTabs]);
+    setActiveTab(tagName);
+  }, [setActiveTab]);
 
   return (
     <View style={styles.container}>

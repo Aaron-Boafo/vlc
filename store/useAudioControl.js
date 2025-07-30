@@ -22,6 +22,7 @@ const useAudioControl = create(
     position: 0,
     isLoading: false,
     isMiniPlayerVisible: true,
+    isBottomPlayerVisible: false,
     isTransitioning: false, // Prevent multiple simultaneous plays
 
     // Sleep Timer State
@@ -76,7 +77,7 @@ const useAudioControl = create(
       return true; // For now, assume it's initialized if no error was thrown
     },
 
-    setAndPlayPlaylist: async (tracks, startIndex = 0, showMiniPlayer = true) => {
+    setAndPlayPlaylist: async (tracks, startIndex = 0, shouldShowBottomPlayer = true) => {
       // Prevent multiple simultaneous plays
       const { isTransitioning, isLoading } = get();
       if (isTransitioning || isLoading) {
@@ -117,13 +118,20 @@ const useAudioControl = create(
         // 🎨 Enrich track with metadata if not already present
         const enrichedTrack = await get()._enrichTrackMetadata(trackToPlay);
 
+        console.log('🎵 Setting bottom player state:', {
+          shouldShowBottomPlayer,
+          trackTitle: enrichedTrack.title,
+          validStartIndex
+        });
+        
         set({
           playQueue: tracks,
           originalQueue: tracks,
           currentIndex: validStartIndex,
           currentTrack: enrichedTrack,
           sound: null,
-          isMiniPlayerVisible: showMiniPlayer,
+          isBottomPlayerVisible: shouldShowBottomPlayer,
+          isMiniPlayerVisible: false, // Disable mini player when using bottom player
         });
 
         console.log('🎵 Loading and playing track:', enrichedTrack.title);
@@ -623,6 +631,26 @@ const useAudioControl = create(
     hideMiniPlayer: () => set({ isMiniPlayerVisible: false }),
 
     showMiniPlayer: () => set({ isMiniPlayerVisible: true }),
+
+    // Bottom player controls
+    showBottomPlayer: () => {
+      console.log('showBottomPlayer called');
+      set({ isBottomPlayerVisible: true, isMiniPlayerVisible: false });
+    },
+
+    hideBottomPlayer: () => {
+      console.log('hideBottomPlayer called');
+      set({ isBottomPlayerVisible: false });
+    },
+
+    toggleBottomPlayer: () => {
+      const { isBottomPlayerVisible } = get();
+      console.log('toggleBottomPlayer called, current state:', isBottomPlayerVisible);
+      set({ 
+        isBottomPlayerVisible: !isBottomPlayerVisible,
+        isMiniPlayerVisible: false // Hide mini player when bottom player is active
+      });
+    },
 
     // 🎨 Enrich track with metadata including artwork
     _enrichTrackMetadata: async (track) => {

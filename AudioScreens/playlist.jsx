@@ -132,7 +132,7 @@ const PlaylistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch
 
   // Play a track
   const handlePlayTrack = (track) => {
-    audioControl.setAndPlayPlaylist([track], 0, true); // Show mini player for individual tracks
+    audioControl.setAndPlayPlaylist([track], 0, true); // Show bottom player for individual tracks
   };
 
   // Multi-select logic

@@ -6,11 +6,11 @@ import AppLogo from "../components/AppLogo";
 
 const AudioHeader = memo(({ onSearch, onFilter, onMore, showIcons = { search: true, filter: true, more: true } }) => {
   const themeColors = useThemeStore(state => state.themeColors);
-  
+
   const handleSearch = useCallback(() => onSearch?.(), [onSearch]);
   const handleFilter = useCallback(() => onFilter?.(), [onFilter]);
   const handleMore = useCallback(() => onMore?.(), [onMore]);
-  
+
   return (
     <View style={styles.headerContainer}>
       <View style={styles.headerLeft}>
@@ -48,19 +48,19 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     height: 60,
   },
-  headerLeft: { 
-    flexDirection: 'row', 
+  headerLeft: {
+    flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
-  headerTitle: { 
-    fontSize: 22, 
-    fontWeight: 'bold', 
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
     marginLeft: 12,
     letterSpacing: 0.5,
   },
-  headerRight: { 
-    flexDirection: 'row', 
+  headerRight: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
     minWidth: 40,

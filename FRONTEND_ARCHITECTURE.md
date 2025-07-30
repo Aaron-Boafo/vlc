@@ -14,7 +14,7 @@
 ```
 store/
 ├── theme.js                 # Theme management (dark/light + accent colors)
-├── optimizedAudioStore.js   # Audio files caching & management
+├── simpleAudioStore.js      # Simplified audio files loading & management
 ├── optimizedVideoStore.js   # Video files caching & management
 ├── playlistStore.js         # Playlist CRUD operations
 ├── useAudioControl.js       # Audio playback control

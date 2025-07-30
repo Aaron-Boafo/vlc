@@ -172,4 +172,3 @@ const uploadFileWithXHR = (url, formData, token, onProgress) => {
 };
 
 export default StorageService;
-

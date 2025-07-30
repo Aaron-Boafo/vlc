@@ -34,7 +34,7 @@ const onboardingData = [
     subtitle: "Next Generation Media Player",
     description: "Experience your entertainment in a whole new way",
     icon: "play",
-    gradient: ["#8B5CF6", "#A855F7", "#EC4899"], // Added pink for more vibrant gradient
+    gradient: ["#FF00FF", "#00FFFF"],
     pattern: "diagonal",
   },
   {
@@ -43,7 +43,7 @@ const onboardingData = [
     description:
       "Your media, automatically categorized and beautifully presented",
     icon: "media",
-    gradient: ["#8B5CF6", "#9333EA", "#7C3AED"], // Enhanced purple gradient
+    gradient: ["#FF00FF", "#FF8C00"],
     pattern: "grid",
   },
   {
@@ -51,7 +51,7 @@ const onboardingData = [
     subtitle: "Play Everything",
     description: "Any format, any device, anytime - without limits",
     icon: "folder",
-    gradient: ["#A855F7", "#8B5CF6", "#06B6D4"], // Added cyan for dynamic effect
+    gradient: ["#00FFFF", "#FF00FF"],
     pattern: "circles",
   },
   {
@@ -59,7 +59,7 @@ const onboardingData = [
     subtitle: "Your Journey Starts Now",
     description: "Dive into a world of unlimited entertainment",
     icon: "complete",
-    gradient: ["#9333EA", "#8B5CF6", "#10B981"], // Added green for completion feel
+    gradient: ["#FF8C00", "#FF00FF"],
     pattern: "waves",
   },
 ];
@@ -206,7 +206,7 @@ const OnboardingScreen = () => {
     const router = useRouter();
     const scrollX = useRef(new Animated.Value(0)).current;
     const slideRef = useRef(null);
-    const { themeColors } = useThemeStore();
+    const { isDark } = useThemeStore();
     const [isChecking, setIsChecking] = useState(true);
 
     useEffect(() => {
@@ -236,42 +236,8 @@ const OnboardingScreen = () => {
     const viewConfig = useRef({viewAreaCoveragePercentThreshold: 50}).current;
 
     const handleNext = () => {
-        console.log('handleNext called, currentIndex:', currentIndex);
         if (currentIndex < onboardingData.length - 1) {
-            const nextIndex = currentIndex + 1;
-            console.log('Moving to index:', nextIndex);
-            
-            try {
-                // Method 1: Try scrollToIndex
-                if (slideRef.current && typeof slideRef.current.scrollToIndex === 'function') {
-                    slideRef.current.scrollToIndex({
-                        index: nextIndex,
-                        animated: true
-                    });
-                    console.log('Used scrollToIndex');
-                } else {
-                    // Method 2: Use scrollToOffset (more reliable)
-                    if (slideRef.current && typeof slideRef.current.scrollToOffset === 'function') {
-                        slideRef.current.scrollToOffset({
-                            offset: width * nextIndex,
-                            animated: true
-                        });
-                        console.log('Used scrollToOffset');
-                    } else {
-                        console.warn('No scroll methods available, updating state only');
-                    }
-                }
-                
-                // Always update the state as a fallback
-                setTimeout(() => {
-                    setCurrentIndex(nextIndex);
-                }, 300);
-                
-            } catch (error) {
-                console.error('Error in handleNext:', error);
-                // Fallback: just update the state
-                setCurrentIndex(nextIndex);
-            }
+            slideRef.current?.scrollToIndex({index: currentIndex + 1});
         }
     };
 
@@ -310,21 +276,18 @@ const OnboardingScreen = () => {
     };
 
     const handleMainButtonPress = () => {
-        console.log('Main button pressed, currentIndex:', currentIndex, 'total:', onboardingData.length);
         if (currentIndex === onboardingData.length - 1) {
-            console.log('Last slide, finishing onboarding');
             requestPermissionsAndFinish();
         } else {
-            console.log('Not last slide, calling handleNext');
             handleNext();
         }
     };
 
     if (isChecking) {
         return (
-            <View style={[styles.container, {justifyContent: 'center', alignItems: 'center', backgroundColor: themeColors.background}]}>
+            <View style={[styles.container, {justifyContent: 'center', alignItems: 'center'}]}>
               <StatusBar hidden />
-              <ActivityIndicator size="large" color={themeColors.primary} />
+              <ActivityIndicator size="large" color="#FFF" />
             </View>
         )
     }
@@ -332,39 +295,23 @@ const OnboardingScreen = () => {
     return (
         <>
             <StatusBar
-              barStyle="light-content"
+              barStyle={isDark ? "light-content" : "dark-content"}
               backgroundColor="transparent"
               translucent
             />
-            <View style={[styles.container, {backgroundColor: themeColors.background}]}>
-                {/* Subtle gradient overlay for the entire background */}
-                <LinearGradient
-                    colors={['rgba(139, 92, 246, 0.05)', 'transparent', 'rgba(139, 92, 246, 0.08)']}
-                    style={styles.backgroundOverlay}
-                    start={{x: 0, y: 0}}
-                    end={{x: 1, y: 1}}
-                />
+            <View style={styles.container}>
                 <Animated.FlatList
                     ref={slideRef}
                     data={onboardingData}
-                    getItemLayout={(data, index) => ({
-                        length: width,
-                        offset: width * index,
-                        index,
-                    })}
-                    initialNumToRender={1}
-                    maxToRenderPerBatch={1}
-                    windowSize={3}
-                    removeClippedSubviews={false}
                     renderItem={({item, index}) => (
                         <View style={styles.slide}>
                             <BackgroundPattern pattern={item.pattern} colors={item.gradient} />
                             <View style={styles.contentContainer}>
                                 <AnimatedIcon icon={item.icon} size={80} isActive={index === currentIndex} />
                                 <View style={styles.textContainer}>
-                                    <Text style={[styles.subtitle, { color: themeColors.primary }]}>{item.subtitle}</Text>
-                                    <Text style={[styles.title, { color: themeColors.text }]} weight="Bold">{item.title}</Text>
-                                    <Text style={[styles.description, { color: themeColors.textSecondary }]}>{item.description}</Text>
+                                    <Text style={[styles.subtitle, { color: item.gradient[0] }]}>{item.subtitle}</Text>
+                                    <Text style={styles.title} weight="Bold">{item.title}</Text>
+                                    <Text style={styles.description}>{item.description}</Text>
                                 </View>
                             </View>
                         </View>
@@ -383,39 +330,23 @@ const OnboardingScreen = () => {
                     viewabilityConfig={viewConfig}
                 />
 
-                <View style={[styles.bottomContainer, { zIndex: 100 }]}>
+                <View style={styles.bottomContainer}>
                     <Paginator data={onboardingData} scrollX={scrollX} />
-                    <View style={[styles.buttonContainer, { zIndex: 101 }]}>
-                        <Pressable 
-                            style={[styles.button, styles.skipButton, { zIndex: 1000 }]} 
-                            onPress={() => {
-                                console.log('Skip button pressed');
-                                skip();
-                            }}
-                        >
-                            <LinearGradient
-                                colors={['rgba(139, 92, 246, 0.1)', 'rgba(139, 92, 246, 0.05)']}
-                                style={styles.skipButtonGradient}
-                                start={{x: 0, y: 0}}
-                                end={{x: 1, y: 1}}
-                            >
-                                <Text style={[styles.buttonText, {color: themeColors.text}]} weight="Bold">Skip</Text>
-                            </LinearGradient>
+                    <View style={styles.buttonContainer}>
+                        <Pressable style={[styles.button, styles.skipButton]} onPress={skip}>
+                            <Text style={styles.buttonText} weight="Bold">Skip</Text>
                         </Pressable>
                         <TouchableOpacity
                             onPress={handleMainButtonPress}
-                            onPressIn={() => console.log('Button pressed in')}
-                            onPressOut={() => console.log('Button pressed out')}
                             activeOpacity={0.8}
-                            style={{ zIndex: 1000 }} // Ensure button is on top
                         >
                             <LinearGradient
-                                colors={['#8B5CF6', '#A855F7', '#EC4899']} // More vibrant gradient
+                                colors={onboardingData[currentIndex].gradient}
                                 start={{x: 0, y: 0}}
                                 end={{x: 1, y: 1}}
-                                style={[styles.button, styles.gradientButton]}
+                                style={styles.button}
                             >
-                                <Text style={[styles.buttonText, {color: '#FFFFFF'}]} weight="Bold">{currentIndex === onboardingData.length - 1 ? "Get Started" : "Next"}</Text>
+                                <Text style={styles.buttonText} weight="Bold">{currentIndex === onboardingData.length - 1 ? "Get Started" : "Next"}</Text>
                             </LinearGradient>
                         </TouchableOpacity>
                     </View>
@@ -428,7 +359,7 @@ const OnboardingScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    // backgroundColor will be set dynamically using themeColors.background
+    backgroundColor: "#121212",
   },
   slide: {
     width,
@@ -444,7 +375,7 @@ const styles = StyleSheet.create({
   },
   pattern: {
     ...StyleSheet.absoluteFillObject,
-    opacity: 0.4, // Increased from 0.15 to make gradients more visible
+    opacity: 0.15,
   },
   patternGradient: {
     width: width * 2,
@@ -467,17 +398,10 @@ const styles = StyleSheet.create({
     width: 160,
     height: 160,
     borderRadius: 80,
-    backgroundColor: "rgba(139, 92, 246, 0.3)", // Increased opacity
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 40,
-    borderWidth: 3, // Thicker border
-    borderColor: "rgba(139, 92, 246, 0.6)", // More visible border
-    shadowColor: "#8B5CF6",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8, // Android shadow
   },
   textContainer: {
     alignItems: "center",
@@ -492,13 +416,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: "bold",
-    // color will be set dynamically using themeColors.text
+    color: "#FFFFFF",
     textAlign: "center",
     marginBottom: 16,
   },
   description: {
     fontSize: 16,
-    // color will be set dynamically using themeColors.textSecondary
+    color: "#CCCCCC",
     textAlign: "center",
     lineHeight: 24,
     maxWidth: "80%",
@@ -524,32 +448,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   skipButton: {
-    overflow: 'hidden', // For gradient border radius
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.2)',
-  },
-  skipButtonGradient: {
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
   },
   buttonText: {
-    // color will be set dynamically
+    color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "600",
     textAlign: 'center'
-  },
-  gradientButton: {
-    shadowColor: "#8B5CF6",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 6, // Android shadow
-  },
-  backgroundOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 1,
   },
 });
 

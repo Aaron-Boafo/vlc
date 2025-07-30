@@ -15,7 +15,7 @@ import { Image } from 'expo-image';
 import {Music4, Play, Heart, MoreVertical, ListPlus, Info, Shuffle, PlusSquare, ArrowDownLeftSquare, Smartphone, ArrowLeft, Share2} from "lucide-react-native";
 import useThemeStore from "../store/theme";
 import useAudioControl from "../store/useAudioControl";
-import useOptimizedAudioStore from "../store/optimizedAudioStore";
+import useGlobalAudioStore from "../store/globalAudioStore";
 import {router} from "expo-router";
 import useFavouriteStore from '../store/favouriteStore';
 import CustomAlert from '../components/CustomAlert';
@@ -97,7 +97,7 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
   const {themeColors} = useThemeStore();
   const audioControl = useAudioControl();
   const favouriteStore = useFavouriteStore();
-  const { audioFiles, isLoading, loadAudioFiles, sortOrder } = useOptimizedAudioStore();
+  const { audioFiles, isLoading, forceRefresh, sortOrder } = useGlobalAudioStore();
   const {width} = Dimensions.get("window");
   const [optionsVisible, setOptionsVisible] = useState(false);
   const [selectedTrack, setSelectedTrack] = useState(null);
@@ -151,7 +151,7 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadAudioFiles();
+    await forceRefresh();
     setRefreshing(false);
   };
 
@@ -198,7 +198,7 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
       console.log('🎨 Artwork URI:', enrichedTracks[index].artwork?.substring(0, 50) + '...');
       
       // Start playing the track and navigate to player
-      await audioControl.setAndPlayPlaylist(enrichedTracks, index, false); // Don't show mini player
+      await audioControl.setAndPlayPlaylist(enrichedTracks, index, true); // Show bottom player
       router.push('/player/audio');
     } catch (error) {
       console.error("Error playing song:", error);
@@ -231,7 +231,7 @@ const AllScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) =
     
     // Create a shuffled copy of the audio files
     const shuffledFiles = [...audioFiles].sort(() => Math.random() - 0.5);
-    audioControl.setAndPlayPlaylist(shuffledFiles, 0, false); // Don't show mini player
+    audioControl.setAndPlayPlaylist(shuffledFiles, 0, true); // Show bottom player
     router.push("/(audio)/player");
   };
 

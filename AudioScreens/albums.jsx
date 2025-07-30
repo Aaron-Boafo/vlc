@@ -1,13 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Image, Modal, StyleSheet, TextInput } from 'react-native';
 import useThemeStore from '../store/theme';
-import useOptimizedAudioStore from '../store/optimizedAudioStore';
+import useGlobalAudioStore from '../store/globalAudioStore';
 import useAudioControl from '../store/useAudioControl';
 import SearchBar from '../components/SearchBar';
 
 const Albums = ({ showSearch, searchQuery, setSearchQuery }) => {
   const { themeColors } = useThemeStore();
-  const { audioFiles } = useOptimizedAudioStore();
+  const { audioFiles } = useGlobalAudioStore();
   const audioControl = useAudioControl();
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -50,7 +50,7 @@ const Albums = ({ showSearch, searchQuery, setSearchQuery }) => {
   const handlePlayTrack = async (track) => {
     const index = albumTracks.findIndex(t => t.id === track.id);
     if (index !== -1 && track.uri) {
-      await audioControl.setAndPlayPlaylist(albumTracks, index, true); // Show mini player
+      await audioControl.setAndPlayPlaylist(albumTracks, index, true); // Show bottom player
       setModalVisible(false);
     } else {
       alert('This track has no valid audio file.');

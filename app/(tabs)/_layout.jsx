@@ -3,7 +3,9 @@ import React, { useCallback, useEffect, useMemo } from "react";
 import { InteractionManager, Platform } from "react-native";
 import useThemeStore from "../../store/theme";
 import * as Icons from "lucide-react-native";
-import MiniPlayer from "../../components/MiniPlayer";
+import SimpleBottomPlayer from "../../components/SimpleBottomPlayer";
+
+
 import VideoMiniPlayerConditional from '../../components/VideoMiniPlayerConditional';
 import NavigationOptimizer from "../../utils/navigationOptimizer";
 import DeviceOptimizer from "../../utils/deviceOptimizer";
@@ -166,7 +168,7 @@ const TabLayouts = React.memo(() => {
           }}
         />
       </Tabs>
-      <MiniPlayer />
+      <SimpleBottomPlayer />
       <VideoMiniPlayerConditional />
     </>
   );
