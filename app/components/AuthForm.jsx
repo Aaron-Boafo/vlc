@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import useUserProfileStore from '../../store/userProfile';
+import useThemeStore from '../../store/theme';
 import {
   View,
   Text,
@@ -10,7 +11,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  ImageBackground,
   StyleSheet,
   ActivityIndicator
 } from 'react-native';
@@ -28,6 +28,7 @@ export default function AuthForm({
   onSignup,
   accentColor = "#0D8ABC"
 }) {
+  const { themeColors } = useThemeStore();
   const [activeTab, setActiveTab] = useState('login');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -389,9 +390,15 @@ export default function AuthForm({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <ImageBackground
-        source={require('../../assets/images/bg-login.png')}
-        resizeMode="cover"
+      <LinearGradient
+        colors={[
+          '#667eea', // Beautiful blue
+          '#764ba2', // Purple
+          '#2c3e50', // Dark blue-gray
+          '#1a1a1a'  // Dark
+        ]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={{ flex: 1 }}
       >
         <KeyboardAvoidingView
@@ -549,7 +556,7 @@ export default function AuthForm({
             </BlurView>
           </View>
         </KeyboardAvoidingView>
-      </ImageBackground>
+      </LinearGradient>
     </Modal>
   );
 }

@@ -6,39 +6,7 @@
   <component name="ChangeListManager">
     <list default="true" id="9db4fd3f-f98f-4439-8024-fcff77de74df" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/AudioComponents/title.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/AudioComponents/title.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/AudioComponents/toggleButton.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/AudioComponents/toggleButton.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/AudioScreens/albums.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/AudioScreens/albums.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/AudioScreens/all.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/AudioScreens/all.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/AudioScreens/artist.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/AudioScreens/artist.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/AudioScreens/playlist.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/AudioScreens/playlist.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/FRONTEND_ARCHITECTURE.md" beforeDir="false" afterPath="$PROJECT_DIR$/FRONTEND_ARCHITECTURE.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/(onboarding)/_layout.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(onboarding)/_layout.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/(onboarding)/index.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(onboarding)/index.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/(tabs)/(audio)/_layout.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(tabs)/(audio)/_layout.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/(tabs)/(audio)/index.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(tabs)/(audio)/index.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/(tabs)/(playlist)/index.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(tabs)/(playlist)/index.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/(tabs)/_layout.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(tabs)/_layout.jsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/components/AuthForm.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/components/AuthForm.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/components/PhoneInput.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/components/PhoneInput.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/components/UserProfileModal.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/components/UserProfileModal.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/player/audio.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/player/audio.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/config/api.js" beforeDir="false" afterPath="$PROJECT_DIR$/config/api.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/services/api.js" beforeDir="false" afterPath="$PROJECT_DIR$/services/api.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/services/authService.js" beforeDir="false" afterPath="$PROJECT_DIR$/services/authService.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/services/musicControlService.js" beforeDir="false" afterPath="$PROJECT_DIR$/services/musicControlService.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/services/profileService.js" beforeDir="false" afterPath="$PROJECT_DIR$/services/profileService.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/services/storageService.js" beforeDir="false" afterPath="$PROJECT_DIR$/services/storageService.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/services/websocketService.js" beforeDir="false" afterPath="$PROJECT_DIR$/services/websocketService.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/store/AudioHeadStore.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/store/optimizedAudioStore.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/store/optimizedVideoStore.js" beforeDir="false" afterPath="$PROJECT_DIR$/store/optimizedVideoStore.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/store/useAudioControl.js" beforeDir="false" afterPath="$PROJECT_DIR$/store/useAudioControl.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/store/userProfile.js" beforeDir="false" afterPath="$PROJECT_DIR$/store/userProfile.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tsconfig.json" beforeDir="false" afterPath="$PROJECT_DIR$/tsconfig.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils/MediaCacheManager.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils/navigationOptimizer.js" beforeDir="false" afterPath="$PROJECT_DIR$/utils/navigationOptimizer.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils/progressiveMediaLoader.js" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

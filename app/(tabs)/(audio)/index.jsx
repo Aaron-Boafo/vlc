@@ -99,7 +99,7 @@ export default function UnifiedAudioApp() {
             // Get all audio files in one go 
             const media = await MediaLibrary.getAssetsAsync({
                 mediaType: MediaLibrary.MediaType.audio,
-                first: 10, // Get a large batch
+                first: 100, // Get a large batch
             });
 
             console.log(`📱 Found ${media.assets.length} audio files`);
