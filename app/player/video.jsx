@@ -335,12 +335,12 @@ const MinimalVideoPlayer = () => {
               <Text style={{ color: '#FFF', marginTop: 16 }}>Video Player Loading...</Text>
             </View>
           )}
-          {/* Controls Overlay */}
-          {(controlsVisible || isLocked) && (
-            <View
-              style={styles.controlsOverlay}
-              pointerEvents="box-none"
-            >
+          {/* Minimal overlay - only back button for navigation */}
+          {controlsVisible && (
+            <View style={styles.minimalOverlay}>
+              <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+                <ChevronDown size={28} color="#FFF" />
+              </TouchableOpacity>
               {/* Top overlay row: Back, Title, More */}
               {controlsVisible && !isLocked && (
                 <View style={styles.topOverlay}>

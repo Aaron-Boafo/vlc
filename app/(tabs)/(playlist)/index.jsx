@@ -1,4 +1,4 @@
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Modal, TextInput, Alert, Image, ActivityIndicator, ScrollView } from "react-native";
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Modal, TextInput, Alert, Image, ActivityIndicator } from "react-native";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import useThemeStore from "../../../store/theme";
 import usePlaylistStore from '../../../store/playlistStore';
@@ -11,8 +11,8 @@ import AudioHeader from '../../../AudioComponents/title';
 import { SafeAreaView as SafeAreaViewSafeAreaContext } from 'react-native-safe-area-context';
 import MoreOptionsMenu from '../../../components/MoreOptionsMenu';
 import SearchBar from '../../../components/SearchBar';
-import { useRef } from "react";
-import useOptimizedPlaylistLoader from '../../../hooks/useOptimizedPlaylistLoader';
+
+
 
 const SegmentedControl = ({ value, onChange }) => {
   const { themeColors } = useThemeStore();
@@ -140,18 +140,20 @@ const PlaylistScreen = () => {
   const audioControl = useAudioControl();
   const router = useRouter();
 
-  // Get cached data from stores
-  const { audioFiles, initialize, isLoading: audioLoading } = useGlobalAudioStore();
-  const { videoFiles, loadVideoFiles, isLoading: videoLoading } = useOptimizedVideoStore();
-  
-  // Use optimized loader for playlist creation
-  const {
-    audioFiles: playlistAudioFiles,
-    videoFiles: playlistVideoFiles,
-    loading: playlistLoading,
-    progress: playlistProgress,
-    loadAllMedia: loadPlaylistMedia
-  } = useOptimizedPlaylistLoader();
+  // Use cached data from main stores (no separate loading needed)
+  const { 
+    audioFiles: playlistAudioFiles, 
+    loadAllAudioFiles, 
+    isLoading: audioLoading,
+    permissionGranted: audioPermission,
+    isInitialized: audioInitialized
+  } = useGlobalAudioStore();
+  const { 
+    videoFiles: playlistVideoFiles, 
+    loadVideoFiles, 
+    isLoading: videoLoading,
+    isInitialLoadComplete: videoInitialized
+  } = useOptimizedVideoStore();
 
   // State
   const [modalVisible, setModalVisible] = useState(false);
@@ -192,18 +194,52 @@ const PlaylistScreen = () => {
   }, [availableTracks, trackSearchQuery]);
 
   // Load tracks from stores when modal opens or type changes
-  // Load files when create modal opens - using optimized loader
+  // Ensure files are loaded when create modal opens - using cached data
   useEffect(() => {
     if (createModal) {
-      console.log('⚡ Loading media files with optimized loader...');
-      loadPlaylistMedia(); // This loads both audio and video efficiently
+      console.log('⚡ Playlist creation modal opened');
+      console.log(`📊 Audio: ${playlistAudioFiles.length} files, loading: ${audioLoading}, initialized: ${audioInitialized}, permission: ${audioPermission}`);
+      console.log(`📊 Video: ${playlistVideoFiles.length} files, loading: ${videoLoading}, initialized: ${videoInitialized}`);
+      
+      // Load audio files if needed
+      if (playlistAudioFiles.length === 0 && !audioLoading) {
+        if (audioPermission === false) {
+          console.warn('❌ Audio permission denied');
+        } else {
+          console.log('📱 Loading audio files...');
+          loadAllAudioFiles().catch(error => {
+            console.error('❌ Failed to load audio files:', error);
+          });
+        }
+      }
+      
+      // Load video files if needed
+      if (playlistVideoFiles.length === 0 && !videoLoading) {
+        console.log('🎥 Loading video files...');
+        loadVideoFiles().catch(error => {
+          console.error('❌ Failed to load video files:', error);
+        });
+      }
     }
-  }, [createModal, loadPlaylistMedia]);
+  }, [createModal, loadAllAudioFiles, loadVideoFiles, playlistAudioFiles.length, playlistVideoFiles.length, audioLoading, videoLoading, audioPermission, audioInitialized, videoInitialized]);
 
-  // Check if we're currently loading - using optimized loader
+  // Check if we're currently loading - using main stores
   const isLoadingTracks = useMemo(() => {
-    return playlistLoading || playlistProgress.audio.phase !== 'idle' || playlistProgress.video.phase !== 'idle';
-  }, [playlistLoading, playlistProgress]);
+    if (playlistType === 'audio') {
+      return audioLoading || (playlistAudioFiles.length === 0 && !audioInitialized && audioPermission !== false);
+    } else {
+      return videoLoading || (playlistVideoFiles.length === 0 && !videoInitialized);
+    }
+  }, [playlistType, audioLoading, videoLoading, playlistAudioFiles.length, playlistVideoFiles.length, audioInitialized, videoInitialized, audioPermission]);
+
+  // Check for errors
+  const hasError = useMemo(() => {
+    if (playlistType === 'audio') {
+      return audioPermission === false || (audioInitialized && playlistAudioFiles.length === 0 && !audioLoading);
+    } else {
+      return videoInitialized && playlistVideoFiles.length === 0 && !videoLoading;
+    }
+  }, [playlistType, audioPermission, audioInitialized, videoInitialized, playlistAudioFiles.length, playlistVideoFiles.length, audioLoading, videoLoading]);
 
   // Handlers
   const openPlaylist = useCallback((playlist) => {
@@ -474,6 +510,11 @@ const PlaylistScreen = () => {
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
               Select {playlistType === 'audio' ? 'Audio' : 'Video'} Tracks ({filteredTracks.length})
+              {filteredTracks.length > 0 && (
+                <Text style={[styles.cacheIndicator, { color: themeColors.primary, fontSize: 14, fontWeight: 'normal' }]}>
+                  {' '}• From Cache
+                </Text>
+              )}
             </Text>
 
             {/* Search input for tracks */}
@@ -495,21 +536,13 @@ const PlaylistScreen = () => {
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={themeColors.primary} />
               <Text style={[styles.loadingText, { color: themeColors.textSecondary }]}>
-                {playlistType === 'audio' 
-                  ? `Loading audio files... ${playlistProgress.audio.loaded}/${playlistProgress.audio.total || '?'}`
-                  : `Loading video files... ${playlistProgress.video.loaded}/${playlistProgress.video.total || '?'}`
+                {playlistType === 'audio' && playlistAudioFiles.length > 0 
+                  ? 'Preparing cached audio files...'
+                  : playlistType === 'video' && playlistVideoFiles.length > 0
+                  ? 'Preparing cached video files...'
+                  : `Loading ${playlistType} files...`
                 }
               </Text>
-              {playlistProgress.audio.phase === 'loading_metadata' && (
-                <Text style={[styles.subLoadingText, { color: themeColors.textSecondary }]}>
-                  Extracting metadata...
-                </Text>
-              )}
-              {playlistProgress.video.phase === 'generating_thumbnails' && (
-                <Text style={[styles.subLoadingText, { color: themeColors.textSecondary }]}>
-                  Generating thumbnails...
-                </Text>
-              )}
             </View>
           ) : filteredTracks.length === 0 ? (
             <View style={styles.loadingContainer}>

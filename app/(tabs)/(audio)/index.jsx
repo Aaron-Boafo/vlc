@@ -863,7 +863,6 @@ export default function UnifiedAudioApp() {
                         </TouchableOpacity>
                         <Text style={[styles.fullPlayerTitle, { color: themeColors.text }]}>Now Playing</Text>
                         <TouchableOpacity>
-                            <MoreVertical size={28} color={themeColors.text} />
                         </TouchableOpacity>
                     </View>
 

@@ -7,8 +7,9 @@
     <list default="true" id="9db4fd3f-f98f-4439-8024-fcff77de74df" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/(tabs)/(audio)/index.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(tabs)/(audio)/index.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/(tabs)/_layout.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(tabs)/_layout.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/contexts/ThemeContext.js" beforeDir="false" afterPath="$PROJECT_DIR$/contexts/ThemeContext.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/(tabs)/(playlist)/index.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/(tabs)/(playlist)/index.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/player/video.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/player/video.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/components/AccentColorPicker.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/components/AccentColorPicker.jsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/store/theme.js" beforeDir="false" afterPath="$PROJECT_DIR$/store/theme.js" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
