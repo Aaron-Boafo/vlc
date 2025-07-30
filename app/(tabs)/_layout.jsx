@@ -12,7 +12,7 @@ import DeviceOptimizer from "../../utils/deviceOptimizer";
 import TabOptimizer from "../../utils/tabOptimizer";
 
 const TabLayouts = React.memo(() => {
-  const { themeColors } = useThemeStore();
+  const { themeColors, _updateCounter } = useThemeStore();
   const [currentTab, setCurrentTab] = React.useState('(audio)');
   const [isTransitioning, setIsTransitioning] = React.useState(false);
 
@@ -99,6 +99,7 @@ const TabLayouts = React.memo(() => {
   return (
     <>
       <Tabs
+        key={_updateCounter} // Force re-render when theme changes
         screenOptions={screenOptions}
         screenListeners={screenListeners}
       >

@@ -20,7 +20,8 @@ export const ThemeProvider = ({ children }) => {
     setBackground,
     selectedBackground,
     initializeTheme,
-    _hasHydrated = false
+    _hasHydrated = false,
+    _updateCounter = 0
   } = useThemeStore();
 
   // Initialize theme when the provider mounts
@@ -42,7 +43,8 @@ export const ThemeProvider = ({ children }) => {
     setAccentColor,
     setBackground,
     selectedBackground,
-  }), [activeTheme, accentColor, themeColors, toggleTheme, setAccentColor, setBackground, selectedBackground]);
+    _updateCounter, // Include update counter to force re-renders
+  }), [activeTheme, accentColor, themeColors, toggleTheme, setAccentColor, setBackground, selectedBackground, _updateCounter]);
 
   // Don't render children until theme is initialized
   if (!_hasHydrated || !themeColors) {

@@ -159,6 +159,9 @@ const createThemeStore = (set, get) => ({
   themeColors: getThemeColors("dark", "purple"),
   selectedBackground: null,
   _hasHydrated: false,
+  
+  // Force re-render counter to ensure all components update
+  _updateCounter: 0,
 
   // Actions
   toggleTheme: () => {
@@ -167,17 +170,22 @@ const createThemeStore = (set, get) => ({
     set({
       activeTheme: newTheme,
       themeColors: getThemeColors(newTheme, state.accentColor),
+      _updateCounter: state._updateCounter + 1, // Force re-render
     });
   },
 
   setAccentColor: (color) => {
     const state = get();
     const newThemeColors = getThemeColors(state.activeTheme, color);
+    console.log('🎨 Setting accent color:', color);
+    console.log('🎨 New primary color:', newThemeColors.primary);
+    console.log('🎨 Update counter:', state._updateCounter + 1);
     set({
       accentColor: color,
       themeColors: newThemeColors,
+      _updateCounter: state._updateCounter + 1, // Force re-render
     });
-    console.log('🎨 Accent color changed to:', color, 'Primary color:', newThemeColors.primary);
+    console.log('✅ Theme store updated successfully');
   },
 
   setBackground: (background) => {

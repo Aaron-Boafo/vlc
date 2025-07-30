@@ -1031,7 +1031,7 @@ export default function UnifiedAudioApp() {
             {/* Bottom Player */}
             {renderBottomPlayer()}
 
-            {/* Full Player Modal */}
+            {/* Full Player .Modal */}
             {renderFullPlayer()}
         </SafeAreaView>
     );
