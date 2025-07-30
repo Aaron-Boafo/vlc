@@ -40,42 +40,42 @@ export default function AuthForm({
   const validateForm = () => {
     // Basic validation for both login and signup
     const trimmedPhone = phone.trim();
-    
+
     if (!trimmedPhone) {
       Alert.alert('Error', 'Please enter your phone number');
       return false;
     }
-    
+
     // Check if phone number has valid international format
     const phoneRegex = /^\+[1-9]\d{1,14}$/; // E.164 format
     if (!phoneRegex.test(trimmedPhone)) {
       Alert.alert('Error', 'Please enter a valid international phone number (e.g., +1234567890)');
       return false;
     }
-    
+
     // Check minimum length (country code + number)
     if (trimmedPhone.length < 8) {
       Alert.alert('Error', 'Phone number is too short');
       return false;
     }
-    
+
     // Check maximum length (15 digits max including +)
     if (trimmedPhone.length > 16) {
       Alert.alert('Error', 'Phone number is too long');
       return false;
     }
-    
+
     if (!password) {
       Alert.alert('Error', 'Please enter your password');
       return false;
     }
-    
+
     // Check password length (minimum 8 characters)
     if (password.length < 8) {
       Alert.alert('Error', 'Password must be at least 8 characters long');
       return false;
     }
-    
+
     // Additional validation for signup
     if (activeTab === 'signup') {
       const trimmedName = name.trim();
@@ -83,29 +83,29 @@ export default function AuthForm({
         Alert.alert('Error', 'Please enter your full name');
         return false;
       }
-      
+
       if (password !== confirmPassword) {
         Alert.alert('Error', 'Passwords do not match');
         return false;
       }
-      
+
       if (password.length < 6) {
         Alert.alert('Error', 'Password must be at least 6 characters');
         return false;
       }
     }
-    
+
     return true;
   };
 
   const handleLogin = async () => {
     if (!validateForm()) return;
-    
+
     try {
       setIsLoading(true);
       const trimmedPhone = phone.trim();
       console.log('Attempting login with phone:', trimmedPhone);
-      
+
       // First, authenticate the user
       const loginResponse = await api.auth.login({
         phoneNumber: trimmedPhone,
@@ -117,18 +117,18 @@ export default function AuthForm({
       });
 
       console.log('Login response:', loginResponse.data);
-      
+
       if (loginResponse.data?.status === true && loginResponse.data?.data?.jwt) {
         const token = loginResponse.data.data.jwt;
         const userData = loginResponse.data.data.user || {}; // Get user data from login response if available
-        
+
         // Get username from response or generate a default one
         const username = userData.username || `User_${trimmedPhone.slice(-4)}`;
         const profilePicture = userData.profilePicture || `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=0D8ABC&color=fff`;
-        
+
         // Save the JWT token to secure storage first
         await SecureStore.setItemAsync('auth_token', token);
-        
+
         // Prepare user profile data
         const userProfile = {
           name: username,
@@ -138,9 +138,9 @@ export default function AuthForm({
           storageUsed: userData.storageUsed || 0,
           token: token
         };
-        
+
         console.log('User logged in with profile:', userProfile);
-        
+
         // Update profile store and initialize WebSocket
         try {
           await useUserProfileStore.getState().setUserProfile({
@@ -148,17 +148,17 @@ export default function AuthForm({
             avatar: profilePicture,
             email: userData.email || ''
           });
-          
+
           console.log('Profile updated, WebSocket should be initializing...');
-          
+
           // Call the onLogin callback with user data if provided
           if (onLogin) {
             onLogin(userProfile);
           }
-          
+
           // Close the modal
           onClose();
-          
+
         } catch (wsError) {
           console.error('Error during WebSocket initialization:', wsError);
           // Still continue with login even if WebSocket fails
@@ -167,22 +167,22 @@ export default function AuthForm({
           }
           onClose();
         }
-        
+
         // Fetch the latest profile data to ensure we have the most up-to-date information
         try {
           console.log('Fetching updated profile...');
           const profileResponse = await api.profile.get();
           console.log('Profile response:', profileResponse.data);
-          
+
           if (profileResponse.data?.status === true && profileResponse.data?.data) {
             const profileData = profileResponse.data.data;
             const updatedName = profileData.username || profileData.phoneNumber || username;
             const updatedAvatar = profileData.profilePicture || profilePicture;
-            
+
             // Update the profile store with the latest data
             useUserProfileStore.getState().setUserName(updatedName);
             useUserProfileStore.getState().setUserAvatar(updatedAvatar);
-            
+
             const updatedProfile = {
               name: updatedName,
               phone: profileData.phoneNumber || trimmedPhone,
@@ -191,9 +191,9 @@ export default function AuthForm({
               storageUsed: profileData.storageUsed || 0,
               token: token
             };
-            
+
             console.log('Updated profile with latest data:', updatedProfile);
-            
+
             // Call the onLogin callback with the updated profile if needed
             if (onLogin) {
               onLogin(updatedProfile);
@@ -203,7 +203,7 @@ export default function AuthForm({
           console.error('Error updating profile:', profileError);
           // Silently fail - we already have the basic profile from login
         }
-        
+
         // Close the modal
         onClose();
       } else {
@@ -213,13 +213,13 @@ export default function AuthForm({
       console.error('Login error:', error);
       console.log('Error response data:', error.response?.data);
       console.log('Error status:', error.response?.status);
-      
+
       let errorMessage = 'Failed to login. Please check your credentials and try again.';
-      
+
       if (error.response) {
         // Server responded with an error status code
         const { status, data } = error.response;
-        
+
         if (status === 400) {
           errorMessage = data?.message || 'Invalid phone number or password.';
         } else if (status === 401) {
@@ -238,7 +238,7 @@ export default function AuthForm({
         console.error('Error:', error.message);
         errorMessage = error.message;
       }
-      
+
       // Show error to user
       Alert.alert("Error", errorMessage);
     } finally {
@@ -248,17 +248,17 @@ export default function AuthForm({
 
   const handleSignup = async () => {
     if (!validateForm()) return;
-    
+
     try {
       setIsLoading(true);
       const trimmedPhone = phone.trim();
-      
+
       console.log('Attempting signup with phone:', trimmedPhone);
-      
+
       // Set a timeout for the API call
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-      
+
       try {
         // Include name in the signup request if available
         const signupData = {
@@ -266,23 +266,23 @@ export default function AuthForm({
           password,
           ...(name && { name }) // Include name if it exists
         };
-        
-        const response = await api.auth.register(signupData, { 
+
+        const response = await api.auth.register(signupData, {
           signal: controller.signal,
           headers: {
             'Content-Type': 'application/json'
           }
         });
-        
+
         clearTimeout(timeoutId);
         console.log('Signup response:', response.data);
-        
+
         if (response.data?.status === true) {
           // Clear form fields
           setPassword('');
           setConfirmPassword('');
           setName('');
-          
+
           // Automatically log in the user after successful signup
           try {
             console.log('Attempting to log in with new account...');
@@ -294,12 +294,12 @@ export default function AuthForm({
                 'Content-Type': 'application/json'
               }
             });
-            
+
             if (loginResponse.data?.status === true && loginResponse.data?.data?.jwt) {
               const token = loginResponse.data.data.jwt;
               const userData = loginResponse.data.data.user || {};
               const username = userData.username || `User_${trimmedPhone.slice(-4)}`;
-              
+
               // Create user profile
               const userProfile = {
                 name: username,
@@ -308,13 +308,13 @@ export default function AuthForm({
                 avatar: userData.profilePicture || `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=0D8ABC&color=fff`,
                 storageUsed: userData.storageUsed || 0
               };
-              
+
               // Save the JWT token and user data
               await SecureStore.setItemAsync('auth_token', token);
               await SecureStore.setItemAsync('user_data', JSON.stringify(userProfile));
-              
+
               console.log('Auto-login successful');
-              
+
               // Call the onLogin callback to update the parent component
               if (onLogin) {
                 onLogin({
@@ -322,7 +322,7 @@ export default function AuthForm({
                   token: token,
                 });
               }
-              
+
               // Close the auth modal
               onClose();
               return; // Exit the function after successful login
@@ -331,7 +331,7 @@ export default function AuthForm({
             console.error('Auto-login failed:', loginError);
             // Continue to show success message if auto-login fails
           }
-          
+
           // If auto-login fails, show success message and switch to login tab
           Alert.alert(
             'Success',
@@ -355,16 +355,16 @@ export default function AuthForm({
     } catch (error) {
       console.error('Signup error:', error);
       let errorMessage = 'Failed to create account. Please try again.';
-      
+
       if (error.name === 'AbortError') {
         errorMessage = 'Request timed out. Please check your internet connection and try again.';
       } else if (error.response?.status === 409) {
         errorMessage = 'This phone number is already registered. Please log in instead.';
       } else if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
-        
-        if (error.response.status === 500 && 
-            error.response.data?.message?.includes('non unique result')) {
+
+        if (error.response.status === 500 &&
+          error.response.data?.message?.includes('non unique result')) {
           errorMessage = "This phone number is already registered. Please login instead.";
         } else if (error.response.status >= 500) {
           errorMessage = "Server error. Please try again later.";
@@ -375,10 +375,10 @@ export default function AuthForm({
       } else {
         console.error('Error setting up request:', error.message);
       }
-      
+
       // Show error to user
       Alert.alert("Error", errorMessage);
-      
+
       // Switch to login tab if needed
       if (shouldSwitchToLogin) {
         setActiveTab('login');

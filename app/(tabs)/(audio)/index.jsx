@@ -74,6 +74,7 @@ export default function UnifiedAudioApp() {
     const [duration, setDuration] = useState(0);
     const [showBottomPlayer, setShowBottomPlayer] = useState(false);
     const [showFullPlayer, setShowFullPlayer] = useState(false);
+    const [isLoadingTrack, setIsLoadingTrack] = useState(false);
 
     // UI state
     const [showSearch, setShowSearch] = useState(false);
@@ -92,102 +93,132 @@ export default function UnifiedAudioApp() {
 
     // ==================== AUDIO LOADING ====================
     const loadAllAudioFiles = async () => {
-        console.log('🎵 Loading audio files...');
+        console.log('🎵 Loading audio files in batches...');
         let allAssets = [];
+        let after = null;
+        let hasNextPage = true;
+        const BATCH_SIZE = 10; // Load 10 files per batch
 
         try {
-            // Get all audio files in one go 
-            const media = await MediaLibrary.getAssetsAsync({
-                mediaType: MediaLibrary.MediaType.audio,
-                first: 100, // Get a large batch
-            });
+            // Load files in batches with pagination
+            while (hasNextPage) {
+                console.log(`📦 Loading batch... (Total so far: ${allAssets.length})`);
 
-            console.log(`📱 Found ${media.assets.length} audio files`);
+                const media = await MediaLibrary.getAssetsAsync({
+                    mediaType: MediaLibrary.MediaType.audio,
+                    first: BATCH_SIZE,
+                    after: after, // Pagination cursor
+                });
 
-            // Filter out unwanted files 
-            const excludedFolders = [
-                '/WhatsApp/Media/WhatsApp Audio/Sent',
-                '/WhatsApp/Media/WhatsApp Audio/Private',
-                '/WhatsApp/Media/WhatsApp Voice Notes',
-                '/WhatsApp/Media/.Statuses',
-                '/WhatsApp/Private',
-                '/Telegram',
-                '/Instagram',
-                '/Snapchat',
-                '/.nomedia',
-                '/Android/data',
-                '/system/',
-                '/cache/',
-            ];
+                console.log(`📱 Found ${media.assets.length} audio files in this batch`);
 
-            const filtered = media.assets.filter(asset => {
-                return !excludedFolders.some(folder => asset.uri.includes(folder));
-            });
+                // Filter out unwanted files 
+                const excludedFolders = [
+                    '/WhatsApp/Media/WhatsApp Audio/Sent',
+                    '/WhatsApp/Media/WhatsApp Audio/Private',
+                    '/WhatsApp/Media/WhatsApp Voice Notes',
+                    '/WhatsApp/Media/.Statuses',
+                    '/WhatsApp/Private',
+                    '/Telegram',
+                    '/Instagram',
+                    '/Snapchat',
+                    '/.nomedia',
+                    '/Android/data',
+                    '/system/',
+                    '/cache/',
+                ];
 
-            console.log(`🔍 Filtered to ${filtered.length} audio files`);
+                const filtered = media.assets.filter(asset => {
+                    return !excludedFolders.some(folder => asset.uri.includes(folder));
+                });
 
-            // Process files with metadata
-            const batchAssets = await Promise.all(
-                filtered.map(async (asset) => {
-                    try {
-                        const data = await getAudioMetadata(asset.uri, [
-                            "album", "artist", "name", "year", "artwork"
-                        ]);
-                        const metadata = data.metadata || {};
+                console.log(`🔍 Filtered to ${filtered.length} audio files in this batch`);
 
-                        // Handle artwork
-                        let artworkUri = null;
-                        if (metadata.artwork) {
-                            if (metadata.artwork.startsWith('data:image')) {
-                                artworkUri = metadata.artwork;
-                            } else if (/^[A-Za-z0-9+/=]+$/.test(metadata.artwork)) {
-                                artworkUri = `data:image/png;base64,${metadata.artwork}`;
-                            } else {
-                                artworkUri = metadata.artwork;
+                // Process files with metadata in smaller chunks to avoid memory issues
+                const batchAssets = await Promise.all(
+                    filtered.map(async (asset) => {
+                        try {
+                            const data = await getAudioMetadata(asset.uri, [
+                                "album", "artist", "name", "year", "artwork"
+                            ]);
+                            const metadata = data.metadata || {};
+
+                            // Handle artwork
+                            let artworkUri = null;
+                            if (metadata.artwork) {
+                                if (metadata.artwork.startsWith('data:image')) {
+                                    artworkUri = metadata.artwork;
+                                } else if (/^[A-Za-z0-9+/=]+$/.test(metadata.artwork)) {
+                                    artworkUri = `data:image/png;base64,${metadata.artwork}`;
+                                } else {
+                                    artworkUri = metadata.artwork;
+                                }
                             }
+
+                            return {
+                                id: asset.id,
+                                uri: asset.uri,
+                                filename: asset.filename,
+                                duration: asset.duration,
+                                album: metadata.album || "Unknown Album",
+                                artist: metadata.artist || "Unknown Artist",
+                                title: metadata.name || asset.filename.replace(/\.[^/.]+$/, ""),
+                                year: metadata.year || null,
+                                artwork: artworkUri,
+                                creationTime: asset.creationTime,
+                                modificationTime: asset.modificationTime,
+                            };
+                        } catch {
+                            return {
+                                id: asset.id,
+                                uri: asset.uri,
+                                filename: asset.filename,
+                                duration: asset.duration,
+                                album: "Unknown Album",
+                                artist: "Unknown Artist",
+                                title: asset.filename.replace(/\.[^/.]+$/, ""),
+                                year: null,
+                                artwork: null,
+                                creationTime: asset.creationTime,
+                                modificationTime: asset.modificationTime,
+                            };
                         }
+                    })
+                );
 
-                        return {
-                            id: asset.id,
-                            uri: asset.uri,
-                            filename: asset.filename,
-                            duration: asset.duration,
-                            album: metadata.album || "Unknown Album",
-                            artist: metadata.artist || "Unknown Artist",
-                            title: metadata.name || asset.filename.replace(/\.[^/.]+$/, ""),
-                            year: metadata.year || null,
-                            artwork: artworkUri,
-                            creationTime: asset.creationTime,
-                            modificationTime: asset.modificationTime,
-                        };
-                    } catch {
-                        return {
-                            id: asset.id,
-                            uri: asset.uri,
-                            filename: asset.filename,
-                            duration: asset.duration,
-                            album: "Unknown Album",
-                            artist: "Unknown Artist",
-                            title: asset.filename.replace(/\.[^/.]+$/, ""),
-                            year: null,
-                            artwork: null,
-                            creationTime: asset.creationTime,
-                            modificationTime: asset.modificationTime,
-                        };
-                    }
-                })
-            );
+                const validAssets = batchAssets.filter(a => a !== null);
+                allAssets = [...allAssets, ...validAssets]; // Accumulate all batches
 
-            const validAssets = batchAssets.filter(a => a !== null);
-            allAssets = validAssets.sort((a, b) => a.title.localeCompare(b.title));
+                // Update UI progressively with each batch
+                const sortedAssets = allAssets.sort((a, b) => a.title.localeCompare(b.title));
+                setAudioFiles(sortedAssets);
 
-            // Update UI immediately (like your friend's approach)
-            setAudioFiles(allAssets);
+                // Update global store progressively
+                const globalStore = useGlobalAudioStore.getState();
+                globalStore.setAudioFiles(sortedAssets);
+
+                console.log(`✅ Processed batch. Total files: ${allAssets.length}`);
+
+                // Check if there are more files to load
+                hasNextPage = media.hasNextPage;
+                after = media.endCursor;
+
+                // Small delay to keep UI responsive
+                if (hasNextPage) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            }
+
+            // Final sort and update
+            const finalSortedAssets = allAssets.sort((a, b) => a.title.localeCompare(b.title));
+            setAudioFiles(finalSortedAssets);
             setLoading(false);
 
-            // Also update global audio store for other screens
+            // Final update to global store
             const globalStore = useGlobalAudioStore.getState();
-            globalStore.setAudioFiles(allAssets);
+            globalStore.setAudioFiles(finalSortedAssets);
+
+            console.log(`🎵 Completed loading ${allAssets.length} audio files in total`);
 
         } catch (err) {
             console.error('❌ Audio loading failed:', err);
@@ -297,11 +328,31 @@ export default function UnifiedAudioApp() {
     // ==================== AUDIO PLAYER FUNCTIONS ====================
     const playTrack = async (track, playlist = null) => {
         try {
+            // Prevent multiple simultaneous audio loading
+            if (isLoadingTrack) {
+                console.log('⚠️ Already loading a track, ignoring request');
+                return;
+            }
+
+            // If same track is already playing, just toggle play/pause
+            if (currentTrack?.id === track.id && sound) {
+                if (isPlaying) {
+                    await pauseTrack();
+                } else {
+                    await resumeTrack();
+                }
+                return;
+            }
+
+            setIsLoadingTrack(true);
             console.log('🎵 Playing track:', track.title);
 
-            // Stop current sound if playing
+            // Stop current sound if playing (ensure only one audio plays)
             if (sound) {
+                console.log('🛑 Stopping current track to play new one');
                 await sound.unloadAsync();
+                setSound(null);
+                setIsPlaying(false);
             }
 
             // Setup audio mode
@@ -323,6 +374,7 @@ export default function UnifiedAudioApp() {
             setCurrentTrack(track);
             setIsPlaying(true);
             setShowBottomPlayer(true);
+            setIsLoadingTrack(false);
 
             // Show music notification
             await MusicNotificationService.showMusicNotification(track);
@@ -337,6 +389,7 @@ export default function UnifiedAudioApp() {
 
         } catch (error) {
             console.error('❌ Error playing track:', error);
+            setIsLoadingTrack(false); // Reset loading state on error
             Alert.alert('Error', 'Could not play this track');
         }
     };
@@ -365,6 +418,7 @@ export default function UnifiedAudioApp() {
         setShowBottomPlayer(false);
         setPosition(0);
         setDuration(0);
+        setIsLoadingTrack(false); // Reset loading state
 
         // Hide music notification
         await MusicNotificationService.hideMusicNotification();
@@ -615,34 +669,51 @@ export default function UnifiedAudioApp() {
         }
     };
     // ==================== RENDER FUNCTIONS ====================
-    const renderTrackItem = ({ item }) => (
-        <TouchableOpacity
-            style={[styles.trackItem, { backgroundColor: themeColors.card }]}
-            onPress={() => playTrack(item, filteredAudioFiles)}
-            activeOpacity={0.7}
-        >
-            {item.artwork ? (
-                <Image source={{ uri: item.artwork }} style={styles.artwork} />
-            ) : (
-                <View style={[styles.artwork, { backgroundColor: themeColors.primary, justifyContent: 'center', alignItems: 'center' }]}>
-                    <Music size={24} color={themeColors.background} />
+    const renderTrackItem = ({ item }) => {
+        const isCurrentTrack = currentTrack?.id === item.id;
+        const isThisTrackLoading = isLoadingTrack && isCurrentTrack;
+
+        return (
+            <TouchableOpacity
+                style={[
+                    styles.trackItem,
+                    {
+                        backgroundColor: themeColors.card,
+                        opacity: isLoadingTrack && !isCurrentTrack ? 0.5 : 1 // Dim other tracks when loading
+                    }
+                ]}
+                onPress={() => playTrack(item, filteredAudioFiles)}
+                activeOpacity={0.7}
+                disabled={isLoadingTrack && !isCurrentTrack} // Disable other tracks when loading
+            >
+                {item.artwork ? (
+                    <Image source={{ uri: item.artwork }} style={styles.artwork} />
+                ) : (
+                    <View style={[styles.artwork, { backgroundColor: themeColors.primary, justifyContent: 'center', alignItems: 'center' }]}>
+                        <Music size={24} color={themeColors.background} />
+                    </View>
+                )}
+
+                <View style={styles.trackInfo}>
+                    <Text style={[styles.title, { color: isCurrentTrack ? themeColors.primary : themeColors.text }]} numberOfLines={1}>
+                        {item.title}
+                    </Text>
+                    <Text style={[styles.artist, { color: themeColors.textSecondary }]} numberOfLines={1}>
+                        {item.artist}
+                    </Text>
                 </View>
-            )}
 
-            <View style={styles.trackInfo}>
-                <Text style={[styles.title, { color: currentTrack?.id === item.id ? themeColors.primary : themeColors.text }]} numberOfLines={1}>
-                    {item.title}
-                </Text>
-                <Text style={[styles.artist, { color: themeColors.textSecondary }]} numberOfLines={1}>
-                    {item.artist}
-                </Text>
-            </View>
-
-            {currentTrack?.id === item.id && isPlaying && (
-                <MaterialIcons name="equalizer" size={24} color={themeColors.primary} />
-            )}
-        </TouchableOpacity>
-    );
+                {/* Show loading indicator for the track being loaded */}
+                {isThisTrackLoading ? (
+                    <ActivityIndicator size="small" color={themeColors.primary} />
+                ) : isCurrentTrack && isPlaying ? (
+                    <MaterialIcons name="equalizer" size={24} color={themeColors.primary} />
+                ) : isCurrentTrack && !isPlaying ? (
+                    <MaterialIcons name="pause" size={24} color={themeColors.primary} />
+                ) : null}
+            </TouchableOpacity>
+        );
+    };
 
     const renderBottomPlayer = () => {
         if (!currentTrack || !showBottomPlayer) return null;
