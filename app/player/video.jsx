@@ -1,11 +1,11 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, TouchableOpacity, StyleSheet, SafeAreaView, Text, TouchableWithoutFeedback, Dimensions, BackHandler } from 'react-native';
-import { MaterialIcons, Entypo } from '@expo/vector-icons';
+import { View, TouchableOpacity, StyleSheet, SafeAreaView, Text, TouchableWithoutFeedback, BackHandler } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { ChevronDown } from 'lucide-react-native';
-import Slider from '@react-native-community/slider';
+// Removed Slider import - not needed for minimal player
 import useOptimizedVideoStore from '../../store/optimizedVideoStore';
-import * as ScreenOrientation from 'expo-screen-orientation';
-import BottomSheet from '../../components/BottomSheet';
+// Removed ScreenOrientation import - not needed for minimal player
+// Removed BottomSheet import - not needed for minimal player
 import { useRouter, useFocusEffect } from 'expo-router';
 import VideoPlayerFallback from '../../components/VideoPlayerFallback';
 import { useCallback } from 'react';
@@ -26,26 +26,22 @@ try {
 const MinimalVideoPlayer = () => {
   const { currentVideo, playlist, videoFiles, setAndPlayVideo, showMiniPlayer } = useOptimizedVideoStore();
   const [isPlaying, setIsPlaying] = useState(true);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [playbackRate, setPlaybackRate] = useState(1.0);
+  // Removed unused state variables for cleaner code
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [controlsVisible, setControlsVisible] = useState(true);
-  const [isLocked, setIsLocked] = useState(false);
+  // Removed lock functionality for cleaner experience
   const hideTimeout = useRef(null);
-  const [moreOptionsVisible, setMoreOptionsVisible] = useState(false);
+  // Removed more options state - not needed for minimal player
   const [autoplay, setAutoplay] = useState(false);
   const [loop, setLoop] = useState(false);
-  const [isTransitioning, setIsTransitioning] = useState(false);
+  // Removed isTransitioning - not needed for minimal player
   const router = useRouter();
 
   // Create video player instance - always call hook to maintain order
-  const player = useVideoPlayer && currentVideo?.uri ? 
+  const player = useVideoPlayer && currentVideo?.uri ?
     useVideoPlayer(currentVideo.uri, (player) => {
       player.loop = loop;
-      player.muted = isMuted;
-      player.playbackRate = playbackRate;
       player.play();
     }) : null;
 
@@ -55,7 +51,7 @@ const MinimalVideoPlayer = () => {
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
       setIsTransitioning(true);
-      
+
       // Simple transition without complex animations
       setTimeout(() => {
         setIsTransitioning(false);
@@ -99,22 +95,18 @@ const MinimalVideoPlayer = () => {
   useEffect(() => {
     if (player) {
       player.loop = loop;
-      player.muted = isMuted;
-      player.playbackRate = playbackRate;
     }
-  }, [player, loop, isMuted, playbackRate]);
+  }, [player, loop]);
 
   // Auto-hide controls after 3 seconds
   useEffect(() => {
-    if (!controlsVisible || isLocked) return;
-    if (hideTimeout.current) clearTimeout(hideTimeout.current);
-    hideTimeout.current = setTimeout(() => setControlsVisible(false), 6000);
-    return () => hideTimeout.current && clearTimeout(hideTimeout.current);
-  }, [controlsVisible, isLocked]);
+    if (!controlsVisible) return;
+    const timeout = setTimeout(() => setControlsVisible(false), 3000);
+    return () => clearTimeout(timeout);
+  }, [controlsVisible]);
 
   // Show controls on tap
   const handleScreenPress = () => {
-    if (isLocked) return;
     setControlsVisible(true);
   };
 
@@ -160,89 +152,16 @@ const MinimalVideoPlayer = () => {
     setControlsVisible(true);
   };
 
-  const handleSeek = (value) => {
-    if (player && duration > 0) {
-      player.currentTime = value;
-    }
-    setControlsVisible(true);
-  };
-
-  const handleSkip = (seconds) => {
-    if (player) {
-      const newTime = Math.max(0, Math.min(currentTime + seconds, duration));
-      player.currentTime = newTime;
-    }
-    setControlsVisible(true);
-  };
-
-  const handleMute = () => {
-    setIsMuted(!isMuted);
-    setControlsVisible(true);
-  };
-
-  const handleSpeed = () => {
-    const speeds = [1.0, 1.25, 1.5, 2.0];
-    const idx = speeds.indexOf(playbackRate);
-    const next = speeds[(idx + 1) % speeds.length];
-    setPlaybackRate(next);
-    setControlsVisible(true);
-  };
-
-  const handleFullscreen = async () => {
-    setIsTransitioning(true);
-
-    try {
-      if (!isFullscreen) {
-        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
-      } else {
-        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
-      }
-
-      setIsFullscreen(f => !f);
-      setControlsVisible(true);
-      
-      // Simple transition delay
-      setTimeout(() => {
-        setIsTransitioning(false);
-      }, 300);
-    } catch (error) {
-      console.log('Orientation change error:', error);
-      setIsTransitioning(false);
-    }
-  };
-
-  const handleLock = () => {
-    setIsLocked(true);
-    setControlsVisible(false);
-  };
-  const handleUnlock = () => {
-    setIsLocked(false);
-    setControlsVisible(true);
-  };
+  // Removed unused control functions for cleaner code
 
   const handleBack = () => {
-    if (isTransitioning) return;
-    
-    setIsTransitioning(true);
-    
-    // For now, let's just always go back to the video tab to test
-    // We can add the smart routing back once we confirm basic navigation works
-    const targetRoute = '/(tabs)/(video)';
-    
-    // Enhanced smooth transition to mini player
+    // Show mini player when going back if there's a current video
     if (showMiniPlayer && currentVideo) {
-      // First show mini player with current state
-      showMiniPlayer(currentVideo, currentTime * 1000, isPlaying); // Convert to milliseconds
-
-      // Add a small delay to ensure mini player is ready before navigation
-      setTimeout(() => {
-        router.replace(targetRoute);
-        setIsTransitioning(false);
-      }, 150);
-    } else {
-      router.replace(targetRoute);
-      setTimeout(() => setIsTransitioning(false), 150);
+      showMiniPlayer(currentVideo, currentTime * 1000, isPlaying);
     }
+
+    // Navigate back to video tab
+    router.replace('/(tabs)/(video)');
   };
 
   // Handle Android hardware back button
@@ -270,7 +189,7 @@ const MinimalVideoPlayer = () => {
   };
   const handlePrevious = () => {
     if (isTransitioning) return;
-    
+
     const list = getCurrentList();
     const idx = getCurrentIndex();
     if (idx > 0) {
@@ -283,7 +202,7 @@ const MinimalVideoPlayer = () => {
   };
   const handleNext = () => {
     if (isTransitioning) return;
-    
+
     const list = getCurrentList();
     const idx = getCurrentIndex();
     if (idx < list.length - 1) {
@@ -303,15 +222,7 @@ const MinimalVideoPlayer = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleShowMoreOptions = () => setMoreOptionsVisible(true);
-  const handleHideMoreOptions = () => setMoreOptionsVisible(false);
-  const handlePlayNext = () => handleNext();
-  const handleToggleAutoplay = () => setAutoplay(a => !a);
-  const handleToggleLoop = () => setLoop(l => !l);
-  const handleShowInfo = () => {
-    // You can expand this to show a modal with more info
-    alert(`Filename: ${currentVideo.filename || ''}\nDuration: ${formatTime(duration)}\nCurrent Time: ${formatTime(currentTime)}`);
-  };
+  // Removed more options functions for cleaner experience
 
   // Removed animated styles to fix casting error
 
@@ -335,104 +246,21 @@ const MinimalVideoPlayer = () => {
               <Text style={{ color: '#FFF', marginTop: 16 }}>Video Player Loading...</Text>
             </View>
           )}
-          {/* Minimal overlay - only back button for navigation */}
+          {/* Clean minimal overlay - just back button and play/pause */}
           {controlsVisible && (
-            <View style={styles.minimalOverlay}>
+            <View style={styles.cleanOverlay}>
+              {/* Back button */}
               <TouchableOpacity onPress={handleBack} style={styles.backButton}>
                 <ChevronDown size={28} color="#FFF" />
               </TouchableOpacity>
-              {/* Top overlay row: Back, Title, More */}
-              {controlsVisible && !isLocked && (
-                <View style={styles.topOverlay}>
-                  <TouchableOpacity onPress={handleBack} style={styles.topIconBtn}>
-                    <ChevronDown size={24} color="#FFF" />
-                  </TouchableOpacity>
-                  <Text style={styles.videoTitle} numberOfLines={1}>{currentVideo.title || ''}</Text>
-                  <TouchableOpacity style={styles.topIconBtn} onPress={handleShowMoreOptions}>
-                    <Entypo name="dots-three-vertical" size={22} color="#FFF" />
-                  </TouchableOpacity>
-                </View>
-              )}
-              {/* Bottom controls group: Seek bar and control bar tightly together */}
-              <View style={styles.bottomControlsGroup}>
-                {controlsVisible && !isLocked && (
-                  <View style={styles.seekBarRow}>
-                    <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
-                    <Slider
-                      style={styles.slider}
-                      minimumValue={0}
-                      maximumValue={duration || 1}
-                      value={currentTime || 0}
-                      onSlidingComplete={handleSeek}
-                      minimumTrackTintColor="#FFF"
-                      maximumTrackTintColor="#888"
-                      thumbTintColor="#FFF"
-                    />
-                    <Text style={styles.timeText}>{formatTime(duration)}</Text>
-                  </View>
-                )}
-                <View style={styles.bottomControlBar}>
-                  {isLocked ? (
-                    <TouchableOpacity onPress={handleUnlock} style={styles.iconBtn}>
-                      <MaterialIcons name="lock-open" size={28} color="#FFF" />
-                    </TouchableOpacity>
-                  ) : (
-                    <>
-                      <TouchableOpacity onPress={handleLock} style={styles.iconBtn}>
-                        <MaterialIcons name="lock" size={24} color="#FFF" />
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleSkip(-10)} style={styles.iconBtn}>
-                        <MaterialIcons name="replay-10" size={28} color="#FFF" />
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={handlePrevious} style={styles.iconBtn}>
-                        <MaterialIcons name="skip-previous" size={32} color="#FFF" />
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.playPauseLargeBtn} onPress={handlePlayPause}>
-                        <MaterialIcons name={isPlaying ? 'pause' : 'play-arrow'} size={44} color="#FFF" />
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={handleNext} style={styles.iconBtn}>
-                        <MaterialIcons name="skip-next" size={32} color="#FFF" />
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleSkip(10)} style={styles.iconBtn}>
-                        <MaterialIcons name="forward-10" size={28} color="#FFF" />
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={handleFullscreen} style={styles.iconBtn}>
-                        <MaterialIcons name={isFullscreen ? 'fullscreen-exit' : 'fullscreen'} size={28} color="#FFF" />
-                      </TouchableOpacity>
-                    </>
-                  )}
-                </View>
-              </View>
+
+              {/* Center play/pause button */}
+              <TouchableOpacity style={styles.centerPlayButton} onPress={handlePlayPause}>
+                <MaterialIcons name={isPlaying ? 'pause' : 'play-arrow'} size={60} color="#FFF" />
+              </TouchableOpacity>
             </View>
           )}
-          {/* More Options BottomSheet */}
-          <BottomSheet
-            visible={moreOptionsVisible}
-            title="More Options"
-            onClose={handleHideMoreOptions}
-            options={[
-              {
-                label: `Autoplay ${autoplay ? '(On)' : '(Off)'}`,
-                icon: 'autorenew',
-                onPress: handleToggleAutoplay,
-              },
-              {
-                label: 'Play Next Video',
-                icon: 'skip-next',
-                onPress: handlePlayNext,
-              },
-              {
-                label: `Loop ${loop ? '(On)' : '(Off)'}`,
-                icon: 'repeat',
-                onPress: handleToggleLoop,
-              },
-              {
-                label: 'Show Video Info',
-                icon: 'information-outline',
-                onPress: handleShowInfo,
-              },
-            ]}
-          />
+          {/* Removed BottomSheet - minimal player doesn't need extra options */}
         </View>
       </TouchableWithoutFeedback>
     </SafeAreaView>
@@ -449,131 +277,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  controlsOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    zIndex: 10,
-    paddingVertical: 24,
-  },
-  controlBarContainer: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 0,
-    marginBottom: 12,
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    borderRadius: 16,
-    paddingVertical: 6,
-  },
-  controlBar: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 16,
-    width: '100%',
-    paddingHorizontal: 16,
-  },
-  playPauseButton: {
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 30,
-    padding: 10,
-    marginHorizontal: 16,
-  },
-  iconBtn: {
-    padding: 8,
-  },
-  bottomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    paddingHorizontal: 16,
-    gap: 8,
-    marginBottom: 4,
-  },
-  slider: {
-    flex: 1,
-    marginHorizontal: 8,
-  },
-  timeText: {
-    color: '#FFF',
-    fontSize: 13,
-    width: 48,
-    textAlign: 'center',
-  },
-  speedText: {
-    color: '#FFF',
-    fontWeight: 'bold',
-    fontSize: 16,
-    paddingHorizontal: 8,
-  },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'black',
   },
-  topOverlay: {
+  cleanOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    zIndex: 10,
+    paddingTop: 50,
+    paddingBottom: 50,
+    paddingHorizontal: 20,
+  },
+  backButton: {
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 25,
+    padding: 12,
+    alignSelf: 'flex-start',
+  },
+  centerPlayButton: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingTop: 32,
-    paddingBottom: 8,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    zIndex: 20,
-  },
-  topIconBtn: {
-    padding: 6,
-  },
-  videoTitle: {
-    flex: 1,
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginHorizontal: 12,
-    textAlign: 'center',
-  },
-  seekBarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    paddingHorizontal: 16,
-    gap: 8,
-    marginBottom: 0,
-  },
-  bottomControlBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    borderRadius: 16,
-    minHeight: 56,
-    marginTop: 0,
-  },
-  playPauseLargeBtn: {
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 32,
-    padding: 10,
-    marginHorizontal: 12,
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -30 }, { translateY: -30 }],
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 40,
+    padding: 20,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  bottomControlsGroup: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingBottom: 0,
-    marginBottom: 32,
-    backgroundColor: 'transparent',
   },
 });
 

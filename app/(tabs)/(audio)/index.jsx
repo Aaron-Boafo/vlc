@@ -66,15 +66,15 @@ export default function UnifiedAudioApp() {
     const [loading, setLoading] = useState(true);
     const [permissionGranted, setPermissionGranted] = useState(null);
 
-    // Player state
+    // ==================== BOTTOM PLAYER STATE ====================
     const [currentTrack, setCurrentTrack] = useState(null);
     const [sound, setSound] = useState(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [position, setPosition] = useState(0);
     const [duration, setDuration] = useState(0);
     const [showBottomPlayer, setShowBottomPlayer] = useState(false);
-    const [showFullPlayer, setShowFullPlayer] = useState(false);
     const [isLoadingTrack, setIsLoadingTrack] = useState(false);
+
 
     // UI state - separate search state for each tab
     const [searchStates, setSearchStates] = useState({
@@ -134,7 +134,7 @@ export default function UnifiedAudioApp() {
         let allAssets = [];
         let after = null;
         let hasNextPage = true;
-        const BATCH_SIZE = 10; // Load 10 files per batch
+        const BATCH_SIZE = 100; // Load 10 files per batch
 
         try {
             // Load files in batches with pagination
@@ -353,7 +353,7 @@ export default function UnifiedAudioApp() {
         };
     }, []);
 
-    // Show bottom player when audio is playing (like your friend's approach)
+    // Show bottom player when audio is playing
     useEffect(() => {
         if (isPlaying && currentTrack) {
             setShowBottomPlayer(true);
@@ -362,10 +362,64 @@ export default function UnifiedAudioApp() {
         }
     }, [isPlaying, currentTrack]);
 
+    // ==================== UI FUNCTIONS ====================
+    const showPermissionAlert = () => {
+        Alert.alert(
+            "Permission Required",
+            "Please grant media library access in settings to continue.",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Open Settings",
+                    onPress: () => {
+                        if (Platform.OS === "ios") {
+                            Linking.openURL("app-settings:");
+                        } else {
+                            Linking.openSettings();
+                        }
+                    },
+                },
+            ]
+        );
+    };
+
+    const handleScroll = useCallback((e) => {
+        const currentY = e.nativeEvent.contentOffset.y;
+        const goingDown = currentY > prevScrollY;
+
+        Animated.timing(playComponentAnim, {
+            toValue: goingDown ? 1 : 0,
+            duration: 100,
+            useNativeDriver: true,
+        }).start();
+
+        setPrevScrollY(currentY);
+    }, [prevScrollY, playComponentAnim]);
+
+    const handleShuffle = () => {
+        if (audioFiles.length === 0) return;
+        const randomTrack = audioFiles[Math.floor(Math.random() * audioFiles.length)];
+        playTrack(randomTrack, audioFiles);
+    };
+
     // ==================== AUDIO PLAYER FUNCTIONS ====================
+    const onPlaybackStatusUpdate = (status) => {
+        if (status.isLoaded) {
+            setPosition(status.positionMillis || 0);
+            setDuration(status.durationMillis || 0);
+            setIsPlaying(status.isPlaying || false);
+
+            if (status.didJustFinish) {
+                // Auto-play next track or stop
+                setIsPlaying(false);
+                setCurrentTrack(null);
+                setShowBottomPlayer(false);
+            }
+        }
+    };
+
     const playTrack = async (track, playlist = null) => {
         try {
-            // Prevent multiple simultaneous audio loading
             if (isLoadingTrack) {
                 console.log('⚠️ Already loading a track, ignoring request');
                 return;
@@ -384,7 +438,7 @@ export default function UnifiedAudioApp() {
             setIsLoadingTrack(true);
             console.log('🎵 Playing track:', track.title);
 
-            // Stop current sound if playing (ensure only one audio plays)
+            // Stop current sound if playing
             if (sound) {
                 console.log('🛑 Stopping current track to play new one');
                 await sound.unloadAsync();
@@ -426,7 +480,7 @@ export default function UnifiedAudioApp() {
 
         } catch (error) {
             console.error('❌ Error playing track:', error);
-            setIsLoadingTrack(false); // Reset loading state on error
+            setIsLoadingTrack(false);
             Alert.alert('Error', 'Could not play this track');
         }
     };
@@ -455,7 +509,7 @@ export default function UnifiedAudioApp() {
         setShowBottomPlayer(false);
         setPosition(0);
         setDuration(0);
-        setIsLoadingTrack(false); // Reset loading state
+        setIsLoadingTrack(false);
 
         // Hide music notification
         await MusicNotificationService.hideMusicNotification();
@@ -469,59 +523,6 @@ export default function UnifiedAudioApp() {
         }).start();
     };
 
-    const onPlaybackStatusUpdate = (status) => {
-        if (status.isLoaded) {
-            setPosition(status.positionMillis || 0);
-            setDuration(status.durationMillis || 0);
-            setIsPlaying(status.isPlaying);
-
-            if (status.didJustFinish) {
-                // Auto play next track or stop
-                setIsPlaying(false);
-            }
-        }
-    };
-
-    // ==================== UI FUNCTIONS ====================
-    const showPermissionAlert = () => {
-        Alert.alert(
-            "Permission Required",
-            "Please grant media library access in settings to continue.",
-            [
-                { text: "Cancel", style: "cancel" },
-                {
-                    text: "Open Settings",
-                    onPress: () => {
-                        if (Platform.OS === "ios") {
-                            Linking.openURL("app-settings:");
-                        } else {
-                            Linking.openSettings();
-                        }
-                    },
-                },
-            ]
-        );
-    };
-
-    const handleScroll = useCallback((e) => {
-        const currentY = e.nativeEvent.contentOffset.y;
-        const goingDown = currentY > prevScrollY;
-
-        Animated.timing(playComponentAnim, {
-            toValue: goingDown ? 1 : 0,
-            duration: 100,
-            useNativeDriver: true,
-        }).start();
-
-        setPrevScrollY(currentY);
-    }, [prevScrollY, playComponentAnim]);
-
-    const handleShuffle = () => {
-        if (audioFiles.length === 0) return;
-
-        const randomTrack = audioFiles[Math.floor(Math.random() * audioFiles.length)];
-        playTrack(randomTrack, audioFiles);
-    };
 
     const formatTime = (milliseconds) => {
         if (!milliseconds) return "0:00";
@@ -739,12 +740,12 @@ export default function UnifiedAudioApp() {
                     styles.trackItem,
                     {
                         backgroundColor: themeColors.card,
-                        opacity: isLoadingTrack && !isCurrentTrack ? 0.5 : 1 // Dim other tracks when loading
+                        opacity: isLoadingTrack && !isCurrentTrack ? 0.5 : 1
                     }
                 ]}
                 onPress={() => playTrack(item, filteredAudioFiles)}
                 activeOpacity={0.7}
-                disabled={isLoadingTrack && !isCurrentTrack} // Disable other tracks when loading
+                disabled={isLoadingTrack && !isCurrentTrack}
             >
                 {item.artwork ? (
                     <Image source={{ uri: item.artwork }} style={styles.artwork} />
@@ -806,8 +807,15 @@ export default function UnifiedAudioApp() {
                 <TouchableOpacity
                     style={styles.bottomPlayerContent}
                     onPress={() => {
-                        console.log('🎵 Opening full player...');
-                        setShowFullPlayer(true);
+                        console.log('🎵 Navigating to audio player...');
+                        // Navigate to the separate audio.jsx player
+                        router.push({
+                            pathname: '/player/audio',
+                            params: {
+                                trackId: currentTrack.id,
+                                playlistData: JSON.stringify(filteredAudioFiles)
+                            }
+                        });
                     }}
                     activeOpacity={0.9}
                 >
@@ -1030,8 +1038,7 @@ export default function UnifiedAudioApp() {
             {/* Bottom Player */}
             {renderBottomPlayer()}
 
-            {/* Full Player .Modal */}
-            {renderFullPlayer()}
+
         </SafeAreaView>
     );
 }
@@ -1157,18 +1164,7 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 8,
     },
-    bottomPlayer: {
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        bottom: 0,
-        borderTopWidth: 1,
-        elevation: 10,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-    },
+
     progressContainer: {
         height: 2,
         backgroundColor: 'rgba(255, 255, 255, 0.1)',
@@ -1176,38 +1172,7 @@ const styles = StyleSheet.create({
     progressBar: {
         height: '100%',
     },
-    bottomPlayerContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 12,
-    },
-    bottomArtwork: {
-        width: 48,
-        height: 48,
-        borderRadius: 8,
-    },
-    bottomTrackInfo: {
-        flex: 1,
-        marginLeft: 12,
-    },
-    bottomTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    bottomArtist: {
-        fontSize: 13,
-        marginTop: 2,
-    },
-    bottomPlayButton: {
-        padding: 8,
-        marginRight: 8,
-    },
-    bottomCloseButton: {
-        padding: 8,
-    },
-    fullPlayer: {
-        flex: 1,
-    },
+
     fullPlayerHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',

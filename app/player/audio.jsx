@@ -81,7 +81,6 @@ const PlayerScreen = () => {
     setPlaybackSpeed: useAudioControlSetPlaybackSpeed,
     isTransitioning: useAudioControlIsTransitioning,
     isLoading: useAudioControlIsLoading,
-    showBottomPlayer,
   } = useAudioControl();
   const { playbackRate } = usePlaybackStore();
   const { playlists, addTrackToPlaylist } = usePlaylistStore();
@@ -125,7 +124,7 @@ const PlayerScreen = () => {
   const handlePlayPause = async () => {
     // Prevent multiple rapid clicks
     if (useAudioControlIsTransitioning || useAudioControlIsLoading) return;
-    
+
     if (useAudioControlIsPlaying) await useAudioControlPause();
     else await useAudioControlPlay();
   };
@@ -137,12 +136,9 @@ const PlayerScreen = () => {
   const handleClose = () => {
     // Prevent multiple rapid clicks
     if (useAudioControlIsTransitioning) return;
-    
-    // Show bottom player when leaving main player (if there's a current track)
-    if (useAudioControlCurrentTrack) {
-      showBottomPlayer();
-    }
-    
+
+    // No need to show mini player - using bottom player from audio tab
+
     // Always use replace to ensure we go to the correct tab
     router.replace('/(tabs)/(audio)');
   };
@@ -202,7 +198,7 @@ const PlayerScreen = () => {
 
   if (!useAudioControlCurrentTrack) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }] }>
+      <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
         <View style={styles.centeredContainer}>
           <Text style={[styles.noTrackText, { color: themeColors.text }]}>No track playing</Text>
           <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
@@ -214,7 +210,7 @@ const PlayerScreen = () => {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }] }>
+    <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.headerButton} onPress={handleClose}>
           <ChevronDown size={24} color={themeColors.text} />
@@ -324,18 +320,18 @@ const PlayerScreen = () => {
       {/* Sleep Timer Modal */}
       <Modal animationType="slide" transparent={true} visible={isTimerModalVisible} onRequestClose={() => setTimerModalVisible(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setTimerModalVisible(false)}>
-          <Pressable style={[styles.modalContent, {backgroundColor: themeColors.card}]}> 
-            <Text style={[styles.modalTitle, {color: themeColors.text}]}>Sleep Timer</Text>
+          <Pressable style={[styles.modalContent, { backgroundColor: themeColors.card }]}>
+            <Text style={[styles.modalTitle, { color: themeColors.text }]}>Sleep Timer</Text>
             <View style={styles.timerOptions}>
               {[15, 30, 45, 60].map(minutes => (
-                <TouchableOpacity key={minutes} style={[styles.timerButton, {backgroundColor: themeColors.background}]} onPress={() => { useAudioControlSetSleepTimer(minutes); setTimerModalVisible(false); }}>
-                  <Text style={[styles.timerButtonText, {color: themeColors.text}]}>{minutes} minutes</Text>
+                <TouchableOpacity key={minutes} style={[styles.timerButton, { backgroundColor: themeColors.background }]} onPress={() => { useAudioControlSetSleepTimer(minutes); setTimerModalVisible(false); }}>
+                  <Text style={[styles.timerButtonText, { color: themeColors.text }]}>{minutes} minutes</Text>
                 </TouchableOpacity>
               ))}
             </View>
             {useAudioControlSleepTimerId && (
-              <TouchableOpacity style={[styles.timerButton, styles.cancelTimerButton, {backgroundColor: themeColors.error}]} onPress={() => { useAudioControlClearSleepTimer(); setTimerModalVisible(false); }}>
-                <Text style={[styles.timerButtonText, {color: '#fff'}]}>Cancel Timer</Text>
+              <TouchableOpacity style={[styles.timerButton, styles.cancelTimerButton, { backgroundColor: themeColors.error }]} onPress={() => { useAudioControlClearSleepTimer(); setTimerModalVisible(false); }}>
+                <Text style={[styles.timerButtonText, { color: '#fff' }]}>Cancel Timer</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity style={styles.closeModalButton} onPress={() => setTimerModalVisible(false)}>
@@ -348,8 +344,8 @@ const PlayerScreen = () => {
       {/* More Options Modal */}
       <Modal animationType="slide" transparent={true} visible={isMoreModalVisible} onRequestClose={() => setMoreModalVisible(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setMoreModalVisible(false)}>
-          <Pressable style={[styles.moreModalContent, {backgroundColor: themeColors.card}]}> 
-            <Text style={[styles.modalTitle, {color: themeColors.text}]}>More Options</Text>
+          <Pressable style={[styles.moreModalContent, { backgroundColor: themeColors.card }]}>
+            <Text style={[styles.modalTitle, { color: themeColors.text }]}>More Options</Text>
             <TouchableOpacity style={styles.moreOptionRow} onPress={() => {
               setMoreModalVisible(false);
               if (useAudioControlCurrentTrack) {
@@ -359,31 +355,31 @@ const PlayerScreen = () => {
               }
             }}>
               <ListMusic size={22} color={themeColors.text} style={styles.moreOptionIcon} />
-              <Text style={[styles.moreOptionLabel, {color: themeColors.text}]}>Show Lyrics</Text>
+              <Text style={[styles.moreOptionLabel, { color: themeColors.text }]}>Show Lyrics</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.moreOptionRow} onPress={() => { setMoreModalVisible(false); setEQModalVisible(true); }}>
               <SlidersHorizontal size={22} color={themeColors.text} style={styles.moreOptionIcon} />
-              <Text style={[styles.moreOptionLabel, {color: themeColors.text}]}>Equalizer</Text>
+              <Text style={[styles.moreOptionLabel, { color: themeColors.text }]}>Equalizer</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.moreOptionRow} onPress={() => { setMoreModalVisible(false); setPlaylistModalVisible(true); }}>
               <ListPlus size={22} color={themeColors.text} style={styles.moreOptionIcon} />
-              <Text style={[styles.moreOptionLabel, {color: themeColors.text}]}>Add to Playlist</Text>
+              <Text style={[styles.moreOptionLabel, { color: themeColors.text }]}>Add to Playlist</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.moreOptionRow} onPress={() => { setMoreModalVisible(false); setInfoModalVisible(true); }}>
               <Info size={22} color={themeColors.text} style={styles.moreOptionIcon} />
-              <Text style={[styles.moreOptionLabel, {color: themeColors.text}]}>Track Info</Text>
+              <Text style={[styles.moreOptionLabel, { color: themeColors.text }]}>Track Info</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.moreOptionRow} onPress={() => { setMoreModalVisible(false); favouriteStore.toggleFavourite(useAudioControlCurrentTrack); }}>
               <Heart size={22} color={favouriteStore.isFavourite(useAudioControlCurrentTrack?.id) ? themeColors.primary : themeColors.text} style={styles.moreOptionIcon} />
-              <Text style={[styles.moreOptionLabel, {color: themeColors.text}]}>Favourite</Text>
+              <Text style={[styles.moreOptionLabel, { color: themeColors.text }]}>Favourite</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.moreOptionRow} onPress={() => { setMoreModalVisible(false); setSpeedModalVisible(true); }}>
-              <Text style={[styles.speedLabel, {color: themeColors.text}]}>{playbackRate}x</Text>
-              <Text style={[styles.moreOptionLabel, {color: themeColors.text}]}>Playback Speed</Text>
+              <Text style={[styles.speedLabel, { color: themeColors.text }]}>{playbackRate}x</Text>
+              <Text style={[styles.moreOptionLabel, { color: themeColors.text }]}>Playback Speed</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.moreOptionRow} onPress={() => { setMoreModalVisible(false); setTimerModalVisible(true); }}>
               <Clock size={22} color={useAudioControlSleepTimerId ? themeColors.primary : themeColors.text} style={styles.moreOptionIcon} />
-              <Text style={[styles.moreOptionLabel, {color: themeColors.text}]}>Sleep Timer</Text>
+              <Text style={[styles.moreOptionLabel, { color: themeColors.text }]}>Sleep Timer</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.closeModalButton} onPress={() => setMoreModalVisible(false)}>
               <X size={24} color={themeColors.textSecondary} />
@@ -395,12 +391,12 @@ const PlayerScreen = () => {
       {/* Playback Speed Modal */}
       <Modal animationType="slide" transparent={true} visible={isSpeedModalVisible} onRequestClose={() => setSpeedModalVisible(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setSpeedModalVisible(false)}>
-          <Pressable style={[styles.modalContent, {backgroundColor: themeColors.card}]}>
-            <Text style={[styles.modalTitle, {color: themeColors.text}]}>Playback Speed</Text>
+          <Pressable style={[styles.modalContent, { backgroundColor: themeColors.card }]}>
+            <Text style={[styles.modalTitle, { color: themeColors.text }]}>Playback Speed</Text>
             <View style={styles.speedOptions}>
               {[0.75, 1.0, 1.5, 2.0].map(rate => (
-                <TouchableOpacity key={rate} style={[styles.speedButton, playbackRate === rate && {backgroundColor: themeColors.primary}]} onPress={() => { useAudioControlSetPlaybackSpeed(rate); setSpeedModalVisible(false); }}>
-                  <Text style={[styles.speedButtonText, {color: themeColors.text}]}>{rate}x</Text>
+                <TouchableOpacity key={rate} style={[styles.speedButton, playbackRate === rate && { backgroundColor: themeColors.primary }]} onPress={() => { useAudioControlSetPlaybackSpeed(rate); setSpeedModalVisible(false); }}>
+                  <Text style={[styles.speedButtonText, { color: themeColors.text }]}>{rate}x</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -414,14 +410,14 @@ const PlayerScreen = () => {
       {/* EQ Modal - Functional Equalizer */}
       <Modal animationType="slide" transparent={true} visible={isEQModalVisible} onRequestClose={() => setEQModalVisible(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setEQModalVisible(false)}>
-          <Pressable style={[styles.modalContent, {backgroundColor: themeColors.card}]}> 
-            <Text style={[styles.modalTitle, {color: themeColors.text}]}>Equalizer</Text>
-            
+          <Pressable style={[styles.modalContent, { backgroundColor: themeColors.card }]}>
+            <Text style={[styles.modalTitle, { color: themeColors.text }]}>Equalizer</Text>
+
             <View style={styles.eqContainer}>
               {Object.entries(eqSettings).map(([frequency, value]) => (
                 <View key={frequency} style={styles.eqBand}>
-                  <Text style={[styles.eqFrequency, {color: themeColors.textSecondary}]}>
-                    {frequency >= 1000 ? `${frequency/1000}k` : frequency}
+                  <Text style={[styles.eqFrequency, { color: themeColors.textSecondary }]}>
+                    {frequency >= 1000 ? `${frequency / 1000}k` : frequency}
                   </Text>
                   <View style={styles.eqSliderContainer}>
                     <Slider
@@ -430,7 +426,7 @@ const PlayerScreen = () => {
                       maximumValue={12}
                       value={value}
                       onValueChange={(newValue) => {
-                        setEqSettings(prev => ({...prev, [frequency]: newValue}));
+                        setEqSettings(prev => ({ ...prev, [frequency]: newValue }));
                         // Here you would apply the EQ setting to the audio
                         // For now, we'll just update the state
                       }}
@@ -439,15 +435,15 @@ const PlayerScreen = () => {
                       thumbTintColor={themeColors.primary}
                     />
                   </View>
-                  <Text style={[styles.eqValue, {color: themeColors.textSecondary}]}>
+                  <Text style={[styles.eqValue, { color: themeColors.textSecondary }]}>
                     {value > 0 ? `+${value.toFixed(0)}` : value.toFixed(0)}
                   </Text>
                 </View>
               ))}
             </View>
-            
+
             <View style={styles.eqPresets}>
-              <Text style={[styles.eqPresetsTitle, {color: themeColors.text}]}>Presets</Text>
+              <Text style={[styles.eqPresetsTitle, { color: themeColors.text }]}>Presets</Text>
               <View style={styles.eqPresetsRow}>
                 {[
                   { name: 'Flat', values: Object.fromEntries(Object.keys(eqSettings).map(f => [f, 0])) },
@@ -457,15 +453,15 @@ const PlayerScreen = () => {
                 ].map(preset => (
                   <TouchableOpacity
                     key={preset.name}
-                    style={[styles.eqPresetButton, {backgroundColor: themeColors.background}]}
+                    style={[styles.eqPresetButton, { backgroundColor: themeColors.background }]}
                     onPress={() => setEqSettings(preset.values)}
                   >
-                    <Text style={[styles.eqPresetText, {color: themeColors.text}]}>{preset.name}</Text>
+                    <Text style={[styles.eqPresetText, { color: themeColors.text }]}>{preset.name}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
             </View>
-            
+
             <TouchableOpacity style={styles.closeModalButton} onPress={() => setEQModalVisible(false)}>
               <X size={24} color={themeColors.textSecondary} />
             </TouchableOpacity>
@@ -476,18 +472,18 @@ const PlayerScreen = () => {
       {/* Playlist Modal - Add to Playlist */}
       <Modal animationType="slide" transparent={true} visible={isPlaylistModalVisible} onRequestClose={() => setPlaylistModalVisible(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setPlaylistModalVisible(false)}>
-          <Pressable style={[styles.modalContent, {backgroundColor: themeColors.card}]}> 
-            <Text style={[styles.modalTitle, {color: themeColors.text}]}>Add to Playlist</Text>
+          <Pressable style={[styles.modalContent, { backgroundColor: themeColors.card }]}>
+            <Text style={[styles.modalTitle, { color: themeColors.text }]}>Add to Playlist</Text>
             {playlists.length === 0 ? (
               <View style={{ alignItems: 'center', paddingVertical: 20 }}>
                 <ListMusic size={48} color={themeColors.textSecondary} />
-                <Text style={[styles.modalSubtitle, {color: themeColors.textSecondary}]}>No playlists yet</Text>
-                <Text style={[styles.modalDescription, {color: themeColors.textSecondary}]}>Create a playlist first to add tracks</Text>
+                <Text style={[styles.modalSubtitle, { color: themeColors.textSecondary }]}>No playlists yet</Text>
+                <Text style={[styles.modalDescription, { color: themeColors.textSecondary }]}>Create a playlist first to add tracks</Text>
               </View>
             ) : (
-              <ScrollView style={{maxHeight: 300}}>
+              <ScrollView style={{ maxHeight: 300 }}>
                 {playlists.map(playlist => (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     key={playlist.id}
                     style={styles.playlistOptionRow}
                     onPress={() => {
@@ -498,8 +494,8 @@ const PlayerScreen = () => {
                     }}
                   >
                     <View style={styles.playlistOptionInfo}>
-                      <Text style={[styles.playlistOptionName, {color: themeColors.text}]}>{playlist.name}</Text>
-                      <Text style={[styles.playlistOptionCount, {color: themeColors.textSecondary}]}>
+                      <Text style={[styles.playlistOptionName, { color: themeColors.text }]}>{playlist.name}</Text>
+                      <Text style={[styles.playlistOptionCount, { color: themeColors.textSecondary }]}>
                         {playlist.tracks.length} {playlist.tracks.length === 1 ? 'track' : 'tracks'}
                       </Text>
                     </View>
@@ -518,12 +514,12 @@ const PlayerScreen = () => {
       {/* Track Info Modal */}
       <Modal animationType="slide" transparent={true} visible={isInfoModalVisible} onRequestClose={() => setInfoModalVisible(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setInfoModalVisible(false)}>
-          <Pressable style={[styles.modalContent, {backgroundColor: themeColors.card}]}> 
-            <Text style={[styles.modalTitle, {color: themeColors.text}]}>Track Info</Text>
-            <Text style={{color: themeColors.text}}>Title: {useAudioControlCurrentTrack.title}</Text>
-            <Text style={{color: themeColors.text}}>Artist: {useAudioControlCurrentTrack.artist}</Text>
-            <Text style={{color: themeColors.text}}>Album: {useAudioControlCurrentTrack.album}</Text>
-            <Text style={{color: themeColors.text}}>Duration: {formatTime(useAudioControlDuration)}</Text>
+          <Pressable style={[styles.modalContent, { backgroundColor: themeColors.card }]}>
+            <Text style={[styles.modalTitle, { color: themeColors.text }]}>Track Info</Text>
+            <Text style={{ color: themeColors.text }}>Title: {useAudioControlCurrentTrack.title}</Text>
+            <Text style={{ color: themeColors.text }}>Artist: {useAudioControlCurrentTrack.artist}</Text>
+            <Text style={{ color: themeColors.text }}>Album: {useAudioControlCurrentTrack.album}</Text>
+            <Text style={{ color: themeColors.text }}>Duration: {formatTime(useAudioControlDuration)}</Text>
             <TouchableOpacity style={styles.closeModalButton} onPress={() => setInfoModalVisible(false)}>
               <X size={24} color={themeColors.textSecondary} />
             </TouchableOpacity>
