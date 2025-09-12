@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, useWindowDimensions, Text } from 'react-native';
 import { Play, Pause, X } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 
 // Try to import expo-video with fallback
 let VideoView, useVideoPlayer;
@@ -123,9 +124,9 @@ const VideoMiniPlayer = () => {
   const triggerHapticFeedback = (type = 'light') => {
     try {
       if (type === 'enter') {
-        Vibration.vibrate(50); // Light vibration when entering delete zone
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       } else if (type === 'delete') {
-        Vibration.vibrate([0, 100, 50, 100]); // Pattern for deletion
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       }
     } catch (error) {
       console.log('Haptic feedback not available');
@@ -349,45 +350,58 @@ const VideoMiniPlayer = () => {
   }
 
   return (
-    <View style={[
-      styles.container,
-      { width: miniPlayerWidth, height: miniPlayerHeight }
-    ]}>
-      {miniPlayerVideo && miniPlayerVideo.uri && (
-        <TouchableOpacity 
-          style={styles.pressableArea} 
-          onPress={handlePlayerPress}
-          activeOpacity={1}
-        >
-          {VideoView && player ? (
-            <VideoView
-              player={player}
-              style={styles.video}
-              contentFit="cover"
-              allowsFullscreen={false}
-              allowsPictureInPicture={false}
-              showsTimecodes={false}
-            />
-          ) : (
-            <View style={[styles.video, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
-              <Play size={24} color="#FFF" />
-            </View>
-          )}
-          <View style={[styles.overlay, { opacity: showControls ? 1 : 0 }]}>
-            <TouchableOpacity onPress={handleTogglePlayback} style={[styles.controlButton, { left: 8 }]}> 
-              {isMiniPlayerPlaying ? (
-                <Pause size={18} color="white" fill="white" />
+    <>
+      {/* Delete Zone */}
+      <Animated.View style={[styles.deleteZone, deleteZoneAnimatedStyle]}>
+        <View style={styles.deleteZoneContent}>
+          <X size={32} color="#FF4444" />
+          <Text style={styles.deleteZoneText}>Release to close</Text>
+        </View>
+      </Animated.View>
+
+      <PanGestureHandler onGestureEvent={panGesture}>
+        <Animated.View style={[
+          styles.container,
+          { width: miniPlayerWidth, height: miniPlayerHeight },
+          containerAnimatedStyle
+        ]}>
+          {miniPlayerVideo && miniPlayerVideo.uri && (
+            <TouchableOpacity 
+              style={styles.pressableArea} 
+              onPress={handlePlayerPress}
+              activeOpacity={1}
+            >
+              {VideoView && player ? (
+                <VideoView
+                  player={player}
+                  style={styles.video}
+                  contentFit="cover"
+                  allowsFullscreen={false}
+                  allowsPictureInPicture={false}
+                  showsTimecodes={false}
+                />
               ) : (
-                <Play size={18} color="white" fill="white" style={{ marginLeft: 2 }}/>
+                <View style={[styles.video, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
+                  <Play size={24} color="#FFF" />
+                </View>
               )}
+              <Animated.View style={[styles.overlay, controlsAnimatedStyle]}>
+                <TouchableOpacity onPress={handleTogglePlayback} style={[styles.controlButton, { left: 8 }]}> 
+                  {isMiniPlayerPlaying ? (
+                    <Pause size={18} color="white" fill="white" />
+                  ) : (
+                    <Play size={18} color="white" fill="white" style={{ marginLeft: 2 }}/>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleClose} style={[styles.controlButton, { right: 8 }]}> 
+                  <X size={18} color="white" />
+                </TouchableOpacity>
+              </Animated.View>
             </TouchableOpacity>
-            <TouchableOpacity onPress={handleClose} style={[styles.controlButton, { right: 8 }]}> 
-              <X size={18} color="white" />
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      )}
-    </View>
+          )}
+        </Animated.View>
+      </PanGestureHandler>
+    </>
   );
 };
 
@@ -427,6 +441,26 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  deleteZone: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 120,
+    backgroundColor: 'rgba(255, 68, 68, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999,
+  },
+  deleteZoneContent: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  deleteZoneText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 
