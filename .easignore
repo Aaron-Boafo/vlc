@@ -38,11 +38,9 @@ coverage
 .expo
 .expo-shared
 
-/android
-/ios
-
-# Mac system files
-*.DS_Store
+# Documentation files (already cleaned up)
+*.md
+!README.md
 
 # Unused assets (customize as needed)
 assets/images/unused/ 
