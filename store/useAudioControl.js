@@ -1,17 +1,18 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
-import { Audio } from "expo-av";
-import useHistoryStore from './historyStore';
+import useHistoryStore from "./historyStore";
 import usePlaybackStore from "./playbackStore";
-import AudioOptimizer from '../utils/audioOptimizations';
-import * as FileSystem from 'expo-file-system';
-import { setupMusicControls, updateNotification } from '../services/musicControlService';
-import * as Notifications from 'expo-notifications';
+import * as FileSystem from "expo-file-system";
+import {
+  setupMusicControls,
+  updateNotification,
+} from "../services/musicControlService";
+import * as Notifications from "expo-notifications";
+import { audioPlayer } from "../services/AudioPlayer";
 
 const useAudioControl = create(
   subscribeWithSelector((set, get) => ({
     // Audio state
-    sound: null,
     isPlaying: false,
     currentTrack: null,
     playQueue: [],
@@ -37,13 +38,17 @@ const useAudioControl = create(
     // Initialize audio
     initialize: async () => {
       try {
-        await Audio.setAudioModeAsync({
-          staysActiveInBackground: true,
-          playsInSilentModeIOS: true,
-          shouldDuckAndroid: true,
-          playThroughEarpieceAndroid: false,
-        }).catch(audioError => {
-          console.warn('Audio mode setup failed:', audioError);
+        // Configure audio mode via the singleton
+        await audioPlayer.configureAudioMode({
+          shouldPlayInBackground: true,
+        });
+
+        // Set up playback status listener
+        audioPlayer.onStatusUpdate((status) => {
+          const state = useAudioControl.getState();
+          if (state._onPlaybackStatusUpdate) {
+            state._onPlaybackStatusUpdate(status);
+          }
         });
 
         // Setup music controls - delay and make safer to prevent startup crashes
@@ -54,13 +59,13 @@ const useAudioControl = create(
               pause: () => get().pause(),
               next: () => get().next(),
               previous: () => get().previous(),
-              seek: (position) => get().seek(position)
+              seek: (position) => get().seek(position),
             });
 
             // Store cleanup function
             set({ _cleanupMusicControls: cleanup });
           } catch (musicControlError) {
-            console.warn('Music control setup failed:', musicControlError);
+            console.warn("Music control setup failed:", musicControlError);
             set({ _cleanupMusicControls: () => {} });
           }
         }, 2000); // Delay music control setup to prevent startup crash
@@ -77,7 +82,11 @@ const useAudioControl = create(
       return true; // For now, assume it's initialized if no error was thrown
     },
 
-    setAndPlayPlaylist: async (tracks, startIndex = 0, shouldShowBottomPlayer = true) => {
+    setAndPlayPlaylist: async (
+      tracks,
+      startIndex = 0,
+      shouldShowBottomPlayer = true
+    ) => {
       // Prevent multiple simultaneous plays
       const { isTransitioning, isLoading } = get();
       if (isTransitioning || isLoading) {
@@ -92,25 +101,24 @@ const useAudioControl = create(
       }
 
       // Ensure startIndex is within bounds
-      const validStartIndex = Math.max(0, Math.min(startIndex, tracks.length - 1));
+      const validStartIndex = Math.max(
+        0,
+        Math.min(startIndex, tracks.length - 1)
+      );
 
       set({ isTransitioning: true });
 
       try {
-        const { sound } = get();
-        if (sound) {
-          try {
-            await sound.stopAsync();
-            await sound.unloadAsync();
-          } catch (error) {
-            console.error("Error stopping/unloading previous sound:", error);
-          }
-        }
         const trackToPlay = tracks[validStartIndex];
 
         // Validate track has required properties
         if (!trackToPlay || !trackToPlay.uri) {
-          console.error("Invalid track at index", validStartIndex, ":", trackToPlay);
+          console.error(
+            "Invalid track at index",
+            validStartIndex,
+            ":",
+            trackToPlay
+          );
           set({ isTransitioning: false });
           return;
         }
@@ -118,23 +126,22 @@ const useAudioControl = create(
         // 🎨 Enrich track with metadata if not already present
         const enrichedTrack = await get()._enrichTrackMetadata(trackToPlay);
 
-        console.log('🎵 Setting bottom player state:', {
+        console.log("🎵 Setting bottom player state:", {
           shouldShowBottomPlayer,
           trackTitle: enrichedTrack.title,
-          validStartIndex
+          validStartIndex,
         });
-        
+
         set({
           playQueue: tracks,
           originalQueue: tracks,
           currentIndex: validStartIndex,
           currentTrack: enrichedTrack,
-          sound: null,
           isBottomPlayerVisible: shouldShowBottomPlayer,
           isMiniPlayerVisible: false, // Disable mini player when using bottom player
         });
 
-        console.log('🎵 Loading and playing track:', enrichedTrack.title);
+        console.log("🎵 Loading and playing track:", enrichedTrack.title);
         await get()._loadAndPlayTrack(enrichedTrack, true); // Skip transition check
 
         // Wait a bit to ensure audio has started before clearing transition state
@@ -143,20 +150,20 @@ const useAudioControl = create(
         }, 500);
 
         // Ensure playback starts - fallback mechanism
-        setTimeout(async () => {
-          const { sound, isPlaying } = get();
-          if (sound && !isPlaying) {
-            console.log('🎵 Fallback: Starting playback manually');
+        setTimeout(() => {
+          const { isPlaying } = get();
+          if (!isPlaying && audioPlayer.isLoaded) {
+            console.log("🎵 Fallback: Starting playback manually");
             try {
-              await sound.playAsync();
+              audioPlayer.play();
               set({ isPlaying: true });
             } catch (error) {
-              console.error('🎵 Fallback playback failed:', error);
+              console.error("🎵 Fallback playback failed:", error);
             }
           }
         }, 1000);
       } catch (error) {
-        console.error('Error in setAndPlayPlaylist:', error);
+        console.error("Error in setAndPlayPlaylist:", error);
         set({ isTransitioning: false });
       }
     },
@@ -170,24 +177,21 @@ const useAudioControl = create(
       }
 
       // Ensure startIndex is within bounds
-      const validStartIndex = Math.max(0, Math.min(startIndex, tracks.length - 1));
+      const validStartIndex = Math.max(
+        0,
+        Math.min(startIndex, tracks.length - 1)
+      );
 
-      const { sound } = get();
-      if (sound) {
-        try {
-          await sound.stopAsync();
-          await sound.unloadAsync();
-        } catch (error) {
-          console.error("Error stopping/unloading previous sound:", error);
-        }
-      }
+      // Stop current playback
+      await audioPlayer.stop();
+
       set({
         playQueue: tracks,
         originalQueue: tracks,
         currentIndex: validStartIndex,
         currentTrack: tracks[validStartIndex] || null,
         isPlaying: false,
-        sound: null,
+        position: 0,
         isMiniPlayerVisible: true,
       });
       // Also fetch lyrics for the new track
@@ -204,20 +208,6 @@ const useAudioControl = create(
       }
 
       set({ isLoading: true });
-      const { sound: existingSound, playQueue, currentIndex } = get();
-
-      try {
-        if (existingSound) {
-          const status = await existingSound.getStatusAsync();
-          if (status.isLoaded) {
-            await existingSound.stopAsync();
-            await existingSound.unloadAsync();
-          }
-        }
-      } catch (e) {
-        console.error("[AUDIO] Error ensuring single playback (unload):", e);
-        set({ sound: null, isPlaying: false });
-      }
 
       if (!track?.uri) {
         console.error("Attempted to play a track with no URI:", track);
@@ -225,87 +215,54 @@ const useAudioControl = create(
         return set({ isLoading: false, currentTrack: null });
       }
 
-      set({ isLoading: true, sound: null, isPlaying: false, position: 0 });
+      set({ isLoading: true, isPlaying: false, position: 0 });
 
       try {
         const { playbackRate } = usePlaybackStore.getState();
 
-        // 🚀 Try to get optimized/preloaded sound first
-        let newSound;
-        try {
-          newSound = await AudioOptimizer.getOptimizedSound(track);
-          console.log('⚡ Using optimized sound for:', track.title);
-        } catch (optimizerError) {
-          console.log('Optimizer failed, using standard loading:', optimizerError);
-          // Fallback to standard loading
-          const initialStatus = {
-            shouldPlay: true,
-            volume: 1.0,
-            rate: playbackRate,
-            androidImplementation: 'MediaPlayer',
-            metadata: {
-              title: track.title || 'Unknown Title',
-              artist: track.artist || 'Unknown Artist',
-              album: track.album || 'Unknown Album',
-              artwork: track.artwork,
-            },
-          };
-
-          // --- FileSystem caching logic start ---
-          let audioUri = track.uri;
-          const isRemote = /^https?:\/\//.test(track.uri);
-          if (isRemote) {
-            const audiosDir = FileSystem.documentDirectory + 'audios/';
-            const filename = encodeURIComponent(track.title || track.uri.split('/').pop());
-            const localUri = audiosDir + filename;
-            // Ensure audios directory exists
-            await FileSystem.makeDirectoryAsync(audiosDir, { intermediates: true }).catch(() => { });
-            const fileInfo = await FileSystem.getInfoAsync(localUri);
-            if (!fileInfo.exists) {
-              try {
-                await FileSystem.downloadAsync(track.uri, localUri);
-              } catch (e) {
-                console.warn('Failed to cache audio, falling back to remote URI', e);
-              }
-            }
-            // Use local file if it exists
-            const cachedFileInfo = await FileSystem.getInfoAsync(localUri);
-            if (cachedFileInfo.exists) {
-              audioUri = localUri;
+        // --- FileSystem caching logic for remote URIs ---
+        let audioUri = track.uri;
+        const isRemote = /^https?:\/\//.test(track.uri);
+        if (isRemote) {
+          const audiosDir = FileSystem.documentDirectory + "audios/";
+          const filename = encodeURIComponent(
+            track.title || track.uri.split("/").pop()
+          );
+          const localUri = audiosDir + filename;
+          // Ensure audios directory exists
+          await FileSystem.makeDirectoryAsync(audiosDir, {
+            intermediates: true,
+          }).catch(() => {});
+          const fileInfo = await FileSystem.getInfoAsync(localUri);
+          if (!fileInfo.exists) {
+            try {
+              await FileSystem.downloadAsync(track.uri, localUri);
+            } catch (e) {
+              console.warn(
+                "Failed to cache audio, falling back to remote URI",
+                e
+              );
             }
           }
-          // --- FileSystem caching logic end ---
-
-          const soundResult = await Audio.Sound.createAsync(
-            { uri: audioUri },
-            initialStatus,
-            (status) => onPlaybackStatusUpdate(status, set, get)
-          );
-          newSound = soundResult.sound;
+          // Use local file if it exists
+          const cachedFileInfo = await FileSystem.getInfoAsync(localUri);
+          if (cachedFileInfo.exists) {
+            audioUri = localUri;
+          }
         }
+        // --- End FileSystem caching ---
 
-        // Configure the sound for playback
-        await newSound.setStatusAsync({
+        // Load and play via the AudioPlayer singleton
+        await audioPlayer.loadAndPlay(audioUri, {
           shouldPlay: true,
           volume: 1.0,
           rate: playbackRate,
         });
 
-        // Set up status callback using the getStatusUpdateHandler method
-        const statusUpdateHandler = get().getStatusUpdateHandler();
-        newSound.setOnPlaybackStatusUpdate(statusUpdateHandler);
+        console.log("🎵 Audio playback started for:", track.title);
 
-        // Ensure playback starts
-        try {
-          await newSound.playAsync();
-          console.log('🎵 Audio playback started for:', track.title);
-        } catch (playError) {
-          console.error('Error starting playback:', playError);
-        }
-
-        // Update state with the new track and sound
+        // Update state with the new track
         set({
-          sound: newSound,
           isPlaying: true,
           isLoading: false,
           currentTrack: track,
@@ -313,11 +270,6 @@ const useAudioControl = create(
 
         // Update notification for the new track
         updateNotification(track, true, 0, 0);
-
-        // 🚀 Start preloading next tracks in background
-        setTimeout(() => {
-          AudioOptimizer.preloadNextTracks(currentIndex, playQueue);
-        }, 1000); // Wait 1 second before starting preload
 
         get().fetchLyrics(track);
       } catch (error) {
@@ -328,12 +280,12 @@ const useAudioControl = create(
 
     // Play current track (now primarily for resume)
     play: async () => {
-      const { sound, currentTrack, isPlaying, isLoading, isTransitioning } = get();
+      const { currentTrack, isPlaying, isLoading, isTransitioning } = get();
       if (isPlaying || isLoading || isTransitioning) return;
 
-      if (sound) {
+      if (audioPlayer.isLoaded) {
         set({ isPlaying: true });
-        await sound.playAsync();
+        audioPlayer.play();
         // Update notification state to playing
         if (currentTrack) {
           const { position, duration } = get();
@@ -346,23 +298,20 @@ const useAudioControl = create(
 
     // Pause current track
     pause: async () => {
-      const { sound, isLoading, isTransitioning } = get();
+      const { isLoading, isTransitioning, currentTrack } = get();
       if (isLoading || isTransitioning) return;
-      if (sound) {
-        const status = await sound.getStatusAsync();
-        if (status.isLoaded && status.isPlaying) {
-          try {
-            set({ isLoading: true, isPlaying: false }); // Immediately update UI to show paused state
-            await sound.pauseAsync();
-            set({ isLoading: false });
-            // Update notification state to paused
-            if (currentTrack) {
-              const { position, duration } = get();
-              updateNotification(currentTrack, false, position, duration);
-            }
-          } catch (error) {
-            set({ isLoading: false, isPlaying: true }); // Revert playing state on error
+      if (audioPlayer.isLoaded && audioPlayer.isPlaying) {
+        try {
+          set({ isLoading: true, isPlaying: false }); // Immediately update UI to show paused state
+          audioPlayer.pause();
+          set({ isLoading: false });
+          // Update notification state to paused
+          if (currentTrack) {
+            const { position, duration } = get();
+            updateNotification(currentTrack, false, position, duration);
           }
+        } catch (error) {
+          set({ isLoading: false, isPlaying: true }); // Revert playing state on error
         }
       }
       get().clearSleepTimer();
@@ -370,9 +319,8 @@ const useAudioControl = create(
 
     // Stop current track
     stop: async () => {
-      const { sound } = get();
+      await audioPlayer.stop();
       set({
-        sound: null,
         currentTrack: null,
         isPlaying: false,
         position: 0,
@@ -402,7 +350,9 @@ const useAudioControl = create(
       } else {
         // Disable shuffle: restore original order and current index
         const currentTrack = playQueue[get().currentIndex];
-        const originalIdx = originalQueue.findIndex(t => t.id === currentTrack.id);
+        const originalIdx = originalQueue.findIndex(
+          (t) => t.id === currentTrack.id
+        );
         set({
           isShuffleOn: false,
           playQueue: originalQueue,
@@ -413,7 +363,13 @@ const useAudioControl = create(
 
     // Next track
     next: async () => {
-      const { playQueue, currentIndex, isShuffleOn, isTransitioning, isLoading } = get();
+      const {
+        playQueue,
+        currentIndex,
+        isShuffleOn,
+        isTransitioning,
+        isLoading,
+      } = get();
       if (playQueue.length === 0 || isTransitioning || isLoading) return;
 
       set({ isTransitioning: true });
@@ -446,7 +402,14 @@ const useAudioControl = create(
 
     // Previous track
     previous: async () => {
-      const { playQueue, currentIndex, position, isPlaying, isTransitioning, isLoading } = get();
+      const {
+        playQueue,
+        currentIndex,
+        position,
+        isPlaying,
+        isTransitioning,
+        isLoading,
+      } = get();
       if (playQueue.length === 0 || isTransitioning || isLoading) return;
 
       // If track has been playing for > 3s, just restart it.
@@ -473,15 +436,12 @@ const useAudioControl = create(
       }
     },
 
-    // Seek to position
-    seek: async (position) => {
-      const { sound } = get();
-      if (sound) {
-        try {
-          await sound.setPositionAsync(position);
-        } catch (error) {
-          console.error("Error seeking audio:", error);
-        }
+    // Seek to position (in milliseconds)
+    seek: async (positionMs) => {
+      try {
+        await audioPlayer.seek(positionMs);
+      } catch (error) {
+        console.error("Error seeking audio:", error);
       }
     },
 
@@ -521,27 +481,31 @@ const useAudioControl = create(
       try {
         // First, try to find a .lrc file with the same name as the audio file
         const audioPath = track.uri;
-        const basePath = audioPath.substring(0, audioPath.lastIndexOf('.'));
-        const lrcPath = basePath + '.lrc';
+        const basePath = audioPath.substring(0, audioPath.lastIndexOf("."));
+        const lrcPath = basePath + ".lrc";
         // Check if .lrc file exists
         const lrcInfo = await FileSystem.getInfoAsync(lrcPath);
 
-        if (lrcInfo.exists) {       // Read the .lrc file
+        if (lrcInfo.exists) {
+          // Read the .lrc file
           const lrcContent = await FileSystem.readAsStringAsync(lrcPath);
           set({ lyrics: lrcContent, lyricsLoading: false });
           return;
         }
 
         // If no .lrc file, try to fetch from online lyrics service
-        // For now, we'll use a simple lyrics API (you can replace with your preferred service)
-        const searchTerm = encodeURIComponent(`${track.title} ${track.artist}`);
-        const response = await fetch(`https://api.lyrics.ovh/v1/${track.artist}/${track.title}`);
+        const response = await fetch(
+          `https://api.lyrics.ovh/v1/${track.artist}/${track.title}`
+        );
 
         if (response.ok) {
           const data = await response.json();
           if (data.lyrics) {
             // Convert plain text lyrics to .lrc format
-            const lrcLyrics = get().convertToLrcFormat(data.lyrics, track.title);
+            const lrcLyrics = get().convertToLrcFormat(
+              data.lyrics,
+              track.title
+            );
             set({ lyrics: lrcLyrics, lyricsLoading: false });
             return;
           }
@@ -555,21 +519,27 @@ const useAudioControl = create(
 
         set({ lyrics: placeholderLyrics, lyricsLoading: false });
       } catch (error) {
-        console.error('Error fetching lyrics:', error);
-        set({ lyrics: null, lyricsLoading: false, lyricsError: 'Failed to load lyrics' });
+        console.error("Error fetching lyrics:", error);
+        set({
+          lyrics: null,
+          lyricsLoading: false,
+          lyricsError: "Failed to load lyrics",
+        });
       }
     },
 
     // Helper function to convert plain text to .lrc format
     convertToLrcFormat: (plainText, title) => {
-      const lines = plainText.split('\n').filter(line => line.trim());
+      const lines = plainText.split("\n").filter((line) => line.trim());
       let lrcContent = `[00:01.00] ${title}\n`;
 
       lines.forEach((line, index) => {
         const timeInSeconds = (index + 2) * 5; // 5 seconds per line
         const minutes = Math.floor(timeInSeconds / 60);
         const seconds = timeInSeconds % 60;
-        const timeStamp = `[${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.00]`;
+        const timeStamp = `[${minutes.toString().padStart(2, "0")}:${seconds
+          .toString()
+          .padStart(2, "0")}.00]`;
         lrcContent += `${timeStamp} ${line}\n`;
       });
 
@@ -582,16 +552,10 @@ const useAudioControl = create(
 
     // Cleanup
     cleanup: async () => {
-      const { sound, _cleanupMusicControls } = get();
+      const { _cleanupMusicControls } = get();
 
-      // Clean up the sound
-      if (sound) {
-        try {
-          await sound.unloadAsync();
-        } catch (error) {
-          console.error("Error cleaning up audio:", error);
-        }
-      }
+      // Release the audio player
+      audioPlayer.release();
 
       // Clean up music controls
       if (_cleanupMusicControls) {
@@ -601,14 +565,13 @@ const useAudioControl = create(
       // Clear notification
       try {
         await Notifications.dismissAllNotificationsAsync();
-        console.log('🎵 Notifications cleared');
+        console.log("🎵 Notifications cleared");
       } catch (error) {
-        console.warn('Error clearing notifications:', error);
+        console.warn("Error clearing notifications:", error);
       }
 
       // Reset state
       set({
-        sound: null,
         currentTrack: null,
         isPlaying: false,
         position: 0,
@@ -617,14 +580,11 @@ const useAudioControl = create(
     },
 
     setPlaybackSpeed: async (rate) => {
-      const { sound } = get();
-      if (sound) {
-        try {
-          await sound.setRateAsync(rate, true);
-          usePlaybackStore.getState().setPlaybackRate(rate);
-        } catch (error) {
-          console.error("Error setting playback speed:", error);
-        }
+      try {
+        audioPlayer.setRate(rate);
+        usePlaybackStore.getState().setPlaybackRate(rate);
+      } catch (error) {
+        console.error("Error setting playback speed:", error);
       }
     },
 
@@ -634,21 +594,24 @@ const useAudioControl = create(
 
     // Bottom player controls
     showBottomPlayer: () => {
-      console.log('showBottomPlayer called');
+      console.log("showBottomPlayer called");
       set({ isBottomPlayerVisible: true, isMiniPlayerVisible: false });
     },
 
     hideBottomPlayer: () => {
-      console.log('hideBottomPlayer called');
+      console.log("hideBottomPlayer called");
       set({ isBottomPlayerVisible: false });
     },
 
     toggleBottomPlayer: () => {
       const { isBottomPlayerVisible } = get();
-      console.log('toggleBottomPlayer called, current state:', isBottomPlayerVisible);
-      set({ 
+      console.log(
+        "toggleBottomPlayer called, current state:",
+        isBottomPlayerVisible
+      );
+      set({
         isBottomPlayerVisible: !isBottomPlayerVisible,
-        isMiniPlayerVisible: false // Hide mini player when bottom player is active
+        isMiniPlayerVisible: false, // Hide mini player when bottom player is active
       });
     },
 
@@ -661,14 +624,22 @@ const useAudioControl = create(
 
       try {
         // Import getAudioMetadata dynamically to avoid circular dependencies
-        const { getAudioMetadata } = await import('@missingcore/audio-metadata');
+        const { getAudioMetadata } = await import(
+          "@missingcore/audio-metadata"
+        );
 
-        const data = await getAudioMetadata(track.uri, ["album", "artist", "name", "year", "artwork"]);
+        const data = await getAudioMetadata(track.uri, [
+          "album",
+          "artist",
+          "name",
+          "year",
+          "artwork",
+        ]);
         const metadata = data.metadata || {};
 
         let artworkUri = null;
         if (metadata.artwork) {
-          if (metadata.artwork.startsWith('data:image')) {
+          if (metadata.artwork.startsWith("data:image")) {
             artworkUri = metadata.artwork;
           } else if (/^[A-Za-z0-9+/=]+$/.test(metadata.artwork)) {
             artworkUri = `data:image/png;base64,${metadata.artwork}`;
@@ -680,85 +651,101 @@ const useAudioControl = create(
         // Return enriched track with metadata
         const enrichedTrack = {
           ...track,
-          title: metadata.name || track.title || track.filename?.replace(/\.[^/.]+$/, "") || 'Unknown Track',
-          artist: metadata.artist || track.artist || 'Unknown Artist',
-          album: metadata.album || track.album || 'Unknown Album',
+          title:
+            metadata.name ||
+            track.title ||
+            track.filename?.replace(/\.[^/.]+$/, "") ||
+            "Unknown Track",
+          artist: metadata.artist || track.artist || "Unknown Artist",
+          album: metadata.album || track.album || "Unknown Album",
           year: metadata.year || track.year || null,
           artwork: artworkUri || track.artwork || null,
         };
 
-        console.log('🎨 Enriched track:', enrichedTrack.title, 'with artwork:', !!enrichedTrack.artwork);
+        console.log(
+          "🎨 Enriched track:",
+          enrichedTrack.title,
+          "with artwork:",
+          !!enrichedTrack.artwork
+        );
         return enrichedTrack;
       } catch (error) {
-        console.log('Failed to enrich track metadata for:', track.filename || track.title, error);
+        console.log(
+          "Failed to enrich track metadata for:",
+          track.filename || track.title,
+          error
+        );
         // Return original track if metadata fetching fails
         return track;
       }
     },
+
     // Playback status update handler
     _onPlaybackStatusUpdate: function (status) {
-      const { currentTrack } = useAudioControl.getState();
+      const currentState = useAudioControl.getState();
+
+      // expo-audio status has different shape than expo-av
+      // Properties: currentTime (seconds), duration (seconds), playing, isLoaded, isBuffering, etc.
 
       if (!status.isLoaded) {
-        if (status.error) {
-          console.error(`Playback Error: ${status.error}`);
-        }
         return;
       }
 
-
-      const currentState = get();
+      // Convert from seconds to milliseconds for compatibility with the rest of the app
+      const positionMs = (status.currentTime ?? 0) * 1000;
+      const durationMs = (status.duration ?? 0) * 1000;
 
       // Only update isPlaying if we're not in a loading/transitioning state
-      // This prevents the status callback from overriding our manual play state
-      const shouldUpdatePlayingState = !currentState.isLoading && !currentState.isTransitioning;
+      const shouldUpdatePlayingState =
+        !currentState.isLoading && !currentState.isTransitioning;
 
       set({
-        position: status.positionMillis || 0,
-        duration: status.durationMillis || 0,
-        ...(shouldUpdatePlayingState && { isPlaying: status.isPlaying }),
+        position: positionMs,
+        duration: durationMs,
+        ...(shouldUpdatePlayingState && { isPlaying: status.playing ?? false }),
       });
 
       // Update notification with current position
-      if (currentTrack) {
+      if (currentState.currentTrack) {
         updateNotification(
-          currentTrack,
-          status.isPlaying,
-          status.positionMillis || 0,
-          status.durationMillis || 0
+          currentState.currentTrack,
+          status.playing ?? false,
+          positionMs,
+          durationMs
         );
       }
 
-      // Handle end of track
-      if (status.didJustFinish) {
-        const { autoplay } = usePlaybackStore.getState();
-        if (autoplay) {
-          useAudioControl.getState().next();
-        } else {
-          useAudioControl.setState({ isPlaying: false });
-          // Clear notification when playback stops
-          // Note: MusicControl is no longer used, but keeping this for reference
-          // You might want to clear notifications using expo-notifications if needed
+      // Handle end of track — expo-audio doesn't auto-reset position
+      // The playing property becomes false when the track finishes
+      if (
+        status.isLoaded &&
+        !status.playing &&
+        status.currentTime > 0 &&
+        status.duration > 0
+      ) {
+        // Check if we're at the end (within 0.5 second tolerance)
+        const isAtEnd = Math.abs(status.currentTime - status.duration) < 0.5;
+        if (
+          isAtEnd &&
+          !currentState.isLoading &&
+          !currentState.isTransitioning
+        ) {
+          const { autoplay } = usePlaybackStore.getState();
+          if (autoplay) {
+            useAudioControl.getState().next();
+          } else {
+            useAudioControl.setState({ isPlaying: false });
+          }
         }
       }
     },
 
-    // Add a method to get the status update handler
+    // Add a method to get the status update handler (kept for compatibility)
     getStatusUpdateHandler: function () {
       return (status) => {
         const state = useAudioControl.getState();
         if (state._onPlaybackStatusUpdate) {
           state._onPlaybackStatusUpdate(status);
-        }
-
-        // Update notification when track changes or playback state changes
-        if (status.isLoaded && (status.didJustFinish || status.isPlaying !== state.isPlaying)) {
-          updateNotification(
-            state.currentTrack,
-            status.isPlaying,
-            status.positionMillis || 0,
-            status.durationMillis || 0
-          );
         }
       };
     },
@@ -769,19 +756,25 @@ const useAudioControl = create(
         // Request notification permissions
         await Notifications.requestPermissionsAsync();
 
-        // Set up audio mode
-        await Audio.setAudioModeAsync({
-          staysActiveInBackground: true,
-          playsInSilentModeIOS: true,
-          shouldDuckAndroid: true,
-          playThroughEarpieceAndroid: false,
+        // Configure audio mode via the singleton
+        await audioPlayer.configureAudioMode({
+          shouldPlayInBackground: true,
         });
 
-        console.log('Audio initialized successfully');
+        // Set up the status listener
+        audioPlayer.onStatusUpdate((status) => {
+          const state = useAudioControl.getState();
+          if (state._onPlaybackStatusUpdate) {
+            state._onPlaybackStatusUpdate(status);
+          }
+        });
+
+        console.log("Audio initialized successfully");
       } catch (error) {
-        console.warn('Error initializing audio:', error);
+        console.warn("Error initializing audio:", error);
       }
-    }
-  })));
+    },
+  }))
+);
 
 export default useAudioControl;

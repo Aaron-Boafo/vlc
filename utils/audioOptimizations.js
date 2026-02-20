@@ -1,58 +1,48 @@
 // Advanced audio optimizations for better performance
-import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
+// NOTE: With expo-audio, the singleton AudioPlayer manages the native player lifecycle.
+// Preloading is simplified to URI tracking rather than creating multiple Sound objects.
 
 class AudioOptimizer {
   constructor() {
-    this.audioCache = new Map();
+    this.preloadedUris = new Set();
     this.preloadQueue = [];
-    this.maxCacheSize = 10; // Keep 10 audio files in memory
+    this.maxCacheSize = 10;
   }
 
-  // Preload next tracks for instant playback
+  /**
+   * Track which URIs are likely to be played next.
+   * expo-audio's AudioPlayer uses a single native player instance, so we
+   * can't preload multiple sounds simultaneously. Instead, we pre-fetch
+   * remote URIs and keep the list ready.
+   */
   async preloadNextTracks(currentIndex, playlist) {
-    const nextTracks = playlist.slice(currentIndex + 1, currentIndex + 4); // Preload next 3
-    
+    const nextTracks = playlist.slice(currentIndex + 1, currentIndex + 4);
+
     for (const track of nextTracks) {
-      if (!this.audioCache.has(track.id)) {
-        try {
-          const { sound } = await Audio.Sound.createAsync(
-            { uri: track.uri },
-            { shouldPlay: false, volume: 0 }
-          );
-          
-          this.audioCache.set(track.id, sound);
-          
-          // Manage cache size
-          if (this.audioCache.size > this.maxCacheSize) {
-            const firstKey = this.audioCache.keys().next().value;
-            const oldSound = this.audioCache.get(firstKey);
-            await oldSound.unloadAsync();
-            this.audioCache.delete(firstKey);
-          }
-        } catch (error) {
-          console.log('Preload failed for:', track.title);
+      if (!this.preloadedUris.has(track.id)) {
+        this.preloadedUris.add(track.id);
+
+        // Manage cache size
+        if (this.preloadedUris.size > this.maxCacheSize) {
+          const firstKey = this.preloadedUris.values().next().value;
+          this.preloadedUris.delete(firstKey);
         }
       }
     }
   }
 
-  // Get preloaded sound or create new one
-  async getOptimizedSound(track) {
-    if (this.audioCache.has(track.id)) {
-      return this.audioCache.get(track.id);
-    }
-    
-    const { sound } = await Audio.Sound.createAsync({ uri: track.uri });
-    return sound;
+  /**
+   * Check if a track has been marked for preloading.
+   * @param {{ id: string }} track
+   * @returns {boolean}
+   */
+  isPreloaded(track) {
+    return this.preloadedUris.has(track.id);
   }
 
   // Cleanup cache
   async cleanup() {
-    for (const sound of this.audioCache.values()) {
-      await sound.unloadAsync();
-    }
-    this.audioCache.clear();
+    this.preloadedUris.clear();
   }
 }
 

@@ -5,7 +5,6 @@ import "../global.css";
 import { View, Text } from 'react-native';
 import { useFonts } from 'expo-font';
 import { useEffect } from 'react';
-import { Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import usePlaybackStore from '../store/playbackStore';
@@ -60,17 +59,8 @@ function RootLayoutContent() {
           }),
         });
 
-        // Initialize audio
+        // Initialize audio — audio mode is now configured by the AudioPlayer singleton
         await initializeAudio();
-        
-        // Set audio mode
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-          playsInSilentModeIOS: true,
-          staysActiveInBackground: backgroundPlay,
-          shouldDuckAndroid: true,
-          playThroughEarpieceAndroid: false,
-        });
       } catch (error) {
         console.warn('Error setting up audio:', error);
       }
@@ -106,15 +96,15 @@ function RootLayoutContent() {
           }}
         >
           <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="(onboarding)" options={{ 
+          <Stack.Screen name="(onboarding)" options={{
             headerShown: false,
             gestureEnabled: true // Enable gestures for onboarding
           }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen
             name="player"
-            options={{ 
-              headerShown: false, 
+            options={{
+              headerShown: false,
               presentation: "modal",
               animation: 'slide_from_bottom',
               animationDuration: 200,

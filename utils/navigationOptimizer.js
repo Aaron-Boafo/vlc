@@ -1,5 +1,5 @@
-import { InteractionManager } from 'react-native';
-import DeviceOptimizer from './deviceOptimizer';
+import { InteractionManager } from "react-native";
+import DeviceOptimizer from "./deviceOptimizer";
 
 // Navigation Performance Optimizer for smooth tab switching
 class NavigationOptimizer {
@@ -10,9 +10,11 @@ class NavigationOptimizer {
     this.deviceSettings = DeviceOptimizer.getRenderingSettings();
 
     // Navigation-specific optimizations
-    this.TRANSITION_DELAY = this.deviceSettings.performanceTier === 'low' ? 100 : 50;
+    this.TRANSITION_DELAY =
+      this.deviceSettings.performanceTier === "low" ? 100 : 50;
     this.CACHE_TIMEOUT = 5 * 60 * 1000; // 5 minutes
-    this.MAX_CACHED_SCREENS = this.deviceSettings.performanceTier === 'high' ? 5 : 3;
+    this.MAX_CACHED_SCREENS =
+      this.deviceSettings.performanceTier === "high" ? 5 : 3;
   }
 
   // Optimize screen transitions
@@ -30,7 +32,7 @@ class NavigationOptimizer {
       await this.preWarmScreen(toScreen);
 
       // Use InteractionManager to ensure smooth transition
-      await new Promise(resolve => {
+      await new Promise((resolve) => {
         InteractionManager.runAfterInteractions(() => {
           setTimeout(() => {
             if (callback) callback();
@@ -41,7 +43,6 @@ class NavigationOptimizer {
 
       // Cache the previous screen state
       this.cacheScreenState(fromScreen);
-
     } finally {
       this.isTransitioning = false;
 
@@ -56,18 +57,18 @@ class NavigationOptimizer {
   // Pre-warm screen data to reduce loading time
   async preWarmScreen(screenName) {
     const cached = this.screenCache.get(screenName);
-    if (cached && (Date.now() - cached.timestamp) < this.CACHE_TIMEOUT) {
+    if (cached && Date.now() - cached.timestamp < this.CACHE_TIMEOUT) {
       console.log(`📱 Using cached data for ${screenName}`);
       return cached.data;
     }
 
     // Pre-load critical data for the screen
     switch (screenName) {
-      case 'audio':
+      case "audio":
         return this.preWarmAudioScreen();
-      case 'video':
+      case "video":
         return this.preWarmVideoScreen();
-      case 'playlist':
+      case "playlist":
         return this.preWarmPlaylistScreen();
       default:
         return null;
@@ -77,23 +78,22 @@ class NavigationOptimizer {
   async preWarmAudioScreen() {
     // Pre-warm audio data if not already loaded
     try {
-      const { default: useSimpleAudioStore } = await import('../store/simpleAudioStore');
-      const store = useSimpleAudioStore.getState();
+      const { default: useGlobalAudioStore } = await import(
+        "../store/globalAudioStore"
+      );
+      const store = useGlobalAudioStore.getState();
 
-      // Only load if we have no files AND no recent load time (prevent reloading after player)
-      if (store.audioFiles.length === 0 && !store.isLoading && !store.lastLoadTime) {
-        console.log('🔄 Navigation optimizer: Pre-warming audio screen...');
-        // Trigger background loading
-        setTimeout(() => {
-          store.loadAllAudioFiles();
-        }, 0);
-      } else if (store.audioFiles.length > 0) {
-        console.log('⚡ Navigation optimizer: Audio files already cached, skipping pre-warm');
+      if (store.audioFiles && store.audioFiles.length > 0) {
+        console.log(
+          "⚡ Navigation optimizer: Audio files already cached, skipping pre-warm"
+        );
+      } else {
+        console.log("🔄 Navigation optimizer: No audio files in store yet");
       }
 
-      return store.audioFiles;
+      return store.audioFiles || [];
     } catch (error) {
-      console.log('Audio pre-warm failed:', error);
+      console.log("Audio pre-warm failed:", error);
       return null;
     }
   }
@@ -101,7 +101,9 @@ class NavigationOptimizer {
   async preWarmVideoScreen() {
     // Pre-warm video data if not already loaded
     try {
-      const { useOptimizedVideoStore } = await import('../store/optimizedVideoStore');
+      const { useOptimizedVideoStore } = await import(
+        "../store/optimizedVideoStore"
+      );
       const store = useOptimizedVideoStore.getState();
 
       if (store.videoFiles.length === 0 && !store.isLoading) {
@@ -113,7 +115,7 @@ class NavigationOptimizer {
 
       return store.videoFiles;
     } catch (error) {
-      console.log('Video pre-warm failed:', error);
+      console.log("Video pre-warm failed:", error);
       return null;
     }
   }
@@ -121,11 +123,11 @@ class NavigationOptimizer {
   async preWarmPlaylistScreen() {
     // Pre-warm playlist data
     try {
-      const { usePlaylistStore } = await import('../store/playlistStore');
+      const { usePlaylistStore } = await import("../store/playlistStore");
       const store = usePlaylistStore.getState();
       return store.playlists;
     } catch (error) {
-      console.log('Playlist pre-warm failed:', error);
+      console.log("Playlist pre-warm failed:", error);
       return null;
     }
   }
@@ -188,13 +190,13 @@ class NavigationOptimizer {
       return JSON.stringify(prevProps) !== JSON.stringify(nextProps);
     }
 
-    return criticalProps.some(prop => prevProps[prop] !== nextProps[prop]);
+    return criticalProps.some((prop) => prevProps[prop] !== nextProps[prop]);
   }
 
   // Memory cleanup
   clearCache() {
     this.screenCache.clear();
-    console.log('📱 Navigation cache cleared');
+    console.log("📱 Navigation cache cleared");
   }
 
   // Preload tab data for faster switching

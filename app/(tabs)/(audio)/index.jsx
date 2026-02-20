@@ -11,7 +11,6 @@ import {
     StyleSheet,
     Image,
     ActivityIndicator,
-    Modal,
     TextInput,
     Platform,
     Linking,
@@ -20,41 +19,29 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
     Shuffle,
-    Play,
-    Pause,
-    SkipBack,
-    SkipForward,
-    X,
     Music,
-    Search,
-    Filter,
-    MoreVertical,
-    Heart,
-    ChevronDown
 } from "lucide-react-native";
 import { MaterialIcons } from '@expo/vector-icons';
-import * as MediaLibrary from "expo-media-library";
-import * as FileSystem from "expo-file-system";
-import { getAudioMetadata } from "@missingcore/audio-metadata";
-import { Audio } from "expo-av";
 import { useRouter } from "expo-router";
 import useThemeStore from "../../../store/theme";
 import AudioHeader from "../../../AudioComponents/title";
 import ToggleBar from "../../../AudioComponents/toggleButton";
 import useGlobalAudioStore from "../../../store/globalAudioStore";
+import useAudioControl from "../../../store/useAudioControl";
 import MusicNotificationService from "../../../services/musicNotificationService";
+import { scanMusicFiles, getSongsForUI, extractMetadataInBackground, backgroundSync } from "../../../services/musicScanner";
+import { initDB, getLastScanTime } from "../../../services/database";
 
-// Import screen components (excluding AllScreen due to missing dependencies)
+// Import screen components
 import PlaylistScreen from "../../../AudioScreens/playlist";
 import Albums from "../../../AudioScreens/albums";
 import ArtistScreen from "../../../AudioScreens/artist";
 import FavouriteScreen from "../../../AudioScreens/favourite";
 
 const { width, height } = Dimensions.get("window");
-const AUDIO_FILE_CACHE = `${FileSystem.documentDirectory}unifiedAudioCache.json`;
 
 /**
- * Unified Audio System - Everything in one file
+ * Unified Audio System — powered by SQLite + AudioPlayer singleton
  */
 export default function UnifiedAudioApp() {
     const { themeColors } = useThemeStore();
@@ -65,16 +52,23 @@ export default function UnifiedAudioApp() {
     const [audioFiles, setAudioFiles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [permissionGranted, setPermissionGranted] = useState(null);
+    const [metadataProgress, setMetadataProgress] = useState(null); // { completed, total }
 
-    // ==================== BOTTOM PLAYER STATE ====================
-    const [currentTrack, setCurrentTrack] = useState(null);
-    const [sound, setSound] = useState(null);
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [position, setPosition] = useState(0);
-    const [duration, setDuration] = useState(0);
-    const [showBottomPlayer, setShowBottomPlayer] = useState(false);
-    const [isLoadingTrack, setIsLoadingTrack] = useState(false);
-
+    // ==================== AUDIO CONTROL (from global store) ====================
+    const {
+        currentTrack,
+        isPlaying,
+        position,
+        duration,
+        isLoading: isLoadingTrack,
+        isBottomPlayerVisible,
+        setAndPlayPlaylist,
+        play: resumeTrack,
+        pause: pauseTrack,
+        stop: stopTrack,
+        next: nextTrack,
+        previous: prevTrack,
+    } = useAudioControl();
 
     // UI state - separate search state for each tab
     const [searchStates, setSearchStates] = useState({
@@ -84,7 +78,6 @@ export default function UnifiedAudioApp() {
         artist: { showSearch: false, searchQuery: '' },
         favourite: { showSearch: false, searchQuery: '' },
     });
-    const [heightView, setHeightView] = useState(0);
 
     // Get current tab's search state
     const currentSearchState = searchStates[activeTab] || { showSearch: false, searchQuery: '' };
@@ -101,7 +94,6 @@ export default function UnifiedAudioApp() {
                 showSearch: show
             }
         }));
-        // Reset the flag after a short delay
         setTimeout(() => {
             isSearchingRef.current = false;
         }, 100);
@@ -119,197 +111,70 @@ export default function UnifiedAudioApp() {
 
     // Animations
     const playComponentAnim = useRef(new Animated.Value(1)).current;
-    const bottomPlayerAnim = useRef(new Animated.Value(100)).current;
     const [prevScrollY, setPrevScrollY] = useState(0);
 
-    // Swipe functionality (like video tab)
+    // Swipe functionality
     const scrollViewRef = useRef(null);
     const [screenWidth, setScreenWidth] = useState(0);
     const [currentIndex, setCurrentIndex] = useState(0);
     const isSearchingRef = useRef(false);
 
-    // ==================== AUDIO LOADING ====================
-    const loadAllAudioFiles = async () => {
-        console.log('🎵 Loading audio files in batches...');
-        let allAssets = [];
-        let after = null;
-        let hasNextPage = true;
-        const BATCH_SIZE = 100; // Load 10 files per batch
-
-        try {
-            // Load files in batches with pagination
-            while (hasNextPage) {
-                console.log(`📦 Loading batch... (Total so far: ${allAssets.length})`);
-
-                const media = await MediaLibrary.getAssetsAsync({
-                    mediaType: MediaLibrary.MediaType.audio,
-                    first: BATCH_SIZE,
-                    after: after, // Pagination cursor
-                });
-
-                console.log(`📱 Found ${media.assets.length} audio files in this batch`);
-
-                // Filter out unwanted files 
-                const excludedFolders = [
-                    '/WhatsApp/Media/WhatsApp Audio/Sent',
-                    '/WhatsApp/Media/WhatsApp Audio/Private',
-                    '/WhatsApp/Media/WhatsApp Voice Notes',
-                    '/WhatsApp/Media/.Statuses',
-                    '/WhatsApp/Private',
-                    '/Telegram',
-                    '/Instagram',
-                    '/Snapchat',
-                    '/.nomedia',
-                    '/Android/data',
-                    '/system/',
-                    '/cache/',
-                ];
-
-                const filtered = media.assets.filter(asset => {
-                    return !excludedFolders.some(folder => asset.uri.includes(folder));
-                });
-
-                console.log(`🔍 Filtered to ${filtered.length} audio files in this batch`);
-
-                // Process files with metadata in smaller chunks to avoid memory issues
-                const batchAssets = await Promise.all(
-                    filtered.map(async (asset) => {
-                        try {
-                            const data = await getAudioMetadata(asset.uri, [
-                                "album", "artist", "name", "year", "artwork"
-                            ]);
-                            const metadata = data.metadata || {};
-
-                            // Handle artwork
-                            let artworkUri = null;
-                            if (metadata.artwork) {
-                                if (metadata.artwork.startsWith('data:image')) {
-                                    artworkUri = metadata.artwork;
-                                } else if (/^[A-Za-z0-9+/=]+$/.test(metadata.artwork)) {
-                                    artworkUri = `data:image/png;base64,${metadata.artwork}`;
-                                } else {
-                                    artworkUri = metadata.artwork;
-                                }
-                            }
-
-                            return {
-                                id: asset.id,
-                                uri: asset.uri,
-                                filename: asset.filename,
-                                duration: asset.duration,
-                                album: metadata.album || "Unknown Album",
-                                artist: metadata.artist || "Unknown Artist",
-                                title: metadata.name || asset.filename.replace(/\.[^/.]+$/, ""),
-                                year: metadata.year || null,
-                                artwork: artworkUri,
-                                creationTime: asset.creationTime,
-                                modificationTime: asset.modificationTime,
-                            };
-                        } catch {
-                            return {
-                                id: asset.id,
-                                uri: asset.uri,
-                                filename: asset.filename,
-                                duration: asset.duration,
-                                album: "Unknown Album",
-                                artist: "Unknown Artist",
-                                title: asset.filename.replace(/\.[^/.]+$/, ""),
-                                year: null,
-                                artwork: null,
-                                creationTime: asset.creationTime,
-                                modificationTime: asset.modificationTime,
-                            };
-                        }
-                    })
-                );
-
-                const validAssets = batchAssets.filter(a => a !== null);
-                allAssets = [...allAssets, ...validAssets]; // Accumulate all batches
-
-                // Update UI progressively with each batch
-                const sortedAssets = allAssets.sort((a, b) => a.title.localeCompare(b.title));
-                setAudioFiles(sortedAssets);
-
-                // Update global store progressively
-                const globalStore = useGlobalAudioStore.getState();
-                globalStore.setAudioFiles(sortedAssets);
-
-                console.log(`✅ Processed batch. Total files: ${allAssets.length}`);
-
-                // Check if there are more files to load
-                hasNextPage = media.hasNextPage;
-                after = media.endCursor;
-
-                // Small delay to keep UI responsive
-                if (hasNextPage) {
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                }
-            }
-
-            // Final sort and update
-            const finalSortedAssets = allAssets.sort((a, b) => a.title.localeCompare(b.title));
-            setAudioFiles(finalSortedAssets);
-            setLoading(false);
-
-            // Final update to global store
-            const globalStore = useGlobalAudioStore.getState();
-            globalStore.setAudioFiles(finalSortedAssets);
-
-            console.log(`🎵 Completed loading ${allAssets.length} audio files in total`);
-
-        } catch (err) {
-            console.error('❌ Audio loading failed:', err);
-            Alert.alert("Error", err.message);
-            setLoading(false);
-        }
-
-        return allAssets;
-    };
-
-    // ==================== CACHE MANAGEMENT ====================
-    const saveAudioFilesToCache = async (data) => {
-        try {
-            await FileSystem.writeAsStringAsync(AUDIO_FILE_CACHE, JSON.stringify(data));
-            console.log(`💾 Cached ${data.length} files`);
-        } catch (error) {
-            console.log('Cache save error:', error);
-        }
-    };
-
-    const loadAudioFilesFromCache = async () => {
-        try {
-            const fileInfo = await FileSystem.getInfoAsync(AUDIO_FILE_CACHE);
-            if (!fileInfo.exists) return null;
-
-            const json = await FileSystem.readAsStringAsync(AUDIO_FILE_CACHE);
-            if (!json || json.trim().length === 0) return null;
-
-            return JSON.parse(json);
-        } catch (error) {
-            console.log("Cache load error:", error);
-            return null;
-        }
-    };
-
-    // ==================== INITIALIZATION  ====================
+    // ==================== INITIALIZATION (SQLite-based) ====================
     useEffect(() => {
         const initialize = async () => {
-            console.log('🚀 Initializing unified audio app...');
+            console.log('🚀 Initializing audio app with SQLite...');
 
             // Step 1: Initialize music notifications
             await MusicNotificationService.initialize();
 
-            // Step 2: Load from cache first (instant UI)
-            const cached = await loadAudioFilesFromCache();
-            if (cached && cached.length > 0) {
-                console.log(`📚 Loaded ${cached.length} files from cache`);
-                setAudioFiles(cached);
+            // Step 2: Initialize the database
+            await initDB();
+
+            // Step 3: Check if we already have songs in the database
+            const lastScan = await getLastScanTime();
+            if (lastScan) {
+                // We have scanned before — load instantly from SQLite
+                console.log('📚 Loading songs from SQLite (instant)...');
+                const songs = await getSongsForUI();
+                setAudioFiles(songs);
                 setLoading(false);
+                setPermissionGranted(true);
+
+                // Update global store for other screens
+                const globalStore = useGlobalAudioStore.getState();
+                globalStore.setAudioFiles(songs);
+
+                // Background sync: find any new files silently
+                backgroundSync(() => {
+                    // Refresh song list when new files are found
+                    getSongsForUI().then(updatedSongs => {
+                        setAudioFiles(updatedSongs);
+                        globalStore.setAudioFiles(updatedSongs);
+                    });
+                });
+
+                // Phase 2: extract metadata for any songs that don't have it yet
+                extractMetadataInBackground(
+                    (progress) => setMetadataProgress(progress),
+                    () => {
+                        // Refresh UI after each batch
+                        getSongsForUI().then(updatedSongs => {
+                            setAudioFiles(updatedSongs);
+                            globalStore.setAudioFiles(updatedSongs);
+                        });
+                    }
+                ).then(() => setMetadataProgress(null));
+
+                return;
             }
 
-            // Step 3: Check permissions
-            const { status } = await MediaLibrary.requestPermissionsAsync();
-            if (status !== "granted") {
+            // First launch — run Phase 1 scan
+            console.log('🔍 First launch — scanning device for music...');
+            const { granted, count } = await scanMusicFiles((progress) => {
+                console.log(`📦 Scanned ${progress.loaded} files...`);
+            });
+
+            if (!granted) {
                 setPermissionGranted(false);
                 showPermissionAlert();
                 return;
@@ -317,50 +182,62 @@ export default function UnifiedAudioApp() {
 
             setPermissionGranted(true);
 
-            // Step 4: Load fresh files and cache them
-            const freshFiles = await loadAllAudioFiles();
-            await saveAudioFilesToCache(freshFiles);
+            // Load the fast results (basic file info, no metadata yet)
+            const songs = await getSongsForUI();
+            setAudioFiles(songs);
+            setLoading(false);
+
+            // Update global store
+            const globalStore = useGlobalAudioStore.getState();
+            globalStore.setAudioFiles(songs);
+
+            console.log(`🎵 Phase 1 complete — ${count} files in SQLite`);
+
+            // Phase 2: Extract metadata in background
+            extractMetadataInBackground(
+                (progress) => setMetadataProgress(progress),
+                () => {
+                    // Refresh UI after each batch
+                    getSongsForUI().then(updatedSongs => {
+                        setAudioFiles(updatedSongs);
+                        globalStore.setAudioFiles(updatedSongs);
+                    });
+                }
+            ).then(() => {
+                setMetadataProgress(null);
+                console.log('🎨 Phase 2 complete — all metadata extracted');
+            });
         };
 
         initialize();
     }, []);
 
-    // Background refresh and notification management
+    // Background refresh when app returns to foreground
     useEffect(() => {
         const subscription = AppState.addEventListener("change", (state) => {
-            if (state === "active") {
-                // Only refresh if we have files and it's been a while
-                if (audioFiles.length > 0) {
-                    setTimeout(() => {
-                        console.log('🔄 Background refresh...');
-                        // Light refresh logic here if needed
-                    }, 2000);
-                }
-            } else if (state === "background" || state === "inactive") {
-                // App going to background - notification should persist
-                console.log('📱 App going to background - notification will persist');
+            if (state === "active" && audioFiles.length > 0) {
+                // Silent background sync
+                setTimeout(() => {
+                    backgroundSync(() => {
+                        getSongsForUI().then(updatedSongs => {
+                            setAudioFiles(updatedSongs);
+                            const globalStore = useGlobalAudioStore.getState();
+                            globalStore.setAudioFiles(updatedSongs);
+                        });
+                    });
+                }, 2000);
             }
         });
 
         return () => subscription.remove();
-    }, [audioFiles]);
+    }, [audioFiles.length]);
 
     // Cleanup notifications when component unmounts
     useEffect(() => {
         return () => {
-            // Clear notifications when app is closed
             MusicNotificationService.clearAllMusicNotifications();
         };
     }, []);
-
-    // Show bottom player when audio is playing
-    useEffect(() => {
-        if (isPlaying && currentTrack) {
-            setShowBottomPlayer(true);
-            // Update notification with current track info
-            MusicNotificationService.updateMusicNotification(currentTrack);
-        }
-    }, [isPlaying, currentTrack]);
 
     // ==================== UI FUNCTIONS ====================
     const showPermissionAlert = () => {
@@ -398,131 +275,15 @@ export default function UnifiedAudioApp() {
 
     const handleShuffle = () => {
         if (audioFiles.length === 0) return;
-        const randomTrack = audioFiles[Math.floor(Math.random() * audioFiles.length)];
-        playTrack(randomTrack, audioFiles);
+        const randomIndex = Math.floor(Math.random() * audioFiles.length);
+        // Use the global audio control store
+        setAndPlayPlaylist(audioFiles, randomIndex, true);
     };
 
-    // ==================== AUDIO PLAYER FUNCTIONS ====================
-    const onPlaybackStatusUpdate = (status) => {
-        if (status.isLoaded) {
-            setPosition(status.positionMillis || 0);
-            setDuration(status.durationMillis || 0);
-            setIsPlaying(status.isPlaying || false);
-
-            if (status.didJustFinish) {
-                // Auto-play next track or stop
-                setIsPlaying(false);
-                setCurrentTrack(null);
-                setShowBottomPlayer(false);
-            }
-        }
-    };
-
-    const playTrack = async (track, playlist = null) => {
-        try {
-            if (isLoadingTrack) {
-                console.log('⚠️ Already loading a track, ignoring request');
-                return;
-            }
-
-            // If same track is already playing, just toggle play/pause
-            if (currentTrack?.id === track.id && sound) {
-                if (isPlaying) {
-                    await pauseTrack();
-                } else {
-                    await resumeTrack();
-                }
-                return;
-            }
-
-            setIsLoadingTrack(true);
-            console.log('🎵 Playing track:', track.title);
-
-            // Stop current sound if playing
-            if (sound) {
-                console.log('🛑 Stopping current track to play new one');
-                await sound.unloadAsync();
-                setSound(null);
-                setIsPlaying(false);
-            }
-
-            // Setup audio mode
-            await Audio.setAudioModeAsync({
-                staysActiveInBackground: true,
-                playsInSilentModeIOS: true,
-                shouldDuckAndroid: true,
-                playThroughEarpieceAndroid: false,
-            });
-
-            // Create and play new sound
-            const { sound: newSound } = await Audio.Sound.createAsync(
-                { uri: track.uri },
-                { shouldPlay: true, volume: 1.0 },
-                onPlaybackStatusUpdate
-            );
-
-            setSound(newSound);
-            setCurrentTrack(track);
-            setIsPlaying(true);
-            setShowBottomPlayer(true);
-            setIsLoadingTrack(false);
-
-            // Show music notification
-            await MusicNotificationService.showMusicNotification(track);
-
-            // Animate bottom player in
-            Animated.spring(bottomPlayerAnim, {
-                toValue: 0,
-                tension: 100,
-                friction: 8,
-                useNativeDriver: true,
-            }).start();
-
-        } catch (error) {
-            console.error('❌ Error playing track:', error);
-            setIsLoadingTrack(false);
-            Alert.alert('Error', 'Could not play this track');
-        }
-    };
-
-    const pauseTrack = async () => {
-        if (sound) {
-            await sound.pauseAsync();
-            setIsPlaying(false);
-        }
-    };
-
-    const resumeTrack = async () => {
-        if (sound) {
-            await sound.playAsync();
-            setIsPlaying(true);
-        }
-    };
-
-    const stopTrack = async () => {
-        if (sound) {
-            await sound.unloadAsync();
-            setSound(null);
-        }
-        setCurrentTrack(null);
-        setIsPlaying(false);
-        setShowBottomPlayer(false);
-        setPosition(0);
-        setDuration(0);
-        setIsLoadingTrack(false);
-
-        // Hide music notification
-        await MusicNotificationService.hideMusicNotification();
-
-        // Animate bottom player out
-        Animated.spring(bottomPlayerAnim, {
-            toValue: 100,
-            tension: 100,
-            friction: 8,
-            useNativeDriver: true,
-        }).start();
-    };
-
+    const handlePlayTrack = useCallback((track, playlist) => {
+        const index = playlist.findIndex(t => t.id === track.id);
+        setAndPlayPlaylist(playlist, index >= 0 ? index : 0, true);
+    }, [setAndPlayPlaylist]);
 
     const formatTime = (milliseconds) => {
         if (!milliseconds) return "0:00";
@@ -534,7 +295,6 @@ export default function UnifiedAudioApp() {
 
     // ==================== FILTERED DATA ====================
     const filteredAudioFiles = useMemo(() => {
-        // Only filter for 'all' tab, other tabs handle their own filtering
         if (activeTab !== 'all' || !searchQuery.trim()) return audioFiles;
 
         const query = searchQuery.toLowerCase();
@@ -546,7 +306,6 @@ export default function UnifiedAudioApp() {
     }, [audioFiles, searchQuery, activeTab]);
 
     // ==================== SWIPE FUNCTIONALITY ====================
-    // Tab configuration (like video tab)
     const tabs = [
         { name: "all", label: "All" },
         { name: "playlist", label: "Playlist" },
@@ -555,7 +314,6 @@ export default function UnifiedAudioApp() {
         { name: "favourite", label: "Favourite" },
     ];
 
-    // Shared props for all screens - tab-specific search state
     const sharedSearchProps = useMemo(() => ({
         showSearch: searchStates[activeTab]?.showSearch || false,
         setShowSearch: (show) => {
@@ -579,20 +337,15 @@ export default function UnifiedAudioApp() {
         },
     }), [searchStates, activeTab]);
 
-    // Get current tab index
     const getCurrentTabIndex = useCallback(() => {
         return tabs.findIndex((tab) => tab.name === activeTab);
     }, [activeTab]);
 
-    // Update current index when activeTab changes (but not when search changes)
     useEffect(() => {
-        // Don't update scroll position if we're in the middle of a search operation
         if (isSearchingRef.current) return;
-
         const newIndex = getCurrentTabIndex();
         if (newIndex !== -1 && newIndex !== currentIndex) {
             setCurrentIndex(newIndex);
-            // Scroll to the new tab
             if (scrollViewRef.current && screenWidth > 0) {
                 scrollViewRef.current.scrollTo({
                     x: newIndex * screenWidth,
@@ -602,11 +355,8 @@ export default function UnifiedAudioApp() {
         }
     }, [activeTab, getCurrentTabIndex, currentIndex, screenWidth]);
 
-    // Handle scroll end to update active tab
     const handleScrollEnd = useCallback((event) => {
-        // Don't handle scroll events if we're in the middle of a search operation
         if (isSearchingRef.current) return;
-
         const contentOffsetX = event.nativeEvent.contentOffset.x;
         const newIndex = Math.round(contentOffsetX / screenWidth);
 
@@ -617,13 +367,57 @@ export default function UnifiedAudioApp() {
         }
     }, [screenWidth, currentIndex]);
 
-    // Handle layout to get screen width
     const handleLayout = useCallback((event) => {
         const { width } = event.nativeEvent.layout;
         setScreenWidth(width);
     }, []);
 
-    // Render swipeable content
+    // ==================== RENDER FUNCTIONS ====================
+    const renderTrackItem = useCallback(({ item }) => {
+        const isCurrentTrack = currentTrack?.id === item.id;
+        const isThisTrackLoading = isLoadingTrack && isCurrentTrack;
+
+        return (
+            <TouchableOpacity
+                style={[
+                    styles.trackItem,
+                    {
+                        backgroundColor: themeColors.card,
+                        opacity: isLoadingTrack && !isCurrentTrack ? 0.5 : 1
+                    }
+                ]}
+                onPress={() => handlePlayTrack(item, filteredAudioFiles)}
+                activeOpacity={0.7}
+                disabled={isLoadingTrack && !isCurrentTrack}
+            >
+                {item.artwork ? (
+                    <Image source={{ uri: item.artwork }} style={styles.artwork} />
+                ) : (
+                    <View style={[styles.artwork, { backgroundColor: themeColors.primary, justifyContent: 'center', alignItems: 'center' }]}>
+                        <Music size={24} color={themeColors.background} />
+                    </View>
+                )}
+
+                <View style={styles.trackInfo}>
+                    <Text style={[styles.title, { color: isCurrentTrack ? themeColors.primary : themeColors.text }]} numberOfLines={1}>
+                        {item.title}
+                    </Text>
+                    <Text style={[styles.artist, { color: themeColors.textSecondary }]} numberOfLines={1}>
+                        {item.artist}
+                    </Text>
+                </View>
+
+                {isThisTrackLoading ? (
+                    <ActivityIndicator size="small" color={themeColors.primary} />
+                ) : isCurrentTrack && isPlaying ? (
+                    <MaterialIcons name="equalizer" size={24} color={themeColors.primary} />
+                ) : isCurrentTrack && !isPlaying ? (
+                    <MaterialIcons name="pause" size={24} color={themeColors.primary} />
+                ) : null}
+            </TouchableOpacity>
+        );
+    }, [currentTrack, isPlaying, isLoadingTrack, themeColors, handlePlayTrack, filteredAudioFiles]);
+
     const renderSwipeableContent = useCallback(() => {
         return (
             <ScrollView
@@ -647,7 +441,7 @@ export default function UnifiedAudioApp() {
                                 renderItem={renderTrackItem}
                                 keyExtractor={(item) => item.id}
                                 onScroll={handleScroll}
-                                contentContainerStyle={{ paddingBottom: showBottomPlayer ? 100 : 20 }}
+                                contentContainerStyle={{ paddingBottom: isBottomPlayerVisible ? 100 : 20 }}
                                 ListEmptyComponent={
                                     <View style={styles.emptyContainer}>
                                         <Music size={64} color={themeColors.textSecondary} />
@@ -670,279 +464,7 @@ export default function UnifiedAudioApp() {
                 ))}
             </ScrollView>
         );
-    }, [sharedSearchProps, screenWidth, handleScrollEnd, handleLayout, filteredAudioFiles, showBottomPlayer, searchQuery, themeColors]);
-
-    // ==================== SCREEN RENDERER ====================
-    const renderActiveScreen = () => {
-        const screenProps = {
-            showSearch,
-            searchQuery,
-            setSearchQuery,
-            setShowSearch
-        };
-
-        switch (activeTab) {
-            case 'all':
-                return (
-                    <FlatList
-                        data={filteredAudioFiles}
-                        renderItem={renderTrackItem}
-                        keyExtractor={(item) => item.id}
-                        onScroll={handleScroll}
-                        contentContainerStyle={{ paddingBottom: showBottomPlayer ? 100 : 20 }}
-                        ListEmptyComponent={
-                            <View style={styles.emptyContainer}>
-                                <Music size={64} color={themeColors.textSecondary} />
-                                <Text style={[styles.emptyText, { color: themeColors.text }]}>
-                                    {searchQuery ? 'No songs found' : 'No music in your library'}
-                                </Text>
-                            </View>
-                        }
-                    />
-                );
-            case 'playlist':
-                return <PlaylistScreen {...screenProps} />;
-            case 'album':
-                return <Albums {...screenProps} />;
-            case 'artist':
-                return <ArtistScreen {...screenProps} />;
-            case 'favourite':
-                return <FavouriteScreen {...screenProps} />;
-            default:
-                return (
-                    <FlatList
-                        data={filteredAudioFiles}
-
-                        renderItem={renderTrackItem}
-                        keyExtractor={(item) => item.id}
-                        onScroll={handleScroll}
-                        contentContainerStyle={{ paddingBottom: showBottomPlayer ? 100 : 20 }}
-                        ListEmptyComponent={
-                            <View style={styles.emptyContainer}>
-                                <Music size={64} color={themeColors.textSecondary} />
-                                <Text style={[styles.emptyText, { color: themeColors.text }]}>
-                                    {searchQuery ? 'No songs found' : 'No music in your library'}
-                                </Text>
-                            </View>
-                        }
-                    />
-                );
-        }
-    };
-    // ==================== RENDER FUNCTIONS ====================
-    const renderTrackItem = ({ item }) => {
-        const isCurrentTrack = currentTrack?.id === item.id;
-        const isThisTrackLoading = isLoadingTrack && isCurrentTrack;
-
-        return (
-            <TouchableOpacity
-                style={[
-                    styles.trackItem,
-                    {
-                        backgroundColor: themeColors.card,
-                        opacity: isLoadingTrack && !isCurrentTrack ? 0.5 : 1
-                    }
-                ]}
-                onPress={() => playTrack(item, filteredAudioFiles)}
-                activeOpacity={0.7}
-                disabled={isLoadingTrack && !isCurrentTrack}
-            >
-                {item.artwork ? (
-                    <Image source={{ uri: item.artwork }} style={styles.artwork} />
-                ) : (
-                    <View style={[styles.artwork, { backgroundColor: themeColors.primary, justifyContent: 'center', alignItems: 'center' }]}>
-                        <Music size={24} color={themeColors.background} />
-                    </View>
-                )}
-
-                <View style={styles.trackInfo}>
-                    <Text style={[styles.title, { color: isCurrentTrack ? themeColors.primary : themeColors.text }]} numberOfLines={1}>
-                        {item.title}
-                    </Text>
-                    <Text style={[styles.artist, { color: themeColors.textSecondary }]} numberOfLines={1}>
-                        {item.artist}
-                    </Text>
-                </View>
-
-                {/* Show loading indicator for the track being loaded */}
-                {isThisTrackLoading ? (
-                    <ActivityIndicator size="small" color={themeColors.primary} />
-                ) : isCurrentTrack && isPlaying ? (
-                    <MaterialIcons name="equalizer" size={24} color={themeColors.primary} />
-                ) : isCurrentTrack && !isPlaying ? (
-                    <MaterialIcons name="pause" size={24} color={themeColors.primary} />
-                ) : null}
-            </TouchableOpacity>
-        );
-    };
-
-    const renderBottomPlayer = () => {
-        if (!currentTrack || !showBottomPlayer) return null;
-
-        return (
-            <Animated.View
-                style={[
-                    styles.bottomPlayer,
-                    {
-                        backgroundColor: themeColors.background,
-                        borderTopColor: themeColors.primary,
-                        transform: [{ translateY: bottomPlayerAnim }],
-                    }
-                ]}
-            >
-                {/* Progress Bar */}
-                <View style={styles.progressContainer}>
-                    <View
-                        style={[
-                            styles.progressBar,
-                            {
-                                backgroundColor: themeColors.primary,
-                                width: duration > 0 ? `${(position / duration) * 100}%` : '0%',
-                            }
-                        ]}
-                    />
-                </View>
-
-                {/* Player Content */}
-                <TouchableOpacity
-                    style={styles.bottomPlayerContent}
-                    onPress={() => {
-                        console.log('🎵 Navigating to audio player...');
-                        // Navigate to the separate audio.jsx player
-                        router.push({
-                            pathname: '/player/audio',
-                            params: {
-                                trackId: currentTrack.id,
-                                playlistData: JSON.stringify(filteredAudioFiles)
-                            }
-                        });
-                    }}
-                    activeOpacity={0.9}
-                >
-                    {currentTrack.artwork ? (
-                        <Image source={{ uri: currentTrack.artwork }} style={styles.bottomArtwork} />
-                    ) : (
-                        <View style={[styles.bottomArtwork, { backgroundColor: themeColors.primary, justifyContent: 'center', alignItems: 'center' }]}>
-                            <Music size={20} color={themeColors.background} />
-                        </View>
-                    )}
-
-                    <View style={styles.bottomTrackInfo}>
-                        <Text style={[styles.bottomTitle, { color: themeColors.text }]} numberOfLines={1}>
-                            {currentTrack.title}
-                        </Text>
-                        <Text style={[styles.bottomArtist, { color: themeColors.textSecondary }]} numberOfLines={1}>
-                            {currentTrack.artist}
-                        </Text>
-                    </View>
-
-                    <TouchableOpacity
-                        style={styles.bottomPlayButton}
-                        onPress={isPlaying ? pauseTrack : resumeTrack}
-                    >
-                        <MaterialIcons
-                            name={isPlaying ? "pause" : "play-arrow"}
-                            size={28}
-                            color={themeColors.primary}
-                        />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.bottomCloseButton} onPress={stopTrack}>
-                        <X size={20} color={themeColors.textSecondary} />
-                    </TouchableOpacity>
-                </TouchableOpacity>
-            </Animated.View>
-        );
-    };
-
-    const renderFullPlayer = () => {
-        console.log('🎵 Full player render - visible:', showFullPlayer, 'currentTrack:', currentTrack?.title);
-        return (
-            <Modal
-                visible={showFullPlayer}
-                animationType="slide"
-                onRequestClose={() => setShowFullPlayer(false)}
-            >
-                <SafeAreaView style={[styles.fullPlayer, { backgroundColor: themeColors.background }]}>
-                    {/* Header */}
-                    <View style={styles.fullPlayerHeader}>
-                        <TouchableOpacity onPress={() => setShowFullPlayer(false)}>
-                            <ChevronDown size={28} color={themeColors.text} />
-                        </TouchableOpacity>
-                        <Text style={[styles.fullPlayerTitle, { color: themeColors.text }]}>Now Playing</Text>
-                        <TouchableOpacity>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Artwork */}
-                    <View style={styles.fullPlayerArtwork}>
-                        {currentTrack?.artwork ? (
-                            <Image source={{ uri: currentTrack.artwork }} style={styles.largeArtwork} />
-                        ) : (
-                            <View style={[styles.largeArtwork, { backgroundColor: themeColors.primary, justifyContent: 'center', alignItems: 'center' }]}>
-                                <Music size={80} color={themeColors.background} />
-                            </View>
-                        )}
-                    </View>
-
-                    {/* Track Info */}
-                    <View style={styles.fullPlayerInfo}>
-                        <Text style={[styles.fullPlayerTrackTitle, { color: themeColors.text }]} numberOfLines={2}>
-                            {currentTrack?.title}
-                        </Text>
-                        <Text style={[styles.fullPlayerArtist, { color: themeColors.textSecondary }]} numberOfLines={1}>
-                            {currentTrack?.artist}
-                        </Text>
-                    </View>
-
-                    {/* Progress */}
-                    <View style={styles.fullPlayerProgress}>
-                        <View style={styles.progressSlider}>
-                            <View
-                                style={[
-                                    styles.progressFill,
-                                    {
-                                        backgroundColor: themeColors.primary,
-                                        width: duration > 0 ? `${(position / duration) * 100}%` : '0%',
-                                    }
-                                ]}
-                            />
-                        </View>
-                        <View style={styles.timeContainer}>
-                            <Text style={[styles.timeText, { color: themeColors.textSecondary }]}>
-                                {formatTime(position)}
-                            </Text>
-                            <Text style={[styles.timeText, { color: themeColors.textSecondary }]}>
-                                {formatTime(duration)}
-                            </Text>
-                        </View>
-                    </View>
-
-                    {/* Controls */}
-                    <View style={styles.fullPlayerControls}>
-                        <TouchableOpacity style={styles.controlButton}>
-                            <SkipBack size={32} color={themeColors.text} />
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.playButton, { backgroundColor: themeColors.primary }]}
-                            onPress={isPlaying ? pauseTrack : resumeTrack}
-                        >
-                            <MaterialIcons
-                                name={isPlaying ? "pause" : "play-arrow"}
-                                size={48}
-                                color={themeColors.background}
-                            />
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.controlButton}>
-                            <SkipForward size={32} color={themeColors.text} />
-                        </TouchableOpacity>
-                    </View>
-                </SafeAreaView>
-            </Modal>
-        );
-    };
+    }, [sharedSearchProps, screenWidth, handleScrollEnd, handleLayout, filteredAudioFiles, isBottomPlayerVisible, searchQuery, themeColors, renderTrackItem, handleScroll]);
 
     // ==================== MAIN RENDER ====================
     if (loading && audioFiles.length === 0) {
@@ -985,13 +507,33 @@ export default function UnifiedAudioApp() {
             {/* Header */}
             <AudioHeader
                 onSearch={() => setShowSearch(!showSearch)}
-                onFilter={() => { }} // Placeholder for future filter functionality
-                onMore={() => { }} // Placeholder for future more options
+                onFilter={() => { }}
+                onMore={() => { }}
                 showIcons={{ search: true, filter: false, more: false }}
             />
 
             {/* Toggle Bar */}
             <ToggleBar />
+
+            {/* Metadata Loading Indicator */}
+            {metadataProgress && (
+                <View style={[styles.metadataProgress, { backgroundColor: themeColors.card }]}>
+                    <Text style={[styles.metadataText, { color: themeColors.textSecondary }]}>
+                        Loading metadata: {metadataProgress.completed}/{metadataProgress.total}
+                    </Text>
+                    <View style={[styles.metadataBar, { backgroundColor: themeColors.border }]}>
+                        <View
+                            style={[
+                                styles.metadataFill,
+                                {
+                                    backgroundColor: themeColors.primary,
+                                    width: `${(metadataProgress.completed / metadataProgress.total) * 100}%`,
+                                }
+                            ]}
+                        />
+                    </View>
+                </View>
+            )}
 
             {/* Search Bar */}
             {showSearch && (
@@ -1018,7 +560,7 @@ export default function UnifiedAudioApp() {
                         styles.shuffleButton,
                         {
                             backgroundColor: themeColors.primary,
-                            bottom: (showBottomPlayer ? 100 : 20) + 10,
+                            bottom: (isBottomPlayerVisible ? 100 : 20) + 10,
                             transform: [{
                                 translateY: playComponentAnim.interpolate({
                                     inputRange: [0, 1],
@@ -1034,11 +576,6 @@ export default function UnifiedAudioApp() {
                     </TouchableOpacity>
                 </Animated.View>
             )}
-
-            {/* Bottom Player */}
-            {renderBottomPlayer()}
-
-
         </SafeAreaView>
     );
 }
@@ -1089,24 +626,9 @@ const styles = StyleSheet.create({
         borderRadius: 25,
     },
     permissionButtonText: {
-        color: '#fff', // Keep white for contrast on primary button
+        color: '#fff',
         fontSize: 16,
         fontWeight: '600',
-    },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingVertical: 15,
-    },
-    headerTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-    },
-    headerButtons: {
-        flexDirection: 'row',
-        gap: 15,
     },
     searchContainer: {
         marginHorizontal: 20,
@@ -1164,89 +686,22 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 8,
     },
-
-    progressContainer: {
-        height: 2,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    },
-    progressBar: {
-        height: '100%',
-    },
-
-    fullPlayerHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingVertical: 15,
-    },
-    fullPlayerTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-    },
-    fullPlayerArtwork: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingHorizontal: 40,
-    },
-    largeArtwork: {
-        width: width * 0.8,
-        height: width * 0.8,
-        borderRadius: 20,
-    },
-    fullPlayerInfo: {
-        alignItems: 'center',
-        paddingHorizontal: 30,
-        paddingVertical: 20,
-    },
-    fullPlayerTrackTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        textAlign: 'center',
+    metadataProgress: {
+        marginHorizontal: 20,
         marginBottom: 8,
-    },
-    fullPlayerArtist: {
-        fontSize: 18,
-        textAlign: 'center',
-    },
-    fullPlayerProgress: {
-        paddingHorizontal: 30,
-        paddingVertical: 20,
-    },
-    progressSlider: {
-        height: 4,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        borderRadius: 2,
-        marginBottom: 10,
-    },
-    progressFill: {
-        height: '100%',
-        borderRadius: 2,
-    },
-    timeContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-    },
-    timeText: {
-        fontSize: 12,
-    },
-    fullPlayerControls: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingHorizontal: 40,
-        paddingBottom: 40,
-        gap: 40,
-    },
-    controlButton: {
         padding: 10,
+        borderRadius: 8,
     },
-    playButton: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        justifyContent: 'center',
-        alignItems: 'center',
+    metadataText: {
+        fontSize: 12,
+        marginBottom: 4,
+    },
+    metadataBar: {
+        height: 3,
+        borderRadius: 1.5,
+        overflow: 'hidden',
+    },
+    metadataFill: {
+        height: '100%',
     },
 });

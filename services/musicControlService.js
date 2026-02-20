@@ -1,13 +1,13 @@
-import { Audio } from 'expo-av';
-import * as Notifications from 'expo-notifications';
+import * as Notifications from "expo-notifications";
+import { audioPlayer } from "./AudioPlayer";
 
 // Simple implementation for Expo
 let audioControlRef = null;
 
 const setupMusicControls = (audioControl) => {
   audioControlRef = audioControl;
-  console.log('Music controls initialized with Expo Audio');
-  
+  console.log("Music controls initialized with AudioPlayer singleton");
+
   // Return cleanup function
   return () => {
     audioControlRef = null;
@@ -19,28 +19,21 @@ const updateNotification = async (track, isPlaying) => {
   if (!track || !audioControlRef) return;
 
   try {
-    // For Expo, we'll use the built-in notification system
-    // This is a simplified version - you might want to enhance it
+    // Audio mode is managed by the AudioPlayer singleton.
+    // We only need to show the notification here.
     if (isPlaying) {
-      await Audio.setAudioModeAsync({
-        staysActiveInBackground: true,
-        playsInSilentModeIOS: true,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
-      });
-      
       // Show a local notification with the current track info
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: track.title || 'Unknown Track',
-          body: track.artist || 'Unknown Artist',
-          data: { trackId: track.id || 'unknown' },
+          title: track.title || "Unknown Track",
+          body: track.artist || "Unknown Artist",
+          data: { trackId: track.id || "unknown" },
         },
         trigger: null, // Send immediately
       });
     }
   } catch (error) {
-    console.warn('Error in updateNotification:', error);
+    console.warn("Error in updateNotification:", error);
   }
 };
 

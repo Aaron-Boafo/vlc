@@ -41,7 +41,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
 import useThemeStore from "../../store/theme";
 import useAudioControl from "../../store/useAudioControl";
-import useSimpleAudioStore from "../../store/simpleAudioStore";
+import useGlobalAudioStore from "../../store/globalAudioStore";
 import useFavouriteStore from "../../store/favouriteStore";
 import usePlaybackStore from "../../store/playbackStore";
 import * as NavigationBar from 'expo-navigation-bar';
@@ -55,7 +55,7 @@ const { width } = Dimensions.get("window");
 const PlayerScreen = () => {
   const { themeColors } = useThemeStore();
   const { activeTab } = useLocalSearchParams();
-  const setActiveTab = useSimpleAudioStore(state => state.setActiveTab);
+  const setActiveTab = useGlobalAudioStore(state => state.setActiveTab);
 
   // Set the active tab when the component mounts
   useEffect(() => {
