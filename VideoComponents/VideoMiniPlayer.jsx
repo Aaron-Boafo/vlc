@@ -3,24 +3,14 @@ import { View, StyleSheet, TouchableOpacity, useWindowDimensions, Text } from 'r
 import { Play, Pause, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
-// Try to import expo-video with fallback
-let VideoView, useVideoPlayer;
-try {
-  const expoVideo = require('expo-video');
-  VideoView = expoVideo.VideoView;
-  useVideoPlayer = expoVideo.useVideoPlayer;
-} catch (error) {
-  console.warn('expo-video not available in mini player, using fallback');
-  VideoView = null;
-  useVideoPlayer = null;
-}
+import { VideoView, useVideoPlayer } from 'expo-video';
 import useOptimizedVideoStore from '../store/optimizedVideoStore';
 import { router } from 'expo-router';
-import Animated, { 
-  useAnimatedStyle, 
-  withTiming, 
-  useSharedValue, 
-  useAnimatedGestureHandler, 
+import Animated, {
+  useAnimatedStyle,
+  withTiming,
+  useSharedValue,
+  useAnimatedGestureHandler,
   runOnJS,
   withSpring,
   interpolate,
@@ -33,13 +23,13 @@ import { PanGestureHandler } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const VideoMiniPlayer = () => {
-  const { 
+  const {
     miniPlayerVideo,
     miniPlayerPosition,
-    isMiniPlayerVisible, 
-    isMiniPlayerPlaying, 
-    toggleMiniPlayerPlayback, 
-    closeMiniPlayer 
+    isMiniPlayerVisible,
+    isMiniPlayerPlaying,
+    toggleMiniPlayerPlayback,
+    closeMiniPlayer
   } = useOptimizedVideoStore();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -47,7 +37,7 @@ const VideoMiniPlayer = () => {
 
   // Create video player instance for expo-video (always call hook)
   const player = useVideoPlayer ? useVideoPlayer(
-    miniPlayerVideo?.uri || '', 
+    miniPlayerVideo?.uri || '',
     (player) => {
       if (miniPlayerVideo?.uri) {
         player.loop = true;
@@ -64,7 +54,7 @@ const VideoMiniPlayer = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [isInDeleteZone, setIsInDeleteZone] = useState(false);
   const [hasTriggeredHaptic, setHasTriggeredHaptic] = useState(false);
-  
+
   // Add video opacity for smooth content transitions
   const videoOpacity = useSharedValue(0);
 
@@ -87,21 +77,21 @@ const VideoMiniPlayer = () => {
     // Enhanced smooth entrance/exit animations
     if (isMiniPlayerVisible) {
       // Smooth entrance animation from bottom-right
-      translateX.value = withSpring(0, { 
-        damping: 20, 
+      translateX.value = withSpring(0, {
+        damping: 20,
         stiffness: 150,
         mass: 1
       });
-      translateY.value = withSpring(0, { 
-        damping: 20, 
+      translateY.value = withSpring(0, {
+        damping: 20,
         stiffness: 150,
         mass: 1
       });
       scale.value = withSequence(
         withTiming(0.8, { duration: 0 }),
-        withSpring(1, { 
-          damping: 15, 
-          stiffness: 200 
+        withSpring(1, {
+          damping: 15,
+          stiffness: 200
         })
       );
       rotation.value = withSpring(0, { damping: 20 });
@@ -109,11 +99,11 @@ const VideoMiniPlayer = () => {
       deleteZoneScale.value = 0.8;
     } else {
       // Smooth exit animation
-      scale.value = withTiming(0.8, { 
+      scale.value = withTiming(0.8, {
         duration: 200,
         easing: Easing.out(Easing.cubic)
       });
-      translateY.value = withTiming(100, { 
+      translateY.value = withTiming(100, {
         duration: 250,
         easing: Easing.out(Easing.cubic)
       });
@@ -137,36 +127,36 @@ const VideoMiniPlayer = () => {
     onStart: (_, ctx) => {
       ctx.startX = translateX.value;
       ctx.startY = translateY.value;
-      
+
       // Start drag animations
       scale.value = withSpring(1.1, { damping: 15 });
       rotation.value = withSpring(2, { damping: 15 });
       deleteZoneOpacity.value = withTiming(1, { duration: 200 });
       deleteZoneScale.value = withSpring(1, { damping: 15 });
-      
+
       runOnJS(setIsDragging)(true);
       runOnJS(setHasTriggeredHaptic)(false);
     },
-    
+
     onActive: (event, ctx) => {
       const newX = ctx.startX + event.translationX;
       const newY = ctx.startY + event.translationY;
-      
+
       translateX.value = newX;
       translateY.value = newY;
-      
+
       // Calculate current absolute position
       const currentAbsoluteY = height - 65 - miniPlayerHeight + newY;
       const isInZone = currentAbsoluteY > DELETE_THRESHOLD;
-      
+
       // Enhanced visual feedback based on proximity to delete zone
       const distanceToZone = Math.max(0, DELETE_THRESHOLD - currentAbsoluteY);
       const proximityFactor = Math.max(0, 1 - distanceToZone / 100);
-      
+
       // Dynamic scaling and rotation based on proximity
       scale.value = 1.1 + (proximityFactor * 0.2);
       rotation.value = 2 + (proximityFactor * 8);
-      
+
       // Update delete zone appearance
       if (isInZone) {
         deleteZoneScale.value = withSpring(1.2, { damping: 10 });
@@ -181,12 +171,12 @@ const VideoMiniPlayer = () => {
         runOnJS(setHasTriggeredHaptic)(false);
       }
     },
-    
+
     onEnd: (event) => {
       const finalY = translateY.value;
       const currentAbsoluteY = height - 65 - miniPlayerHeight + finalY;
       const shouldDelete = currentAbsoluteY > DELETE_THRESHOLD;
-      
+
       if (shouldDelete) {
         // Enhanced delete animation
         scale.value = withSequence(
@@ -195,7 +185,7 @@ const VideoMiniPlayer = () => {
         );
         rotation.value = withTiming(15, { duration: 200 });
         translateY.value = withTiming(height, { duration: 300 });
-        
+
         runOnJS(triggerHapticFeedback)('delete');
         runOnJS(setTimeout)(() => {
           runOnJS(closeMiniPlayer)();
@@ -208,12 +198,12 @@ const VideoMiniPlayer = () => {
           { x: -(width - miniPlayerWidth - 16), y: 0 }, // top-left
           { x: -(width - miniPlayerWidth - 16), y: -(height - miniPlayerHeight - 65) }, // bottom-left
         ];
-        
+
         const dist = (a, b) => Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
         const current = { x: translateX.value, y: translateY.value };
         let minDist = Infinity;
         let nearest = corners[0];
-        
+
         for (let c of corners) {
           const d = dist(current, c);
           if (d < minDist) {
@@ -221,18 +211,18 @@ const VideoMiniPlayer = () => {
             nearest = c;
           }
         }
-        
+
         // Smooth return animation
         translateX.value = withSpring(nearest.x, { damping: 15, stiffness: 150 });
         translateY.value = withSpring(nearest.y, { damping: 15, stiffness: 150 });
         scale.value = withSpring(1, { damping: 15 });
         rotation.value = withSpring(0, { damping: 15 });
       }
-      
+
       // Hide delete zone
       deleteZoneOpacity.value = withTiming(0, { duration: 300 });
       deleteZoneScale.value = withSpring(0.8, { damping: 15 });
-      
+
       runOnJS(setIsDragging)(false);
       runOnJS(setIsInDeleteZone)(false);
       runOnJS(setHasTriggeredHaptic)(false);
@@ -247,7 +237,7 @@ const VideoMiniPlayer = () => {
         { scale: scale.value },
         { rotate: `${rotation.value}deg` }
       ],
-      opacity: withTiming(isMiniPlayerVisible ? 1 : 0, { 
+      opacity: withTiming(isMiniPlayerVisible ? 1 : 0, {
         duration: 300,
         easing: Easing.bezier(0.25, 0.1, 0.25, 1) // Smooth easing curve
       }),
@@ -264,7 +254,7 @@ const VideoMiniPlayer = () => {
       transform: [{ scale: deleteZoneScale.value }],
     };
   });
-  
+
   const controlsAnimatedStyle = useAnimatedStyle(() => {
     return {
       opacity: withTiming(showControls ? 1 : 0, { duration: 200 })
@@ -278,7 +268,7 @@ const VideoMiniPlayer = () => {
     } else {
       setShowControls(false);
       if (controlsTimer.current) clearTimeout(controlsTimer.current);
-      
+
       // Cleanup video player when mini player becomes invisible
       if (player && miniPlayerVideo?.uri) {
         try {
@@ -313,7 +303,7 @@ const VideoMiniPlayer = () => {
   const handleTogglePlayback = (e) => {
     e.stopPropagation();
     toggleMiniPlayerPlayback();
-    
+
     // Control expo-video player
     if (player && miniPlayerVideo?.uri) {
       if (isMiniPlayerPlaying) {
@@ -336,7 +326,7 @@ const VideoMiniPlayer = () => {
         console.log('Error stopping video player:', error);
       }
     }
-    
+
     closeMiniPlayer();
   };
 
@@ -366,8 +356,8 @@ const VideoMiniPlayer = () => {
           containerAnimatedStyle
         ]}>
           {miniPlayerVideo && miniPlayerVideo.uri && (
-            <TouchableOpacity 
-              style={styles.pressableArea} 
+            <TouchableOpacity
+              style={styles.pressableArea}
               onPress={handlePlayerPress}
               activeOpacity={1}
             >
@@ -379,6 +369,7 @@ const VideoMiniPlayer = () => {
                   allowsFullscreen={false}
                   allowsPictureInPicture={false}
                   showsTimecodes={false}
+                  nativeControls={false}
                 />
               ) : (
                 <View style={[styles.video, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
@@ -386,14 +377,14 @@ const VideoMiniPlayer = () => {
                 </View>
               )}
               <Animated.View style={[styles.overlay, controlsAnimatedStyle]}>
-                <TouchableOpacity onPress={handleTogglePlayback} style={[styles.controlButton, { left: 8 }]}> 
+                <TouchableOpacity onPress={handleTogglePlayback} style={[styles.controlButton, { left: 8 }]}>
                   {isMiniPlayerPlaying ? (
                     <Pause size={18} color="white" fill="white" />
                   ) : (
-                    <Play size={18} color="white" fill="white" style={{ marginLeft: 2 }}/>
+                    <Play size={18} color="white" fill="white" style={{ marginLeft: 2 }} />
                   )}
                 </TouchableOpacity>
-                <TouchableOpacity onPress={handleClose} style={[styles.controlButton, { right: 8 }]}> 
+                <TouchableOpacity onPress={handleClose} style={[styles.controlButton, { right: 8 }]}>
                   <X size={18} color="white" />
                 </TouchableOpacity>
               </Animated.View>
@@ -408,7 +399,7 @@ const VideoMiniPlayer = () => {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 65, 
+    bottom: 65,
     right: 16,
     borderRadius: 8,
     overflow: 'hidden',

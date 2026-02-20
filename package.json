@@ -24,7 +24,6 @@
     "clsx": "^2.1.1",
     "expo": "~53.0.27",
     "expo-audio": "^0.4.9",
-    "expo-av": "~15.1.7",
     "expo-blur": "~14.1.5",
     "expo-constants": "~17.1.6",
     "expo-dev-client": "~5.2.4",
@@ -91,7 +90,8 @@
   "expo": {
     "doctor": {
       "reactNativeDirectoryCheck": {
-        "listUnknownPackages": false
+        "listUnknownPackages": false,
+        "exclude": ["react-native-progress"]
       }
     }
   },
