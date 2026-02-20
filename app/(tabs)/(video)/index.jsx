@@ -4,6 +4,8 @@ import {
   StyleSheet,
   Platform,
   ScrollView,
+  Text,
+  AppState,
 } from "react-native";
 import AudioHeader from "../../../AudioComponents/title";
 import VideoToggleBar from "../../../VideoComponents/toggleButton";
@@ -12,51 +14,128 @@ import VideoAllScreen from "../../../VideoScreens/all";
 import VideoPlaylistScreen from "../../../VideoScreens/playlist";
 import VideoFavouriteScreen from "../../../VideoScreens/favourite";
 import VideoHistoryScreen from "../../../VideoScreens/history";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
-import MoreOptionsMenu from "../../../components/MoreOptionsMenu";
 import SortOptionsSheet from "../../../components/SortOptionsSheet";
-import ProgressiveLoadingIndicator from "../../../components/ProgressiveLoadingIndicator";
-import StoreMigration from "../../../utils/storeMigration";
 import AdvancedSearch from "../../../utils/advancedSearch";
-import PerformanceAnalytics from "../../../utils/performanceAnalytics";
 import LazyScreen from "../../../components/LazyScreen";
-import ImageOptimizer from "../../../utils/imageOptimizer";
 import * as Icons from "lucide-react-native";
+
+// SQLite-based scanner
+import { initDB, getVideoScanTime } from "../../../services/database";
+import {
+  scanVideoFiles,
+  getVideosForUI,
+  extractThumbnailsInBackground,
+  videoBackgroundSync,
+} from "../../../services/videoScanner";
 
 export default function VideoTabScreen() {
   const {
     activeTab,
-    loadVideoFiles,
     videoFiles,
     isLoading,
     sortOrder,
     sortVideoFiles,
     toggleTabs,
+    setVideoFiles,
   } = useOptimizedVideoStore();
   const { themeColors } = useThemeStore();
   const [showSort, setShowSort] = useState(false);
-  const [showMore, setShowMore] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [migrationComplete, setMigrationComplete] = useState(false);
-  const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
+  const [thumbnailProgress, setThumbnailProgress] = useState(null);
+  const [isInitialized, setIsInitialized] = useState(false);
   const router = useRouter();
+  const appStateRef = useRef(AppState.currentState);
 
-  // Run migration on first load
+  // ─── SQLite-based initialization ──────────────────────────────
   useEffect(() => {
-    const runMigration = async () => {
+    const initialize = async () => {
       try {
-        await StoreMigration.migrateVideoStore();
-        setMigrationComplete(true);
+        await initDB();
+        const lastScan = await getVideoScanTime();
+
+        if (lastScan) {
+          // Subsequent launch — load from SQLite instantly
+          console.log("📹 Loading videos from SQLite...");
+          const videos = await getVideosForUI();
+          setVideoFiles(videos);
+          setIsInitialized(true);
+
+          // Background sync for new files
+          videoBackgroundSync(async () => {
+            console.log("📹 New videos found during sync, refreshing...");
+            const updated = await getVideosForUI();
+            setVideoFiles(updated);
+          });
+
+          // Extract thumbnails for any remaining videos
+          extractThumbnailsInBackground(
+            (progress) => setThumbnailProgress(progress),
+            async () => {
+              const updated = await getVideosForUI();
+              setVideoFiles(updated);
+            }
+          ).then(() => setThumbnailProgress(null));
+        } else {
+          // First launch — full scan
+          console.log("📹 First launch: scanning for video files...");
+          useOptimizedVideoStore.getState().setLoading(true);
+
+          const { granted, count } = await scanVideoFiles();
+          if (!granted) {
+            console.warn("📹 Media library permission not granted");
+            useOptimizedVideoStore.getState().setLoading(false);
+            setIsInitialized(true);
+            return;
+          }
+
+          console.log(`📹 Scan complete: ${count} videos found`);
+          const videos = await getVideosForUI();
+          setVideoFiles(videos);
+          useOptimizedVideoStore.getState().setLoading(false);
+          setIsInitialized(true);
+
+          // Start background thumbnail extraction
+          extractThumbnailsInBackground(
+            (progress) => setThumbnailProgress(progress),
+            async () => {
+              const updated = await getVideosForUI();
+              setVideoFiles(updated);
+            }
+          ).then(() => setThumbnailProgress(null));
+        }
       } catch (error) {
-        console.error("Video migration failed:", error);
-        setMigrationComplete(true); // Continue anyway
+        console.error("📹 Video initialization error:", error);
+        useOptimizedVideoStore.getState().setLoading(false);
+        setIsInitialized(true);
       }
     };
-    runMigration();
+
+    initialize();
   }, []);
+
+  // ─── Background sync on app foreground ────────────────────────
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", async (nextState) => {
+      if (
+        appStateRef.current.match(/inactive|background/) &&
+        nextState === "active" &&
+        isInitialized
+      ) {
+        console.log("📹 App foregrounded — running background sync");
+        videoBackgroundSync(async () => {
+          const updated = await getVideosForUI();
+          setVideoFiles(updated);
+        });
+      }
+      appStateRef.current = nextState;
+    });
+
+    return () => subscription?.remove();
+  }, [isInitialized]);
 
   const videoSortOptions = [
     {
@@ -97,51 +176,34 @@ export default function VideoTabScreen() {
     },
   ];
 
-  // Fast loading with the new optimized system
-  useFocusEffect(
-    useCallback(() => {
-      // Only load if migration is complete and we haven't loaded yet
-      if (migrationComplete && !hasInitiallyLoaded && videoFiles.length === 0) {
-        console.log("🚀 Loading video files with fast loader...");
-        const startTime = Date.now();
-        setHasInitiallyLoaded(true); // Mark as loaded
-        loadVideoFiles().then(() => {
-          PerformanceAnalytics.trackLoadTime(
-            "VideoFiles",
-            startTime,
-            Date.now(),
-            videoFiles.length
-          );
-          // 🖼️ Preload video thumbnails for better performance
-          ImageOptimizer.preloadArtwork(videoFiles.slice(0, 10));
-        });
-      }
-    }, [
-      migrationComplete,
-      hasInitiallyLoaded,
-      videoFiles.length,
-      loadVideoFiles,
-    ])
-  );
-
-  // 🔍 Build search index when video files change
+  // Build search index when video files change
   useEffect(() => {
     if (videoFiles.length > 0) {
-      const startTime = Date.now();
       AdvancedSearch.buildSearchIndex(videoFiles);
-      PerformanceAnalytics.trackLoadTime(
-        "VideoSearchIndex",
-        startTime,
-        Date.now(),
-        videoFiles.length
-      );
-      console.log(
-        "🔍 Video search index built for",
-        videoFiles.length,
-        "files"
-      );
     }
   }, [videoFiles]);
+
+  // Handle refresh — force re-scan
+  const handleRefresh = useCallback(async () => {
+    useOptimizedVideoStore.getState().setLoading(true);
+    try {
+      const { count } = await scanVideoFiles();
+      const videos = await getVideosForUI();
+      setVideoFiles(videos);
+
+      // Re-extract thumbnails
+      extractThumbnailsInBackground(
+        (progress) => setThumbnailProgress(progress),
+        async () => {
+          const updated = await getVideosForUI();
+          setVideoFiles(updated);
+        }
+      ).then(() => setThumbnailProgress(null));
+    } catch (error) {
+      console.error("📹 Refresh failed:", error);
+    }
+    useOptimizedVideoStore.getState().setLoading(false);
+  }, []);
 
   // ScrollView ref for programmatic scrolling
   const scrollViewRef = React.useRef(null);
@@ -178,7 +240,6 @@ export default function VideoTabScreen() {
     const newIndex = getCurrentTabIndex();
     if (newIndex !== -1 && newIndex !== currentIndex) {
       setCurrentIndex(newIndex);
-      // Scroll to the new tab
       if (scrollViewRef.current && screenWidth > 0) {
         scrollViewRef.current.scrollTo({
           x: newIndex * screenWidth,
@@ -252,53 +313,46 @@ export default function VideoTabScreen() {
   ]);
 
   const renderContent = () => {
-    // Show progressive loading indicator only during initial load with no files
+    // Show loading during initial scan with no files
     if (isLoading && videoFiles.length === 0) {
       return (
-        <ProgressiveLoadingIndicator
-          isLoading={isLoading}
-          totalFiles={0}
-          loadedFiles={0}
-          isComplete={false}
-          mediaType="video files"
-        />
+        <View style={styles.centerContainer}>
+          <Text style={{ color: themeColors.textSecondary }}>
+            Scanning for videos...
+          </Text>
+        </View>
       );
     }
 
-    // If we have files, show them (even if still loading in background)
-    if (videoFiles.length > 0) {
-      return renderScrollableContent();
-    }
-
-    // Show empty state only when not loading and no files
-    if (!isLoading && videoFiles.length === 0) {
-      return renderScrollableContent(); // This will show the empty state in VideoAllScreen
-    }
-
-    // Default fallback - show main content
     return renderScrollableContent();
   };
 
   return (
     <SafeAreaView
       style={[styles.screen, { backgroundColor: themeColors.background }]}
-      edges={["top"]} // Only apply safe area to top, let bottom be handled by tab bar
+      edges={["top"]}
     >
       <AudioHeader
         title="Video"
         onSearch={() => setShowSearch((s) => !s)}
         onFilter={() => setShowSort(true)}
-        onRefresh={loadVideoFiles}
+        onRefresh={handleRefresh}
         showIcons={{ search: true, filter: true, more: false }}
       />
 
       <VideoToggleBar />
 
+      {/* Thumbnail extraction progress */}
+      {thumbnailProgress && (
+        <View style={[styles.progressBar, { backgroundColor: themeColors.card }]}>
+          <Text style={{ color: themeColors.textSecondary, fontSize: 12 }}>
+            📹 Generating thumbnails: {thumbnailProgress.completed}/{thumbnailProgress.total}
+          </Text>
+        </View>
+      )}
+
       <View style={styles.contentArea}>{renderContent()}</View>
 
-      {/* <MiniPlayer /> */}
-
-      {/* Modals can stay here */}
       <SortOptionsSheet
         visible={showSort}
         onClose={() => setShowSort(false)}
@@ -308,13 +362,6 @@ export default function VideoTabScreen() {
         onSort={(newSortOrder) =>
           sortVideoFiles(newSortOrder.key, newSortOrder.direction)
         }
-      />
-      <MoreOptionsMenu
-        visible={showMore}
-        onClose={() => setShowMore(false)}
-        onSettings={() => router.push("/(tabs)/(more)/settings")}
-        onAbout={() => router.push("/(tabs)/(more)/about")}
-        onRefresh={loadVideoFiles}
       />
     </SafeAreaView>
   );
@@ -331,12 +378,17 @@ const styles = StyleSheet.create({
   },
   contentArea: {
     flex: 1,
-    paddingBottom: Platform.OS === "ios" ? 0 : 20, // Extra padding for Android
+    paddingBottom: Platform.OS === "ios" ? 0 : 20,
   },
   scrollContainer: {
     flex: 1,
   },
   tabScreen: {
     flex: 1,
+  },
+  progressBar: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    alignItems: "center",
   },
 });

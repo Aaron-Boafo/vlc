@@ -3,21 +3,10 @@ import { View, TouchableOpacity, StyleSheet, SafeAreaView, Text, TouchableWithou
 import { MaterialIcons } from '@expo/vector-icons';
 import { ChevronDown, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react-native';
 import Slider from '@react-native-community/slider';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import useOptimizedVideoStore from '../../store/optimizedVideoStore';
 import { useRouter, useFocusEffect } from 'expo-router';
-import VideoPlayerFallback from '../../components/VideoPlayerFallback';
-
-// Try to import expo-video with fallback
-let VideoView, useVideoPlayer;
-try {
-  const expoVideo = require('expo-video');
-  VideoView = expoVideo.VideoView;
-  useVideoPlayer = expoVideo.useVideoPlayer;
-} catch (error) {
-  console.warn('expo-video not available, using fallback');
-  VideoView = null;
-  useVideoPlayer = null;
-}
+import { videoManager } from '../../services/VideoManager';
 
 const VideoPlayer = () => {
   const { currentVideo, playlist, videoFiles, setAndPlayVideo, showMiniPlayer } = useOptimizedVideoStore();
@@ -30,13 +19,23 @@ const VideoPlayer = () => {
   const hideTimeout = useRef(null);
   const router = useRouter();
 
-  // Create video player instance
-  const player = useVideoPlayer && currentVideo?.uri ?
-    useVideoPlayer(currentVideo.uri, (player) => {
-      player.loop = false;
-      player.muted = isMuted;
-      player.play();
-    }) : null;
+  // Always call useVideoPlayer unconditionally (React hooks rule).
+  // Pass empty string if no video URI, and guard play() in the setup callback.
+  const videoSource = currentVideo?.uri || '';
+  const player = useVideoPlayer(videoSource, (p) => {
+    p.loop = false;
+    p.muted = isMuted;
+    if (currentVideo?.uri) {
+      p.play();
+    }
+  });
+
+  // Sync VideoManager state when the player screen opens
+  useEffect(() => {
+    if (currentVideo) {
+      videoManager.playVideo(currentVideo);
+    }
+  }, [currentVideo?.id]);
 
   // Video player event listeners
   useEffect(() => {
@@ -45,6 +44,8 @@ const VideoPlayer = () => {
     const timeUpdateListener = player.addListener('timeUpdate', (payload) => {
       setCurrentTime(payload.currentTime);
       setIsPlaying(player.playing);
+      // Keep VideoManager in sync
+      videoManager.updatePosition(payload.currentTime, player.duration);
     });
 
     const statusChangeListener = player.addListener('statusChange', (status) => {
@@ -55,7 +56,7 @@ const VideoPlayer = () => {
       }
     });
 
-    const playbackEndListener = player.addListener('playbackEnd', () => {
+    const playbackEndListener = player.addListener('playToEnd', () => {
       handleNext();
     });
 
@@ -95,18 +96,7 @@ const VideoPlayer = () => {
     setControlsVisible(true);
   };
 
-  // Check if expo-video is available
-  if (!VideoView || !useVideoPlayer) {
-    return <VideoPlayerFallback onRetry={() => router.back()} />;
-  }
-
   if (!currentVideo || !currentVideo.uri) {
-    console.log('🎥 Video Player Debug:', {
-      currentVideo,
-      hasCurrentVideo: !!currentVideo,
-      currentVideoUri: currentVideo?.uri,
-      videoFiles: videoFiles?.length || 0
-    });
     return (
       <View style={styles.center}>
         <MaterialIcons name="videocam-off" size={48} color="#888" />
@@ -122,9 +112,11 @@ const VideoPlayer = () => {
       if (player.playing) {
         player.pause();
         setIsPlaying(false);
+        videoManager.pause();
       } else {
         player.play();
         setIsPlaying(true);
+        videoManager.play();
       }
     }
     setControlsVisible(true);
@@ -134,6 +126,7 @@ const VideoPlayer = () => {
     if (player && duration > 0) {
       player.currentTime = value;
       setCurrentTime(value);
+      videoManager.seek(value);
     }
     setControlsVisible(true);
   };
@@ -175,17 +168,13 @@ const VideoPlayer = () => {
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
-        // Call the existing handleBack function instead of letting the app close
         handleBack();
-        return true; // Prevent default behavior (closing the app)
+        return true;
       };
 
-      // Add the back handler when the screen is focused
       const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-
-      // Remove the back handler when the screen loses focus
       return () => backHandler.remove();
-    }, [handleBack]) // Include handleBack in dependencies
+    }, [handleBack])
   );
 
   // Previous/Next logic
@@ -235,23 +224,17 @@ const VideoPlayer = () => {
     <SafeAreaView style={styles.container}>
       <TouchableWithoutFeedback onPress={handleScreenPress}>
         <View style={styles.videoContainer}>
-          {VideoView && player ? (
-            <VideoView
-              player={player}
-              style={StyleSheet.absoluteFill}
-              contentFit="contain"
-              allowsFullscreen={false}
-              allowsPictureInPicture={false}
-              showsTimecodes={false}
-              requiresLinearPlayback={false}
-            />
-          ) : (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
-              <MaterialIcons name="play-circle-outline" size={64} color="#FFF" />
-              <Text style={{ color: '#FFF', marginTop: 16 }}>Video Player Loading...</Text>
-            </View>
-          )}
-          
+          <VideoView
+            player={player}
+            style={StyleSheet.absoluteFill}
+            contentFit="contain"
+            allowsFullscreen={true}
+            allowsPictureInPicture={true}
+            showsTimecodes={false}
+            requiresLinearPlayback={false}
+            nativeControls={false}
+          />
+
           {/* Video Controls Overlay */}
           {controlsVisible && (
             <View style={styles.controlsOverlay}>
@@ -279,11 +262,11 @@ const VideoPlayer = () => {
                 <TouchableOpacity onPress={handleSkipBackward} style={styles.skipButton}>
                   <SkipBack size={32} color="#FFF" />
                 </TouchableOpacity>
-                
+
                 <TouchableOpacity style={styles.playButton} onPress={handlePlayPause}>
                   <MaterialIcons name={isPlaying ? 'pause' : 'play-arrow'} size={60} color="#FFF" />
                 </TouchableOpacity>
-                
+
                 <TouchableOpacity onPress={handleSkipForward} style={styles.skipButton}>
                   <SkipForward size={32} color="#FFF" />
                 </TouchableOpacity>
@@ -305,18 +288,18 @@ const VideoPlayer = () => {
                   />
                   <Text style={styles.timeText}>{formatTime(duration)}</Text>
                 </View>
-                
+
                 <View style={styles.navigationControls}>
-                  <TouchableOpacity 
-                    onPress={handlePrevious} 
+                  <TouchableOpacity
+                    onPress={handlePrevious}
                     style={[styles.navButton, { opacity: getCurrentIndex() > 0 ? 1 : 0.5 }]}
                     disabled={getCurrentIndex() <= 0}
                   >
                     <MaterialIcons name="skip-previous" size={28} color="#FFF" />
                   </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    onPress={handleNext} 
+
+                  <TouchableOpacity
+                    onPress={handleNext}
                     style={[styles.navButton, { opacity: getCurrentIndex() < getCurrentList().length - 1 ? 1 : 0.5 }]}
                     disabled={getCurrentIndex() >= getCurrentList().length - 1}
                   >
@@ -435,4 +418,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default VideoPlayer; 
+export default VideoPlayer;

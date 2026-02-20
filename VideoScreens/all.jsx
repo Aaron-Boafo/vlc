@@ -27,9 +27,11 @@ import CustomAlert from '../components/CustomAlert';
 import MemoryManager from '../utils/memoryManager';
 import LargeLibraryOptimizer from '../utils/largeLibraryOptimizer';
 import PerformanceMonitor from '../utils/performanceMonitor';
+import { scanVideoFiles, getVideosForUI, extractThumbnailsInBackground } from '../services/videoScanner';
+import { initDB } from '../services/database';
 
 const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
-  const { videoFiles, isLoading, loadVideoFiles, setAndPlayVideo, removeVideo, renameVideo, toggleFavouriteVideo, forceReloadVideos } = useOptimizedVideoStore();
+  const { videoFiles, isLoading, setAndPlayVideo, removeVideo, renameVideo, toggleFavouriteVideo, setVideoFiles, setLoading } = useOptimizedVideoStore();
   const { themeColors } = useThemeStore();
   const favouriteStore = useFavouriteStore();
   const historyStore = useHistoryStore();
@@ -48,19 +50,23 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
   });
   const [videoThumbnails, setVideoThumbnails] = useState({});
   const [isTransitioning, setIsTransitioning] = useState(false);
-  
+
   // 🚀 Optimized thumbnail management for large libraries
   const thumbnailCache = useRef(new Map());
   const maxThumbnailCache = useRef(500); // Limit thumbnail cache size
 
   useEffect(() => {
     if (!videoFiles || !Array.isArray(videoFiles) || videoFiles.length === 0) {
-      loadVideoFiles().catch(error => {
+      // Videos are loaded by the parent tab screen via SQLite scanner.
+      // This is just a fallback safety net.
+      initDB().then(() => getVideosForUI()).then(videos => {
+        if (videos.length > 0) setVideoFiles(videos);
+      }).catch(error => {
         console.error('Error loading videos:', error);
         setLoadingError(error.message);
       });
     }
-  }, [loadVideoFiles]);
+  }, []);
 
   // Safety check to ensure refreshing doesn't get stuck
   useEffect(() => {
@@ -70,7 +76,7 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
         console.log('⚠️ Safety timeout triggered - forcing refresh to stop');
         setRefreshing(false);
       }, 45000); // 45 second safety timeout
-      
+
       return () => {
         clearTimeout(safetyTimeout);
       };
@@ -89,12 +95,12 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
   useEffect(() => {
     MemoryManager.registerCache('videoThumbnails', thumbnailCache.current, maxThumbnailCache.current);
     MemoryManager.registerCache('videoThumbnailState', videoThumbnails, maxThumbnailCache.current);
-    
+
     return () => {
       // Cleanup when component unmounts
       MemoryManager.forceCleanupCache('videoThumbnails');
       MemoryManager.forceCleanupCache('videoThumbnailState');
-      
+
       // Stop performance monitoring
       if (LargeLibraryOptimizer.isLargeLibrary()) {
         const report = PerformanceMonitor.stopMonitoring();
@@ -109,13 +115,13 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
       const startTime = Date.now();
       const optimizedSettings = LargeLibraryOptimizer.optimizeForLibrarySize(videoFiles.length);
       maxThumbnailCache.current = Math.floor(optimizedSettings.cacheSize / 2); // Thumbnails use more memory
-      
+
       // 📊 Start performance monitoring for large libraries
       if (LargeLibraryOptimizer.isLargeLibrary()) {
         PerformanceMonitor.startMonitoring();
         PerformanceMonitor.trackLoadTime('video', videoFiles.length, Date.now() - startTime);
       }
-      
+
       console.log(`🎥 Video library optimization applied for ${videoFiles.length} files:`, optimizedSettings);
     }
   }, [videoFiles.length]);
@@ -124,36 +130,49 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
     console.log('🔄 Starting video refresh...');
     setRefreshing(true);
     setLoadingError(null);
-    
-    // Add timeout to prevent infinite loading
+
     const timeoutId = setTimeout(() => {
       console.log('⚠️ Video refresh timeout - forcing refresh to stop');
       setRefreshing(false);
-    }, 30000); // 30 second timeout
-    
+    }, 30000);
+
     try {
-      await forceReloadVideos();
+      setLoading(true);
+      await scanVideoFiles();
+      const videos = await getVideosForUI();
+      setVideoFiles(videos);
       console.log('✅ Video refresh completed successfully');
+
+      // Re-extract thumbnails in background
+      extractThumbnailsInBackground(null, async () => {
+        const updated = await getVideosForUI();
+        setVideoFiles(updated);
+      });
     } catch (error) {
       console.error('❌ Error refreshing videos:', error);
       setLoadingError(error.message || 'Failed to refresh videos');
     } finally {
       clearTimeout(timeoutId);
-      console.log('🔄 Setting refreshing to false');
+      setLoading(false);
       setRefreshing(false);
     }
-  }, [forceReloadVideos]);
+  }, []);
 
   const handleRetryLoad = async () => {
     setLoadingError(null);
     try {
-      await forceReloadVideos();
+      setLoading(true);
+      await scanVideoFiles();
+      const videos = await getVideosForUI();
+      setVideoFiles(videos);
     } catch (error) {
       console.error('Error retrying video load:', error);
       setLoadingError(error.message);
+    } finally {
+      setLoading(false);
     }
   };
-  
+
   const filteredVideos = useMemo(() => {
     if (!videoFiles || !Array.isArray(videoFiles)) return [];
     if (!searchQuery) return videoFiles;
@@ -173,7 +192,7 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
   const handleVideoPress = useCallback((video) => {
     // Prevent multiple rapid clicks
     if (isTransitioning) return;
-    
+
     // Check for invalid characters in filename
     if (video.filename && (video.filename.includes('?') || video.filename.includes('#'))) {
       setCustomAlert({
@@ -184,11 +203,11 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
       });
       return;
     }
-    
+
     // Attach thumbnail if available
     const videoWithThumb = videoThumbnails[video.id] ? { ...video, thumbnail: videoThumbnails[video.id] } : video;
     setAndPlayVideo(videoWithThumb, 'video'); // Pass 'video' as source tab
-    
+
     // Use replace for smoother navigation
     router.replace('/player/video');
   }, [isTransitioning, videoThumbnails, setAndPlayVideo, router]);
@@ -304,9 +323,9 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
   // Only show loading screen if we're loading AND have no files
   if (isLoading && (!videoFiles || videoFiles.length === 0)) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: themeColors.background }]}> 
+      <View style={[styles.loadingContainer, { backgroundColor: themeColors.background }]}>
         <ActivityIndicator size="large" color={themeColors.primary} />
-        <Text style={[styles.loadingText, { color: themeColors.text }]}> 
+        <Text style={[styles.loadingText, { color: themeColors.text }]}>
           Loading your video library...
         </Text>
         {loadingError && (
@@ -314,7 +333,7 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
             <Text style={[styles.errorText, { color: themeColors.error || '#ff6b6b' }]}>
               {loadingError}
             </Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.retryButton, { backgroundColor: themeColors.primary }]}
               onPress={handleRetryLoad}
             >
@@ -333,7 +352,7 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
       {showSearch && (
         <View style={[styles.searchContainer, { backgroundColor: themeColors.sectionBackground }]}>
           <TextInput
-            style={[styles.searchInput, { 
+            style={[styles.searchInput, {
               backgroundColor: themeColors.card,
               color: themeColors.text,
               borderColor: themeColors.primary
@@ -397,9 +416,9 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
         }}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <VideoOff 
-              size={64} 
-              color={themeColors.textSecondary} 
+            <VideoOff
+              size={64}
+              color={themeColors.textSecondary}
             />
             <Text style={[styles.emptyText, { color: themeColors.text }]}>
               {searchQuery ? 'No videos found' : 'No videos in your library'}
@@ -425,11 +444,11 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
         animationType="slide"
         onRequestClose={() => setShowMoreModal(false)}
       >
-        <Pressable 
-          style={styles.modalOverlay} 
+        <Pressable
+          style={styles.modalOverlay}
           onPress={() => setShowMoreModal(false)}
         >
-          <Pressable 
+          <Pressable
             style={[styles.modalContent, { backgroundColor: themeColors.card }]}
             onPress={(e) => e.stopPropagation()}
           >
@@ -439,7 +458,7 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
                   <Text style={[styles.modalTitle, { color: themeColors.text }]}>
                     {selectedVideo.filename.replace(/\.mp4$/, '')}
                   </Text>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     onPress={() => setShowMoreModal(false)}
                     style={styles.closeModalButton}
                   >
@@ -448,46 +467,46 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
                 </View>
 
                 <View style={styles.modalOptions}>
-                  <TouchableOpacity 
-                    style={styles.optionRow} 
+                  <TouchableOpacity
+                    style={styles.optionRow}
                     onPress={handlePlay}
                   >
                     <Play size={22} color={themeColors.primary} style={styles.optionIcon} />
                     <Text style={[styles.optionText, { color: themeColors.text }]}>Play</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity 
-                    style={styles.optionRow} 
+                  <TouchableOpacity
+                    style={styles.optionRow}
                     onPress={handleAddToFavorites}
                   >
-                    <Heart 
-                      size={22} 
-                      color={favouriteStore.isFavourite(selectedVideo.id) ? themeColors.primary : themeColors.text} 
-                      style={styles.optionIcon} 
+                    <Heart
+                      size={22}
+                      color={favouriteStore.isFavourite(selectedVideo.id) ? themeColors.primary : themeColors.text}
+                      style={styles.optionIcon}
                     />
                     <Text style={[styles.optionText, { color: themeColors.text }]}>
                       {favouriteStore.isFavourite(selectedVideo.id) ? 'Remove from Favorites' : 'Add to Favorites'}
                     </Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity 
-                    style={styles.optionRow} 
+                  <TouchableOpacity
+                    style={styles.optionRow}
                     onPress={handleShare}
                   >
                     <Share2 size={22} color={themeColors.text} style={styles.optionIcon} />
                     <Text style={[styles.optionText, { color: themeColors.text }]}>Share</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity 
-                    style={styles.optionRow} 
+                  <TouchableOpacity
+                    style={styles.optionRow}
                     onPress={handleInfo}
                   >
                     <Info size={22} color={themeColors.text} style={styles.optionIcon} />
                     <Text style={[styles.optionText, { color: themeColors.text }]}>Info</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity 
-                    style={styles.optionRow} 
+                  <TouchableOpacity
+                    style={styles.optionRow}
                     onPress={handleDelete}
                   >
                     <Trash2 size={22} color={themeColors.error} style={styles.optionIcon} />

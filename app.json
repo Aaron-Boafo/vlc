@@ -62,7 +62,6 @@
     },
     "plugins": [
       "expo-router",
-      "expo-av",
       [
         "expo-media-library",
         {
@@ -96,10 +95,7 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "451c20a0-c013-475d-a621-dba344892b1d"
-      }
+      "router": {}
     }
   }
 }

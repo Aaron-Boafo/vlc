@@ -101,16 +101,20 @@ class NavigationOptimizer {
   async preWarmVideoScreen() {
     // Pre-warm video data if not already loaded
     try {
-      const { useOptimizedVideoStore } = await import(
+      const { default: useOptimizedVideoStore } = await import(
         "../store/optimizedVideoStore"
       );
       const store = useOptimizedVideoStore.getState();
 
       if (store.videoFiles.length === 0 && !store.isLoading) {
-        // Trigger background loading
-        setTimeout(() => {
-          store.loadVideoFiles();
-        }, 0);
+        // Load from SQLite instead of MediaLibrary
+        const { initDB } = await import("../services/database");
+        const { getVideosForUI } = await import("../services/videoScanner");
+        await initDB();
+        const videos = await getVideosForUI();
+        if (videos.length > 0) {
+          store.setVideoFiles(videos);
+        }
       }
 
       return store.videoFiles;
