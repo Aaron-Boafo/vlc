@@ -1,0 +1,15 @@
+# Environment files
+.env
+.env.*
+!.env.example
+!.env.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo

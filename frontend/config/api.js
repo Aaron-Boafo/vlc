@@ -1,5 +1,5 @@
 const API_CONFIG = {
-  BASE_URL: 'https://vlc-spring-boot.onrender.com',
+  BASE_URL: process.env.EXPO_PUBLIC_API_URL || 'https://vlc-spring-boot.onrender.com',
   ENDPOINTS: {
     // Auth endpoints
     REGISTER: '/register',
