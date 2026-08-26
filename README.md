@@ -2,6 +2,14 @@
 
 A cross-platform mobile media application for playing audio and video files with integrated cloud storage, playlist management, and user profiles.
 
+![License](https://img.shields.io/badge/license-MIT-green)
+![Java](https://img.shields.io/badge/Java-21-orange)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.5.3-brightgreen)
+![React Native](https://img.shields.io/badge/React_Native-0.79-blue)
+![Expo](https://img.shields.io/badge/Expo-53-black)
+![MongoDB](https://img.shields.io/badge/MongoDB-7-green)
+![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)
+
 ## Features
 
 - **Audio Playback** — Play, pause, skip, and manage your music library with background playback
