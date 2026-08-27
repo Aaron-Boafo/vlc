@@ -138,6 +138,8 @@ All endpoints require an `Authorization: Bearer <JWT_TOKEN>` header unless noted
 | Armahkyek22 | [@Armahkyek22](https://github.com/Armahkyek22) |
 | Skytechninja2 | [@Skytechninja2](https://github.com/Skytechninja2) |
 
+See [CONTRIBUTORS.md](CONTRIBUTORS.md) for the full list. Contributions are welcome — check out [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
+
 ## License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
