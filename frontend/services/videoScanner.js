@@ -1,36 +1,30 @@
 /**
- * Two-Phase Video Scanner
+ * Two-Phase Video Scanner with Incremental Sync
  *
  * Phase 1 — Fast Initial Load:
  *   Scan the device for video files and insert basic file references
- *   (URI, filename, duration, dimensions) into SQLite immediately.
+ *   (URI, filename, duration, dimensions, file_size) into SQLite immediately.
  *
  * Phase 2 — Lazy Thumbnail Extraction:
- *   Process videos in small batches (5 at a time). Generate a thumbnail
- *   via expo-video-thumbnails, save it as a persistent .png via
+ *   Process videos in small batches. Generate a thumbnail
+ *   via expo-video-thumbnails, save it as a persistent file via
  *   expo-file-system, and store that path in SQLite.
  *
- * Background Sync:
- *   On subsequent launches, detect new files added since the last scan
- *   and process them without blocking the UI.
+ * Incremental Sync:
+ *   On subsequent launches, detect new, modified, and deleted files
+ *   by comparing modification_time and file_size.
  */
 
 import * as MediaLibrary from "expo-media-library";
 import * as FileSystem from "expo-file-system";
 import * as VideoThumbnails from "expo-video-thumbnails";
-import {
-  insertVideos,
-  getAllVideos,
-  getVideosWithoutThumbnails,
-  updateVideoThumbnail,
-  getAllVideoUris,
-  getVideoScanTime,
-  setVideoScanTime,
-} from "./database";
+import { initDB } from "./database";
+import { videoRepository } from "./database/repositories/videoRepository";
+import { scanStateRepository } from "./database/repositories/scanStateRepository";
+import { artworkManager } from "./media/artworkManager";
 
 const SCAN_BATCH_SIZE = 200; // MediaLibrary pagination size
 const THUMBNAIL_CHUNK_SIZE = 5; // Videos per thumbnail extraction batch
-const THUMBNAILS_DIR = `${FileSystem.documentDirectory}video_thumbnails/`;
 
 // Folders to skip during scanning
 const EXCLUDED_FOLDERS = [
@@ -46,6 +40,10 @@ const EXCLUDED_FOLDERS = [
   "/system/",
   "/cache/",
 ];
+
+function shouldSkipFile(uri) {
+  return EXCLUDED_FOLDERS.some((folder) => uri.includes(folder));
+}
 
 // ─── Phase 1: Fast Scan ──────────────────────────────────────────
 
@@ -64,9 +62,13 @@ export async function scanVideoFiles(onProgress) {
   }
 
   console.log("📹 Phase 1: Starting fast video scan...");
-  const allAssets = [];
+
+  await initDB();
+
+  let after = null;
   let hasNextPage = true;
   let endCursor;
+  let totalInserted = 0;
 
   while (hasNextPage) {
     const page = await MediaLibrary.getAssetsAsync({
@@ -77,45 +79,45 @@ export async function scanVideoFiles(onProgress) {
     });
 
     const filtered = page.assets.filter(
-      (asset) => !EXCLUDED_FOLDERS.some((folder) => asset.uri.includes(folder))
+      (asset) => !shouldSkipFile(asset.uri)
     );
 
-    allAssets.push(...filtered);
+    // Map to DB rows - include file_size for incremental sync
+    const videoRows = filtered.map((asset) => ({
+      id: asset.id,
+      uri: asset.uri,
+      filename: asset.filename || "Unknown",
+      duration: asset.duration || 0,
+      width: asset.width || 0,
+      height: asset.height || 0,
+      file_size: asset.fileSize || 0,
+      creation_time: asset.creationTime || null,
+      modification_time: asset.modificationTime || null,
+    }));
+
+    // Bulk insert into SQLite using repository
+    const inserted = await videoRepository.insertBatch(videoRows);
+    totalInserted += inserted;
+
     hasNextPage = page.hasNextPage;
     endCursor = page.endCursor;
 
     if (onProgress) {
-      onProgress({ loaded: allAssets.length, total: page.totalCount });
+      onProgress({ loaded: totalInserted, total: page.totalCount });
     }
   }
 
-  console.log(`📹 Found ${allAssets.length} video files after filtering`);
+  await scanStateRepository.setVideoScanState(totalInserted);
 
-  // Map to DB rows
-  const videoRows = allAssets.map((asset) => ({
-    id: asset.id,
-    uri: asset.uri,
-    filename: asset.filename || "Unknown",
-    duration: asset.duration || 0,
-    width: asset.width || 0,
-    height: asset.height || 0,
-    creation_time: asset.creationTime || null,
-    modification_time: asset.modificationTime || null,
-  }));
-
-  // Bulk insert into SQLite
-  await insertVideos(videoRows);
-  await setVideoScanTime(videoRows.length);
-
-  console.log(`📹 Phase 1 complete: ${videoRows.length} videos in SQLite`);
-  return { granted: true, count: videoRows.length };
+  console.log(`📹 Phase 1 complete: ${totalInserted} videos in SQLite`);
+  return { granted: true, count: totalInserted };
 }
 
 // ─── Phase 2: Lazy Thumbnail Extraction ──────────────────────────
 
 /**
  * Process videos that don't have thumbnails yet, in small batches.
- * Generates a thumbnail at 1.5s, saves as persistent .png.
+ * Generates a thumbnail at 1.5s, saves as persistent file.
  *
  * @param {(progress: { completed: number, total: number }) => void} [onProgress]
  * @param {() => void} [onBatchComplete] — called after each batch
@@ -125,15 +127,7 @@ export async function extractThumbnailsInBackground(
   onProgress,
   onBatchComplete
 ) {
-  // Ensure thumbnails directory exists
-  const dirInfo = await FileSystem.getInfoAsync(THUMBNAILS_DIR);
-  if (!dirInfo.exists) {
-    await FileSystem.makeDirectoryAsync(THUMBNAILS_DIR, {
-      intermediates: true,
-    });
-  }
-
-  const pending = await getVideosWithoutThumbnails();
+  const pending = await videoRepository.getWithoutThumbnails();
   if (pending.length === 0) {
     console.log("📹 Phase 2: All thumbnails already extracted");
     return 0;
@@ -188,31 +182,19 @@ async function _generateAndSaveThumbnail(video) {
     if (!tempUri) {
       console.warn(`📹 No thumbnail generated for ${video.filename}`);
       // Mark as processed to avoid retrying indefinitely
-      await updateVideoThumbnail(video.id, null);
+      await videoRepository.updateBatch([{ id: video.id, metadata_loaded: 1, thumbnail_path: null }]);
       return;
     }
 
-    // Move/copy to persistent location
-    const persistentPath = `${THUMBNAILS_DIR}${video.id.replace(
-      /[^a-zA-Z0-9]/g,
-      "_"
-    )}.png`;
+    // Save using artwork manager (handles copying and thumbnail generation)
+    const result = await artworkManager.saveVideoThumbnail(video.id, tempUri);
 
-    // Check if tempUri is a file path — copy to persistent storage
-    const fileInfo = await FileSystem.getInfoAsync(tempUri);
-    if (fileInfo.exists) {
-      await FileSystem.copyAsync({
-        from: tempUri,
-        to: persistentPath,
-      });
-    } else {
-      // Fallback: just use the temp URI directly
-      await updateVideoThumbnail(video.id, tempUri);
-      return;
-    }
-
-    // Update database with persistent path
-    await updateVideoThumbnail(video.id, persistentPath);
+    // Update database with persistent paths
+    await videoRepository.updateBatch([{
+      id: video.id,
+      thumbnail_path: result.fullPath,
+      metadata_loaded: 1,
+    }]);
   } catch (error) {
     console.warn(
       `📹 Thumbnail extraction failed for ${video.filename}:`,
@@ -220,111 +202,144 @@ async function _generateAndSaveThumbnail(video) {
     );
     // Mark as processed (with null) to avoid infinite retries
     try {
-      await updateVideoThumbnail(video.id, null);
+      await videoRepository.updateBatch([{ id: video.id, metadata_loaded: 1, thumbnail_path: null }]);
     } catch (dbError) {
       console.warn("📹 Failed to mark video as processed:", dbError.message);
     }
   }
 }
 
-// ─── Background Sync ─────────────────────────────────────────────
+// ─── Incremental Sync ────────────────────────────────────────────
 
 /**
- * Check for new video files added since the last scan.
- * Only inserts new files and generates their thumbnails.
- * Designed to run silently in the background.
+ * Perform incremental sync: detect new, modified, and deleted video files.
+ * Compares modification_time and file_size to detect changes.
  *
- * @param {() => void} [onNewFilesFound] — called when new videos are discovered
- * @returns {Promise<number>} — number of new files found
+ * @param {(progress: { new: number, modified: number, deleted: number }) => void} [onProgress]
+ * @param {() => void} [onComplete] — called when sync completes
+ * @returns {Promise<{ new: number, modified: number, deleted: number }>}
  */
-export async function videoBackgroundSync(onNewFilesFound) {
+export async function incrementalVideoSync(onProgress, onComplete) {
   try {
-    const { status } = await MediaLibrary.requestPermissionsAsync();
-    if (status !== "granted") return 0;
+    await initDB();
 
-    const lastScan = await getVideoScanTime();
-    if (!lastScan) {
-      console.log("📹 Sync: No previous scan found, skipping background sync");
-      return 0;
-    }
+    const { status } = await MediaLibrary.getPermissionsAsync();
+    if (status !== "granted") return { new: 0, modified: 0, deleted: 0 };
 
-    console.log("📹 Background sync: checking for new videos...");
+    // Get all known files with metadata from database
+    const knownFiles = await videoRepository.getAllUrisWithMeta();
+    console.log(`📹 Incremental sync: ${knownFiles.size} known videos in DB`);
 
-    // Get all known URIs for fast duplicate checking
-    const knownUris = await getAllVideoUris();
-
-    // Scan for all videos
-    const allAssets = [];
+    let newCount = 0;
+    let modifiedCount = 0;
+    let deletedCount = 0;
+    let after = null;
     let hasNextPage = true;
-    let endCursor;
+    const seenUris = new Set();
 
+    // Scan all files on device
     while (hasNextPage) {
       const page = await MediaLibrary.getAssetsAsync({
         mediaType: MediaLibrary.MediaType.video,
         first: SCAN_BATCH_SIZE,
-        after: endCursor,
+        after,
         sortBy: [MediaLibrary.SortBy.modificationTime],
       });
 
-      const filtered = page.assets.filter(
-        (asset) =>
-          !EXCLUDED_FOLDERS.some((folder) => asset.uri.includes(folder))
-      );
+      for (const asset of page.assets) {
+        if (shouldSkipFile(asset.uri)) continue;
+        seenUris.add(asset.uri);
 
-      allAssets.push(...filtered);
+        const known = knownFiles.get(asset.uri);
+        const currentMtime = asset.modificationTime || 0;
+        const currentSize = asset.fileSize || 0;
+
+        if (!known) {
+          // New file
+          await videoRepository.insertBatch([{
+            id: asset.id,
+            uri: asset.uri,
+            filename: asset.filename || "Unknown",
+            duration: asset.duration || 0,
+            width: asset.width || 0,
+            height: asset.height || 0,
+            file_size: asset.fileSize || 0,
+            creation_time: asset.creationTime || null,
+            modification_time: asset.modificationTime || null,
+          }]);
+          newCount++;
+        } else if (
+          known.modification_time !== currentMtime ||
+          (known.file_size && known.file_size !== currentSize)
+        ) {
+          // Modified file - update basic info and mark for thumbnail re-extraction
+          await videoRepository.updateBatch([{
+            id: known.id || asset.id,
+            filename: asset.filename || "Unknown",
+            duration: asset.duration || 0,
+            width: asset.width || 0,
+            height: asset.height || 0,
+            modification_time: asset.modificationTime || null,
+            file_size: asset.fileSize || 0,
+            metadata_loaded: 0, // Trigger re-extraction
+          }]);
+          modifiedCount++;
+        }
+        // If unchanged, do nothing
+      }
+
       hasNextPage = page.hasNextPage;
-      endCursor = page.endCursor;
+      after = page.endCursor;
     }
 
-    // Find new files
-    const newAssets = allAssets.filter((asset) => !knownUris.has(asset.uri));
-
-    if (newAssets.length === 0) {
-      console.log("📹 Background sync: no new videos found");
-      return 0;
+    // Find deleted files (in DB but not on device)
+    for (const [uri, meta] of knownFiles) {
+      if (!seenUris.has(uri)) {
+        const video = await videoRepository.getById(meta.id);
+        if (video) {
+          await videoRepository.deleteBatch([video.id]);
+          await artworkManager.cleanupArtwork(video.id, 'video');
+        }
+        deletedCount++;
+      }
     }
 
-    console.log(`📹 Background sync: found ${newAssets.length} new videos`);
-
-    // Insert new videos
-    const newRows = newAssets.map((asset) => ({
-      id: asset.id,
-      uri: asset.uri,
-      filename: asset.filename || "Unknown",
-      duration: asset.duration || 0,
-      width: asset.width || 0,
-      height: asset.height || 0,
-      creation_time: asset.creationTime || null,
-      modification_time: asset.modificationTime || null,
-    }));
-
-    await insertVideos(newRows);
-    await setVideoScanTime(allAssets.length);
-
-    if (onNewFilesFound) {
-      onNewFilesFound();
+    if (onProgress) {
+      onProgress({ new: newCount, modified: modifiedCount, deleted: deletedCount });
     }
 
-    // Generate thumbnails for new files in background
-    const dirInfo = await FileSystem.getInfoAsync(THUMBNAILS_DIR);
-    if (!dirInfo.exists) {
-      await FileSystem.makeDirectoryAsync(THUMBNAILS_DIR, {
-        intermediates: true,
-      });
+    if (newCount > 0 || modifiedCount > 0) {
+      console.log(`📹 Incremental sync: +${newCount} new, ~${modifiedCount} modified, -${deletedCount} deleted`);
+      // Extract thumbnails for new/modified files
+      await extractThumbnailsInBackground();
+      if (onComplete) onComplete();
+    } else {
+      console.log("📹 Incremental sync — no changes");
     }
 
-    for (const video of newRows) {
-      await _generateAndSaveThumbnail(video);
-    }
+    // Update scan state
+    const totalCount = await videoRepository.getCount();
+    await scanStateRepository.setVideoScanState(totalCount);
 
-    console.log(
-      `📹 Background sync complete: ${newAssets.length} new videos processed`
-    );
-    return newAssets.length;
+    return { new: newCount, modified: modifiedCount, deleted: deletedCount };
   } catch (error) {
-    console.warn("📹 Background sync error:", error);
-    return 0;
+    console.warn("📹 Incremental sync error:", error);
+    return { new: 0, modified: 0, deleted: 0 };
   }
+}
+
+// ─── Background Sync (Legacy Compatibility) ──────────────────────
+
+/**
+ * Legacy background sync - now uses incremental sync
+ * @deprecated Use incrementalVideoSync instead
+ */
+export async function videoBackgroundSync(onNewFilesFound) {
+  const result = await incrementalVideoSync();
+  if (result.new > 0 && onNewFilesFound) {
+    onNewFilesFound();
+  }
+  return result.new;
 }
 
 // ─── Convenience ─────────────────────────────────────────────────
@@ -335,12 +350,18 @@ export async function videoBackgroundSync(onNewFilesFound) {
  *
  * @returns {Promise<Array<{
  *   id: string, uri: string, filename: string, duration: number,
- *   width: number, height: number, thumbnail: string|null,
- *   creationTime: number, modificationTime: number
+ *   width: number, height: number, fileSize: number,
+ *   title: string|null, artist: string|null, album: string|null,
+ *   genre: string|null, year: string|null,
+ *   thumbnail: string|null, fullArtwork: string|null,
+ *   creationTime: number, modificationTime: number,
+ *   metadataLoaded: boolean,
+ *   favorite: boolean, playCount: number, playbackPosition: number
  * }>>}
  */
 export async function getVideosForUI() {
-  const rows = await getAllVideos();
+  await initDB();
+  const rows = await videoRepository.getAll({ limit: 10000 });
   return rows.map((row) => ({
     id: row.id,
     uri: row.uri,
@@ -349,8 +370,18 @@ export async function getVideosForUI() {
     width: row.width || 0,
     height: row.height || 0,
     fileSize: row.file_size || 0,
+    title: row.title,
+    artist: row.artist,
+    album: row.album,
+    genre: row.genre,
+    year: row.year,
     thumbnail: row.thumbnail_path || null,
+    fullArtwork: row.thumbnail_path || null, // Same for now
     creationTime: row.creation_time || 0,
     modificationTime: row.modification_time || 0,
+    metadataLoaded: row.metadata_loaded === 1,
+    favorite: row.favorite === 1,
+    playCount: row.play_count || 0,
+    playbackPosition: row.playback_position || 0,
   }));
 }

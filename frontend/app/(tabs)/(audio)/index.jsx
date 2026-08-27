@@ -3,7 +3,6 @@ import {
     Animated,
     View,
     Text,
-    FlatList,
     TouchableOpacity,
     Alert,
     Dimensions,
@@ -17,6 +16,7 @@ import {
     ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { FlashList } from "@shopify/flash-list";
 import {
     Shuffle,
     Music,
@@ -29,8 +29,9 @@ import ToggleBar from "../../../AudioComponents/toggleButton";
 import useGlobalAudioStore from "../../../store/globalAudioStore";
 import useAudioControl from "../../../store/useAudioControl";
 import MusicNotificationService from "../../../services/musicNotificationService";
-import { scanMusicFiles, getSongsForUI, extractMetadataInBackground, backgroundSync } from "../../../services/musicScanner";
+import { scanMusicFiles, extractMetadataInBackground, incrementalSync } from "../../../services/musicScanner";
 import { initDB, getLastScanTime } from "../../../services/database";
+import { useSongs, useSongSearch } from "../../../hooks/useSongs";
 
 // Import screen components
 import PlaylistScreen from "../../../AudioScreens/playlist";
@@ -42,17 +43,22 @@ const { width, height } = Dimensions.get("window");
 
 /**
  * Unified Audio System — powered by SQLite + AudioPlayer singleton
+ * Now uses FlashList for virtualized rendering and hooks for data fetching
  */
 export default function UnifiedAudioApp() {
     const { themeColors } = useThemeStore();
     const router = useRouter();
     const activeTab = useGlobalAudioStore(state => state.activeTab);
-
-    // ==================== CORE STATE ====================
-    const [audioFiles, setAudioFiles] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [permissionGranted, setPermissionGranted] = useState(null);
-    const [metadataProgress, setMetadataProgress] = useState(null); // { completed, total }
+    const sortOrder = useGlobalAudioStore(state => state.sortOrder);
+    const setSortOrder = useGlobalAudioStore(state => state.setSortOrder);
+    const searchStates = useGlobalAudioStore(state => state.searchStates);
+    const setSearchState = useGlobalAudioStore(state => state.setSearchState);
+    const permissionGranted = useGlobalAudioStore(state => state.permissionGranted);
+    const setPermissionGranted = useGlobalAudioStore(state => state.setPermissionGranted);
+    const isLoading = useGlobalAudioStore(state => state.isLoading);
+    const setLoading = useGlobalAudioStore(state => state.setLoading);
+    const isInitialLoadComplete = useGlobalAudioStore(state => state.isInitialLoadComplete);
+    const setInitialLoadComplete = useGlobalAudioStore(state => state.setInitialLoadComplete);
 
     // ==================== AUDIO CONTROL (from global store) ====================
     const {
@@ -70,15 +76,6 @@ export default function UnifiedAudioApp() {
         previous: prevTrack,
     } = useAudioControl();
 
-    // UI state - separate search state for each tab
-    const [searchStates, setSearchStates] = useState({
-        all: { showSearch: false, searchQuery: '' },
-        playlist: { showSearch: false, searchQuery: '' },
-        album: { showSearch: false, searchQuery: '' },
-        artist: { showSearch: false, searchQuery: '' },
-        favourite: { showSearch: false, searchQuery: '' },
-    });
-
     // Get current tab's search state
     const currentSearchState = searchStates[activeTab] || { showSearch: false, searchQuery: '' };
     const showSearch = currentSearchState.showSearch;
@@ -86,28 +83,12 @@ export default function UnifiedAudioApp() {
 
     // Functions to update search state for current tab
     const setShowSearch = useCallback((show) => {
-        isSearchingRef.current = true;
-        setSearchStates(prev => ({
-            ...prev,
-            [activeTab]: {
-                ...prev[activeTab],
-                showSearch: show
-            }
-        }));
-        setTimeout(() => {
-            isSearchingRef.current = false;
-        }, 100);
-    }, [activeTab]);
+        setSearchState(activeTab, { showSearch: show });
+    }, [activeTab, setSearchState]);
 
     const setSearchQuery = useCallback((query) => {
-        setSearchStates(prev => ({
-            ...prev,
-            [activeTab]: {
-                ...prev[activeTab],
-                searchQuery: query
-            }
-        }));
-    }, [activeTab]);
+        setSearchState(activeTab, { searchQuery: query });
+    }, [activeTab, setSearchState]);
 
     // Animations
     const playComponentAnim = useRef(new Animated.Value(1)).current;
@@ -118,6 +99,40 @@ export default function UnifiedAudioApp() {
     const [screenWidth, setScreenWidth] = useState(0);
     const [currentIndex, setCurrentIndex] = useState(0);
     const isSearchingRef = useRef(false);
+    const [metadataProgress, setMetadataProgress] = useState(null);
+
+    // ==================== DATA FETCHING HOOKS ====================
+    // Main songs list (for 'all' tab)
+    const {
+        songs,
+        loading: songsLoading,
+        hasMore: songsHasMore,
+        loadMore: loadMoreSongs,
+        refresh: refreshSongs,
+        error: songsError,
+    } = useSongs({
+        sort: { key: sortOrder.key, dir: sortOrder.direction.toUpperCase() },
+        pageSize: 50,
+        enabled: activeTab === 'all',
+    });
+
+    // Search hook for 'all' tab
+    const {
+        songs: searchSongs,
+        loading: searchLoading,
+        hasMore: searchHasMore,
+        loadMore: loadMoreSearch,
+        refresh: refreshSearch,
+    } = useSongSearch(searchQuery, {
+        pageSize: 50,
+        enabled: activeTab === 'all' && showSearch && searchQuery.trim().length > 0,
+    });
+
+    // Use search results when searching, otherwise use main list
+    const displaySongs = (showSearch && searchQuery.trim()) ? searchSongs : songs;
+    const displayLoading = (showSearch && searchQuery.trim()) ? searchLoading : songsLoading;
+    const displayHasMore = (showSearch && searchQuery.trim()) ? searchHasMore : songsHasMore;
+    const displayLoadMore = (showSearch && searchQuery.trim()) ? loadMoreSearch : loadMoreSongs;
 
     // ==================== INITIALIZATION (SQLite-based) ====================
     useEffect(() => {
@@ -134,34 +149,30 @@ export default function UnifiedAudioApp() {
             const lastScan = await getLastScanTime();
             if (lastScan) {
                 // We have scanned before — load instantly from SQLite
-                console.log('📚 Loading songs from SQLite (instant)...');
-                const songs = await getSongsForUI();
-                setAudioFiles(songs);
-                setLoading(false);
-                setPermissionGranted(true);
+                console.log('📚 Database has data — hooks will load from SQLite');
 
-                // Update global store for other screens
-                const globalStore = useGlobalAudioStore.getState();
-                globalStore.setAudioFiles(songs);
+                // Set permission granted
+                setPermissionGranted(true);
+                setInitialLoadComplete(true);
+                setLoading(false);
 
                 // Background sync: find any new files silently
-                backgroundSync(() => {
-                    // Refresh song list when new files are found
-                    getSongsForUI().then(updatedSongs => {
-                        setAudioFiles(updatedSongs);
-                        globalStore.setAudioFiles(updatedSongs);
-                    });
-                });
+                incrementalSync(
+                    (progress) => {
+                        console.log(`🔄 Incremental sync: +${progress.new} new, ~${progress.modified} modified, -${progress.deleted} deleted`);
+                    },
+                    () => {
+                        // Refresh song list when new files are found
+                        refreshSongs();
+                    }
+                );
 
                 // Phase 2: extract metadata for any songs that don't have it yet
                 extractMetadataInBackground(
                     (progress) => setMetadataProgress(progress),
                     () => {
                         // Refresh UI after each batch
-                        getSongsForUI().then(updatedSongs => {
-                            setAudioFiles(updatedSongs);
-                            globalStore.setAudioFiles(updatedSongs);
-                        });
+                        refreshSongs();
                     }
                 ).then(() => setMetadataProgress(null));
 
@@ -170,6 +181,7 @@ export default function UnifiedAudioApp() {
 
             // First launch — run Phase 1 scan
             console.log('🔍 First launch — scanning device for music...');
+            setLoading(true);
             const { granted, count } = await scanMusicFiles((progress) => {
                 console.log(`📦 Scanned ${progress.loaded} files...`);
             });
@@ -177,19 +189,14 @@ export default function UnifiedAudioApp() {
             if (!granted) {
                 setPermissionGranted(false);
                 showPermissionAlert();
+                setLoading(false);
+                setInitialLoadComplete(true);
                 return;
             }
 
             setPermissionGranted(true);
-
-            // Load the fast results (basic file info, no metadata yet)
-            const songs = await getSongsForUI();
-            setAudioFiles(songs);
+            setInitialLoadComplete(true);
             setLoading(false);
-
-            // Update global store
-            const globalStore = useGlobalAudioStore.getState();
-            globalStore.setAudioFiles(songs);
 
             console.log(`🎵 Phase 1 complete — ${count} files in SQLite`);
 
@@ -197,11 +204,7 @@ export default function UnifiedAudioApp() {
             extractMetadataInBackground(
                 (progress) => setMetadataProgress(progress),
                 () => {
-                    // Refresh UI after each batch
-                    getSongsForUI().then(updatedSongs => {
-                        setAudioFiles(updatedSongs);
-                        globalStore.setAudioFiles(updatedSongs);
-                    });
+                    refreshSongs();
                 }
             ).then(() => {
                 setMetadataProgress(null);
@@ -210,27 +213,27 @@ export default function UnifiedAudioApp() {
         };
 
         initialize();
-    }, []);
+    }, []); // Only run once on mount
 
     // Background refresh when app returns to foreground
     useEffect(() => {
         const subscription = AppState.addEventListener("change", (state) => {
-            if (state === "active" && audioFiles.length > 0) {
+            if (state === "active") {
                 // Silent background sync
                 setTimeout(() => {
-                    backgroundSync(() => {
-                        getSongsForUI().then(updatedSongs => {
-                            setAudioFiles(updatedSongs);
-                            const globalStore = useGlobalAudioStore.getState();
-                            globalStore.setAudioFiles(updatedSongs);
-                        });
-                    });
+                    incrementalSync(
+                        (progress) => {
+                            if (progress.new > 0 || progress.modified > 0) {
+                                refreshSongs();
+                            }
+                        }
+                    );
                 }, 2000);
             }
         });
 
         return () => subscription.remove();
-    }, [audioFiles.length]);
+    }, []);
 
     // Cleanup notifications when component unmounts
     useEffect(() => {
@@ -274,10 +277,11 @@ export default function UnifiedAudioApp() {
     }, [prevScrollY, playComponentAnim]);
 
     const handleShuffle = () => {
-        if (audioFiles.length === 0) return;
-        const randomIndex = Math.floor(Math.random() * audioFiles.length);
-        // Use the global audio control store
-        setAndPlayPlaylist(audioFiles, randomIndex, true);
+        // For shuffle, we need to get all songs - use a larger fetch
+        // For now, shuffle from current displaySongs
+        if (displaySongs.length === 0) return;
+        const randomIndex = Math.floor(Math.random() * displaySongs.length);
+        setAndPlayPlaylist(displaySongs, randomIndex, true);
     };
 
     const handlePlayTrack = useCallback((track, playlist) => {
@@ -293,18 +297,6 @@ export default function UnifiedAudioApp() {
         return `${minutes}:${seconds.toString().padStart(2, "0")}`;
     };
 
-    // ==================== FILTERED DATA ====================
-    const filteredAudioFiles = useMemo(() => {
-        if (activeTab !== 'all' || !searchQuery.trim()) return audioFiles;
-
-        const query = searchQuery.toLowerCase();
-        return audioFiles.filter(file =>
-            file.title?.toLowerCase().includes(query) ||
-            file.artist?.toLowerCase().includes(query) ||
-            file.album?.toLowerCase().includes(query)
-        );
-    }, [audioFiles, searchQuery, activeTab]);
-
     // ==================== SWIPE FUNCTIONALITY ====================
     const tabs = [
         { name: "all", label: "All" },
@@ -317,25 +309,13 @@ export default function UnifiedAudioApp() {
     const sharedSearchProps = useMemo(() => ({
         showSearch: searchStates[activeTab]?.showSearch || false,
         setShowSearch: (show) => {
-            setSearchStates(prev => ({
-                ...prev,
-                [activeTab]: {
-                    ...prev[activeTab],
-                    showSearch: show
-                }
-            }));
+            setSearchState(activeTab, { showSearch: show });
         },
         searchQuery: searchStates[activeTab]?.searchQuery || '',
         setSearchQuery: (query) => {
-            setSearchStates(prev => ({
-                ...prev,
-                [activeTab]: {
-                    ...prev[activeTab],
-                    searchQuery: query
-                }
-            }));
+            setSearchState(activeTab, { searchQuery: query });
         },
-    }), [searchStates, activeTab]);
+    }), [searchStates, activeTab, setSearchState]);
 
     const getCurrentTabIndex = useCallback(() => {
         return tabs.findIndex((tab) => tab.name === activeTab);
@@ -362,10 +342,10 @@ export default function UnifiedAudioApp() {
 
         if (newIndex !== currentIndex && newIndex >= 0 && newIndex < tabs.length) {
             setCurrentIndex(newIndex);
-            const globalStore = useGlobalAudioStore.getState();
-            globalStore.setActiveTab(tabs[newIndex].name);
+            setSearchState(tabs[newIndex].name, {}); // This will trigger setActiveTab via the store
+            useGlobalAudioStore.getState().setActiveTab(tabs[newIndex].name);
         }
-    }, [screenWidth, currentIndex]);
+    }, [screenWidth, currentIndex, setSearchState]);
 
     const handleLayout = useCallback((event) => {
         const { width } = event.nativeEvent.layout;
@@ -386,11 +366,13 @@ export default function UnifiedAudioApp() {
                         opacity: isLoadingTrack && !isCurrentTrack ? 0.5 : 1
                     }
                 ]}
-                onPress={() => handlePlayTrack(item, filteredAudioFiles)}
+                onPress={() => handlePlayTrack(item, displaySongs)}
                 activeOpacity={0.7}
                 disabled={isLoadingTrack && !isCurrentTrack}
             >
-                {item.artwork ? (
+                {item.thumbnail ? (
+                    <Image source={{ uri: item.thumbnail }} style={styles.artwork} />
+                ) : item.artwork ? (
                     <Image source={{ uri: item.artwork }} style={styles.artwork} />
                 ) : (
                     <View style={[styles.artwork, { backgroundColor: themeColors.primary, justifyContent: 'center', alignItems: 'center' }]}>
@@ -416,7 +398,7 @@ export default function UnifiedAudioApp() {
                 ) : null}
             </TouchableOpacity>
         );
-    }, [currentTrack, isPlaying, isLoadingTrack, themeColors, handlePlayTrack, filteredAudioFiles]);
+    }, [currentTrack, isPlaying, isLoadingTrack, themeColors, handlePlayTrack, displaySongs]);
 
     const renderSwipeableContent = useCallback(() => {
         return (
@@ -436,12 +418,19 @@ export default function UnifiedAudioApp() {
                         style={[styles.tabScreen, { width: screenWidth }]}
                     >
                         {tab.name === 'all' ? (
-                            <FlatList
-                                data={filteredAudioFiles}
+                            <FlashList
+                                data={displaySongs}
                                 renderItem={renderTrackItem}
                                 keyExtractor={(item) => item.id}
                                 onScroll={handleScroll}
                                 contentContainerStyle={{ paddingBottom: isBottomPlayerVisible ? 100 : 20 }}
+                                estimatedItemSize={72}
+                                initialNumToRender={20}
+                                maxToRenderPerBatch={10}
+                                windowSize={21}
+                                removeClippedSubviews={true}
+                                onEndReached={displayLoadMore}
+                                onEndReachedThreshold={0.3}
                                 ListEmptyComponent={
                                     <View style={styles.emptyContainer}>
                                         <Music size={64} color={themeColors.textSecondary} />
@@ -464,10 +453,11 @@ export default function UnifiedAudioApp() {
                 ))}
             </ScrollView>
         );
-    }, [sharedSearchProps, screenWidth, handleScrollEnd, handleLayout, filteredAudioFiles, isBottomPlayerVisible, searchQuery, themeColors, renderTrackItem, handleScroll]);
+    }, [sharedSearchProps, screenWidth, handleScrollEnd, handleLayout, displaySongs, isBottomPlayerVisible, searchQuery, themeColors, renderTrackItem, handleScroll, displayLoadMore]);
 
     // ==================== MAIN RENDER ====================
-    if (loading && audioFiles.length === 0) {
+    // Show loading only on initial load with no data
+    if (isLoading && !isInitialLoadComplete) {
         return (
             <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
                 <View style={styles.loadingContainer}>
@@ -554,7 +544,7 @@ export default function UnifiedAudioApp() {
             </View>
 
             {/* Floating Shuffle Button */}
-            {permissionGranted && audioFiles.length > 0 && !loading && (
+            {permissionGranted && displaySongs.length > 0 && !displayLoading && (
                 <Animated.View
                     style={[
                         styles.shuffleButton,

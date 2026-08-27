@@ -5,6 +5,7 @@
  * replacing the old JSON-file-based caching approach.
  */
 import * as SQLite from "expo-sqlite";
+import { runMigrations } from "./database/migrations";
 
 const DB_NAME = "visura_music.db";
 
@@ -19,60 +20,8 @@ export async function initDB() {
 
   _db = await SQLite.openDatabaseAsync(DB_NAME);
 
-  // Create tables
-  await _db.execAsync(`
-    CREATE TABLE IF NOT EXISTS songs (
-      id TEXT PRIMARY KEY,
-      uri TEXT NOT NULL UNIQUE,
-      filename TEXT,
-      duration REAL DEFAULT 0,
-      title TEXT,
-      artist TEXT,
-      album TEXT,
-      year TEXT,
-      artwork_path TEXT,
-      metadata_loaded INTEGER DEFAULT 0,
-      creation_time REAL,
-      modification_time REAL,
-      created_at TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS scan_state (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      last_scan_time TEXT,
-      last_scan_count INTEGER DEFAULT 0
-    );
-
-    -- Seed scan_state if empty
-    INSERT OR IGNORE INTO scan_state (id, last_scan_time, last_scan_count)
-    VALUES (1, NULL, 0);
-
-    -- ─── Video tables ──────────────────────────────────────────────
-
-    CREATE TABLE IF NOT EXISTS videos (
-      id TEXT PRIMARY KEY,
-      uri TEXT NOT NULL UNIQUE,
-      filename TEXT,
-      duration REAL DEFAULT 0,
-      width INTEGER DEFAULT 0,
-      height INTEGER DEFAULT 0,
-      file_size INTEGER DEFAULT 0,
-      thumbnail_path TEXT,
-      metadata_loaded INTEGER DEFAULT 0,
-      creation_time REAL,
-      modification_time REAL,
-      created_at TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS video_scan_state (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      last_scan_time TEXT,
-      last_scan_count INTEGER DEFAULT 0
-    );
-
-    INSERT OR IGNORE INTO video_scan_state (id, last_scan_time, last_scan_count)
-    VALUES (1, NULL, 0);
-  `);
+  // Run migrations to ensure schema is up to date
+  await runMigrations();
 
   return _db;
 }
@@ -91,7 +40,7 @@ export function getDB() {
 /**
  * Bulk-insert basic file references (Phase 1 — fast).
  * Uses INSERT OR IGNORE so duplicates are silently skipped.
- * @param {{ id: string, uri: string, filename: string, duration: number, creation_time?: number, modification_time?: number }[]} songs
+ * @param {{ id: string, uri: string, filename: string, duration: number, creation_time?: number, modification_time?: number, file_size?: number }[]} songs
  */
 export async function insertSongs(songs) {
   if (!songs || songs.length === 0) return;
@@ -101,7 +50,7 @@ export async function insertSongs(songs) {
   const BATCH = 50;
   for (let i = 0; i < songs.length; i += BATCH) {
     const batch = songs.slice(i, i + BATCH);
-    const placeholders = batch.map(() => "(?, ?, ?, ?, ?, ?)").join(", ");
+    const placeholders = batch.map(() => "(?, ?, ?, ?, ?, ?, ?)").join(", ");
     const values = batch.flatMap((s) => [
       s.id,
       s.uri,
@@ -109,10 +58,11 @@ export async function insertSongs(songs) {
       s.duration || 0,
       s.creation_time || null,
       s.modification_time || null,
+      s.file_size || null,
     ]);
 
     await db.runAsync(
-      `INSERT OR IGNORE INTO songs (id, uri, filename, duration, creation_time, modification_time)
+      `INSERT OR IGNORE INTO songs (id, uri, filename, duration, creation_time, modification_time, file_size)
        VALUES ${placeholders}`,
       values
     );
@@ -145,7 +95,7 @@ export async function getSongsWithoutMetadata(limit) {
 /**
  * Update a song's metadata after Phase 2 extraction.
  * @param {string} id
- * @param {{ title?: string, artist?: string, album?: string, year?: string, artwork_path?: string }} meta
+ * @param {{ title?: string, artist?: string, album?: string, album_artist?: string, genre?: string, year?: string, track_number?: number, disc_number?: number, bitrate?: number, sample_rate?: number, channels?: number, artwork_path?: string, thumbnail_path?: string, file_size?: number }} meta
  */
 export async function updateSongMetadata(id, meta) {
   const db = getDB();
@@ -154,16 +104,34 @@ export async function updateSongMetadata(id, meta) {
        title = COALESCE(?, title),
        artist = COALESCE(?, artist),
        album = COALESCE(?, album),
+       album_artist = COALESCE(?, album_artist),
+       genre = COALESCE(?, genre),
        year = COALESCE(?, year),
+       track_number = COALESCE(?, track_number),
+       disc_number = COALESCE(?, disc_number),
+       bitrate = COALESCE(?, bitrate),
+       sample_rate = COALESCE(?, sample_rate),
+       channels = COALESCE(?, channels),
        artwork_path = ?,
+       thumbnail_path = ?,
+       file_size = COALESCE(?, file_size),
        metadata_loaded = 1
      WHERE id = ?`,
     [
       meta.title || null,
       meta.artist || null,
       meta.album || null,
+      meta.album_artist || null,
+      meta.genre || null,
       meta.year || null,
+      meta.track_number || null,
+      meta.disc_number || null,
+      meta.bitrate || null,
+      meta.sample_rate || null,
+      meta.channels || null,
       meta.artwork_path ?? null,
+      meta.thumbnail_path ?? null,
+      meta.file_size || null,
       id,
     ]
   );
@@ -181,6 +149,20 @@ export async function songExistsByUri(uri) {
     [uri]
   );
   return !!row;
+}
+
+/**
+ * Get all known URIs with modification time and file size for incremental sync.
+ * @returns {Promise<Map<string, {modification_time: number, file_size: number}>>}
+ */
+export async function getAllSongUrisWithMeta() {
+  const db = getDB();
+  const rows = await db.getAllAsync(`SELECT uri, modification_time, file_size FROM songs`);
+  const map = new Map();
+  for (const row of rows) {
+    map.set(row.uri, { modification_time: row.modification_time, file_size: row.file_size });
+  }
+  return map;
 }
 
 /**
@@ -238,6 +220,7 @@ export async function clearDatabase() {
   const db = getDB();
   await db.execAsync(`
     DELETE FROM songs;
+    DELETE FROM songs_fts;
     UPDATE scan_state SET last_scan_time = NULL, last_scan_count = 0 WHERE id = 1;
   `);
 }
@@ -249,7 +232,7 @@ export async function clearDatabase() {
 /**
  * Bulk-insert basic video file references (Phase 1 — fast).
  * Uses INSERT OR IGNORE so duplicates are silently skipped.
- * @param {{ id: string, uri: string, filename: string, duration: number, width?: number, height?: number, creation_time?: number, modification_time?: number }[]} videos
+ * @param {{ id: string, uri: string, filename: string, duration: number, width?: number, height?: number, creation_time?: number, modification_time?: number, file_size?: number }[]} videos
  */
 export async function insertVideos(videos) {
   if (!videos || videos.length === 0) return;
@@ -258,7 +241,7 @@ export async function insertVideos(videos) {
   const BATCH = 50;
   for (let i = 0; i < videos.length; i += BATCH) {
     const batch = videos.slice(i, i + BATCH);
-    const placeholders = batch.map(() => "(?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
+    const placeholders = batch.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
     const values = batch.flatMap((v) => [
       v.id,
       v.uri,
@@ -268,10 +251,11 @@ export async function insertVideos(videos) {
       v.height || 0,
       v.creation_time || null,
       v.modification_time || null,
+      v.file_size || 0,
     ]);
 
     await db.runAsync(
-      `INSERT OR IGNORE INTO videos (id, uri, filename, duration, width, height, creation_time, modification_time)
+      `INSERT OR IGNORE INTO videos (id, uri, filename, duration, width, height, creation_time, modification_time, file_size)
        VALUES ${placeholders}`,
       values
     );
@@ -312,6 +296,51 @@ export async function updateVideoThumbnail(id, thumbnailPath) {
     `UPDATE videos SET thumbnail_path = ?, metadata_loaded = 1 WHERE id = ?`,
     [thumbnailPath, id]
   );
+}
+
+/**
+ * Update a video's metadata after Phase 2 extraction.
+ * @param {string} id
+ * @param {{ title?: string, artist?: string, album?: string, genre?: string, year?: string, thumbnail_path?: string, file_size?: number }} meta
+ */
+export async function updateVideoMetadata(id, meta) {
+  const db = getDB();
+  await db.runAsync(
+    `UPDATE videos SET
+       title = COALESCE(?, title),
+       artist = COALESCE(?, artist),
+       album = COALESCE(?, album),
+       genre = COALESCE(?, genre),
+       year = COALESCE(?, year),
+       thumbnail_path = ?,
+       file_size = COALESCE(?, file_size),
+       metadata_loaded = 1
+     WHERE id = ?`,
+    [
+      meta.title || null,
+      meta.artist || null,
+      meta.album || null,
+      meta.genre || null,
+      meta.year || null,
+      meta.thumbnail_path ?? null,
+      meta.file_size || null,
+      id,
+    ]
+  );
+}
+
+/**
+ * Get all known video URIs with modification time and file size for incremental sync.
+ * @returns {Promise<Map<string, {modification_time: number, file_size: number}>>}
+ */
+export async function getAllVideoUrisWithMeta() {
+  const db = getDB();
+  const rows = await db.getAllAsync(`SELECT uri, modification_time, file_size FROM videos`);
+  const map = new Map();
+  for (const row of rows) {
+    map.set(row.uri, { modification_time: row.modification_time, file_size: row.file_size });
+  }
+  return map;
 }
 
 /**
@@ -367,6 +396,7 @@ export async function clearVideoDatabase() {
   const db = getDB();
   await db.execAsync(`
     DELETE FROM videos;
+    DELETE FROM videos_fts;
     UPDATE video_scan_state SET last_scan_time = NULL, last_scan_count = 0 WHERE id = 1;
-  `);
+  `;
 }

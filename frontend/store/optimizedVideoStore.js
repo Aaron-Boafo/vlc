@@ -7,15 +7,13 @@ const useOptimizedVideoStore = create(
   subscribeWithSelector(
     persist(
       (set, get) => ({
-        // Core state
-        videoFiles: [],
+        // UI state only - NO videoFiles array (data comes from SQLite via hooks)
         isLoading: false,
         isInitialLoadComplete: false,
-        lastLoadTime: null,
         activeTab: "all",
         sortOrder: { key: "filename", direction: "asc" },
 
-        // Video-specific state
+        // Video-specific user state (keep these - user created)
         favouriteVideos: [],
         videoHistory: [],
         videoPlaylists: [],
@@ -29,45 +27,20 @@ const useOptimizedVideoStore = create(
         miniPlayerVideo: null,
 
         // Navigation context tracking
-        sourceTab: null, // Track which tab the user came from
+        sourceTab: null,
 
-        // Set video files (called by videoScanner)
-        setVideoFiles: (files) => {
-          set({
-            videoFiles: files,
-            isLoading: false,
-            isInitialLoadComplete: true,
-            lastLoadTime: Date.now(),
-          });
-        },
-
-        // Set loading state (used during scanning)
+        // Loading state
         setLoading: (loading) => set({ isLoading: loading }),
+        setInitialLoadComplete: (complete) => set({ isInitialLoadComplete: complete }),
 
-        // Optimized sorting
-        sortVideoFiles: (key, direction) => {
-          const files = get().videoFiles;
-          const sortedFiles = [...files].sort((a, b) => {
-            const valA = a[key] || "";
-            const valB = b[key] || "";
-
-            if (key === "filename") {
-              return direction === "asc"
-                ? valA.localeCompare(valB)
-                : valB.localeCompare(valA);
-            }
-            return direction === "asc" ? valA - valB : valB - valA;
-          });
-
-          set({ videoFiles: sortedFiles, sortOrder: { key, direction } });
-        },
+        // Sort management (UI only - actual sorting done in SQL)
+        setSortOrder: (key, direction) => set({ sortOrder: { key, direction } }),
 
         // Tab management
         toggleTabs: (tab) => set({ activeTab: tab }),
 
-        // Video playback management
+        // Video playback management (currentVideo comes from player, not from videoFiles array)
         setAndPlayVideo: (video, sourceTab = null) => {
-          // Validate input
           if (!video || !video.uri) {
             console.error("Invalid video provided to setAndPlayVideo:", video);
             return;
@@ -81,14 +54,11 @@ const useOptimizedVideoStore = create(
             sourceTab: sourceTab,
           });
 
-          const videoFiles = get().videoFiles || [];
-          const index = videoFiles.findIndex((v) => v.id === video.id);
-
           set({
             currentVideo: video,
-            currentVideoIndex: index,
+            currentVideoIndex: -1, // Not from a list anymore
             isMiniPlayerVisible: false,
-            sourceTab: sourceTab, // Store the source tab
+            sourceTab: sourceTab,
           });
 
           console.log(
@@ -98,20 +68,17 @@ const useOptimizedVideoStore = create(
             sourceTab
           );
 
-          // Add to history
           get().addToHistory(video);
         },
 
         setCurrentVideo: (video) => {
-          const videoFiles = get().videoFiles || [];
-          const index = videoFiles.findIndex((v) => v.id === video.id);
           set({
             currentVideo: video,
-            currentVideoIndex: index,
+            currentVideoIndex: -1,
           });
         },
 
-        // Favorites management
+        // Favorites management (user-created data - keep in Zustand)
         toggleFavouriteVideo: (video) => {
           set((state) => {
             const isFavourite = state.favouriteVideos.some(
@@ -148,16 +115,16 @@ const useOptimizedVideoStore = create(
           }));
         },
 
-        // History management
+        // History management (user-created data - keep in Zustand)
         addToHistory: (video) => {
           set((state) => ({
             videoHistory: [
               {
                 ...video,
-                playedAt: Date.now(), // Add timestamp for when video was actually played
+                playedAt: Date.now(),
               },
               ...state.videoHistory.filter((v) => v.id !== video.id),
-            ].slice(0, 100), // Keep only last 100 items
+            ].slice(0, 100),
           }));
         },
 
@@ -169,7 +136,7 @@ const useOptimizedVideoStore = create(
 
         clearHistory: () => set({ videoHistory: [] }),
 
-        // Playlist management
+        // Playlist management (user-created data - keep in Zustand)
         createVideoPlaylist: (playlistName) => {
           set((state) => ({
             videoPlaylists: [
@@ -235,7 +202,6 @@ const useOptimizedVideoStore = create(
         hideMiniPlayer: () => set({ isMiniPlayerVisible: false }),
 
         closeMiniPlayer: () => {
-          // Ensure complete cleanup of mini player state
           set({
             isMiniPlayerVisible: false,
             isMiniPlayerPlaying: false,
@@ -243,11 +209,9 @@ const useOptimizedVideoStore = create(
             miniPlayerPosition: 0,
           });
 
-          // Force a small delay to ensure UI updates
           setTimeout(() => {
             const state = get();
             if (state.isMiniPlayerVisible) {
-              // Force set to false if still visible
               set({ isMiniPlayerVisible: false });
             }
           }, 100);
@@ -257,43 +221,21 @@ const useOptimizedVideoStore = create(
           set((state) => ({ isMiniPlayerPlaying: !state.isMiniPlayerPlaying }));
         },
 
-        // Navigation controls
+        // Navigation controls (now work with currentVideo directly)
         playNext: () => {
-          const { currentVideoIndex, videoFiles } = get();
-          if (!videoFiles?.length) return;
-
-          const nextIndex = (currentVideoIndex + 1) % videoFiles.length;
-          const nextVideo = videoFiles[nextIndex];
-
-          set({
-            currentVideo: nextVideo,
-            currentVideoIndex: nextIndex,
-          });
-
-          get().addToHistory(nextVideo);
+          // This now requires the playlist/queue to be passed in
+          // Kept for compatibility but will need playlist from hook
+          console.log("playNext called - needs playlist from hook");
         },
 
         playPrevious: () => {
-          const { currentVideoIndex, videoFiles } = get();
-          if (!videoFiles?.length) return;
-
-          const prevIndex =
-            (currentVideoIndex - 1 + videoFiles.length) % videoFiles.length;
-          const prevVideo = videoFiles[prevIndex];
-
-          set({
-            currentVideo: prevVideo,
-            currentVideoIndex: prevIndex,
-          });
-
-          get().addToHistory(prevVideo);
+          console.log("playPrevious called - needs playlist from hook");
         },
 
         // Navigation helper
         getReturnRoute: () => {
           const { sourceTab, activeTab } = get();
 
-          // If we have a specific source tab, return to the appropriate tab
           if (sourceTab) {
             switch (sourceTab) {
               case "video":
@@ -303,37 +245,28 @@ const useOptimizedVideoStore = create(
               case "playlist":
                 return "/(tabs)/(playlist)";
               case "stream":
-                return "/(tabs)/(browse)"; // Stream modal is typically accessed from browse
+                return "/(tabs)/(browse)";
               default:
                 return "/(tabs)/(video)";
             }
           }
 
-          // If we have an active tab, return to video tab
           if (activeTab) {
             return "/(tabs)/(video)";
           }
 
-          // Default fallback to video tab (changed from browse)
           return "/(tabs)/(video)";
         },
 
-        // Utility functions
-        getVideoById: (id) => get().videoFiles.find((v) => v.id === id),
+        // Utility functions (no longer use videoFiles array)
+        // getVideoById: Use useVideo hook instead
+        // searchVideos: Use useVideoSearch hook instead
 
-        searchVideos: (query) => {
-          if (!query.trim()) return get().videoFiles;
-
-          const lowerQuery = query.toLowerCase();
-          return get().videoFiles.filter((video) =>
-            video.filename?.toLowerCase().includes(lowerQuery)
-          );
-        },
-
-        // Video management functions (for compatibility with VideoAllScreen)
+        // Video management functions (for compatibility - now use database)
         removeVideo: async (videoId) => {
+          // This now needs to delete from database
+          // Kept for compatibility
           set((state) => ({
-            videoFiles: state.videoFiles.filter((v) => v.id !== videoId),
             favouriteVideos: state.favouriteVideos.filter(
               (v) => v.id !== videoId
             ),
@@ -342,23 +275,14 @@ const useOptimizedVideoStore = create(
         },
 
         renameVideo: async (videoId, newFileName) => {
-          // This is a placeholder - actual file renaming would need native implementation
           console.log("Rename video:", videoId, "to:", newFileName);
-          // For now, just update the filename in the store
-          set((state) => ({
-            videoFiles: state.videoFiles.map((v) =>
-              v.id === videoId ? { ...v, filename: newFileName } : v
-            ),
-          }));
         },
 
         // Reset all state
         resetVideoStore: () => {
           set({
-            videoFiles: [],
             isLoading: false,
             isInitialLoadComplete: false,
-            lastLoadTime: null,
             currentVideo: null,
             currentVideoIndex: -1,
             isMiniPlayerVisible: false,
@@ -369,7 +293,7 @@ const useOptimizedVideoStore = create(
         },
       }),
       {
-        name: "optimized-video-storage",
+        name: "optimized-video-ui-storage",
         storage: createJSONStorage(() => AsyncStorage),
         partialize: (state) => ({
           activeTab: state.activeTab,
@@ -377,8 +301,6 @@ const useOptimizedVideoStore = create(
           favouriteVideos: state.favouriteVideos,
           videoHistory: state.videoHistory,
           videoPlaylists: state.videoPlaylists,
-          lastLoadTime: state.lastLoadTime,
-          // Don't persist videoFiles - let them load fresh for better performance
         }),
       }
     )

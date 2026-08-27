@@ -1,40 +1,35 @@
 /**
- * Two-Phase Music Scanner
+ * Two-Phase Music Scanner with Incremental Sync
  *
  * Phase 1 — Fast Initial Load:
  *   Scan the device for audio files and insert basic file references
- *   (URI, filename, duration) into SQLite immediately.
+ *   (URI, filename, duration, file_size) into SQLite immediately.
  *
  * Phase 2 — Lazy Metadata Extraction:
  *   Process files in small batches, extract metadata (title, artist, album,
- *   artwork), save artwork images to the filesystem, and update SQLite.
+ *   album_artist, genre, year, track_number, disc_number, bitrate, sample_rate,
+ *   channels, artwork), save artwork images to the filesystem, and update SQLite.
  *
- * Background Sync:
- *   On subsequent launches, detect and add new files without blocking the UI.
+ * Incremental Sync:
+ *   On subsequent launches, detect new, modified, and deleted files
+ *   by comparing modification_time and file_size.
  */
+
 import * as MediaLibrary from "expo-media-library";
 import * as FileSystem from "expo-file-system";
 import { InteractionManager } from "react-native";
 import { getAudioMetadata } from "@missingcore/audio-metadata";
 import {
   initDB,
-  insertSongs,
-  getAllSongs,
-  getSongsWithoutMetadata,
-  updateSongMetadata,
-  getAllSongUris,
-  getLastScanTime,
-  setLastScanTime,
-  getSongCount,
 } from "./database";
+import { songRepository } from "./database/repositories/songRepository";
+import { scanStateRepository } from "./database/repositories/scanStateRepository";
+import { artworkManager } from "./media/artworkManager";
 
 // ─── Configuration ───────────────────────────────────────────────
 
 const SCAN_BATCH_SIZE = 200; // MediaLibrary pagination size
 const METADATA_CHUNK_SIZE = 5; // Files per metadata extraction batch
-const ARTWORKS_DIR = `${FileSystem.documentDirectory}artworks/`;
-
-// Folders to skip during scanning
 const EXCLUDED_FOLDERS = [
   "/WhatsApp/Media/WhatsApp Audio/Sent",
   "/WhatsApp/Media/WhatsApp Audio/Private",
@@ -49,6 +44,10 @@ const EXCLUDED_FOLDERS = [
   "/system/",
   "/cache/",
 ];
+
+function shouldSkipFile(uri) {
+  return EXCLUDED_FOLDERS.some((folder) => uri.includes(folder));
+}
 
 // ─── Phase 1: Fast Scan ──────────────────────────────────────────
 
@@ -83,10 +82,10 @@ export async function scanMusicFiles(onProgress) {
 
     // Filter out excluded folders
     const filtered = page.assets.filter(
-      (asset) => !EXCLUDED_FOLDERS.some((folder) => asset.uri.includes(folder))
+      (asset) => !shouldSkipFile(asset.uri)
     );
 
-    // Map to DB shape
+    // Map to DB shape - include file_size for incremental sync
     const songs = filtered.map((asset) => ({
       id: asset.id,
       uri: asset.uri,
@@ -94,14 +93,16 @@ export async function scanMusicFiles(onProgress) {
       duration: asset.duration || 0,
       creation_time: asset.creationTime || null,
       modification_time: asset.modificationTime || null,
+      file_size: asset.fileSize || null,
+      media_type: 'audio',
     }));
 
-    // Insert into SQLite (INSERT OR IGNORE handles duplicates)
-    await insertSongs(songs);
-    totalInserted += songs.length;
+    // Insert into SQLite using repository (batch insert with transaction)
+    const inserted = await songRepository.insertBatch(songs);
+    totalInserted += inserted;
 
     if (onProgress) {
-      onProgress({ loaded: totalInserted, total: null });
+      onProgress({ loaded: totalInserted, total: page.totalCount || null });
     }
 
     hasNextPage = page.hasNextPage;
@@ -109,7 +110,7 @@ export async function scanMusicFiles(onProgress) {
   }
 
   // Update scan state
-  await setLastScanTime(totalInserted);
+  await scanStateRepository.setMusicScanState(totalInserted);
 
   console.log(
     `[MusicScanner] Phase 1 complete — ${totalInserted} files scanned`
@@ -121,20 +122,16 @@ export async function scanMusicFiles(onProgress) {
 
 /**
  * Process songs that don't have metadata yet, in small batches.
- * Extracts title, artist, album, year, and artwork.
- * Artwork is saved as a .png file to the local filesystem.
+ * Extracts title, artist, album, album_artist, genre, year, track_number,
+ * disc_number, bitrate, sample_rate, channels, and artwork.
+ * Artwork is saved as optimized files to the local filesystem.
  *
  * @param {(progress: { completed: number, total: number }) => void} [onProgress]
- * @param {() => Array} [onBatchComplete] — called after each batch with updated songs
+ * @param {() => void} [onBatchComplete] — called after each batch
  * @returns {Promise<number>} — number of songs processed
  */
 export async function extractMetadataInBackground(onProgress, onBatchComplete) {
-  // Ensure artwork directory exists
-  await FileSystem.makeDirectoryAsync(ARTWORKS_DIR, {
-    intermediates: true,
-  }).catch(() => {});
-
-  const pending = await getSongsWithoutMetadata();
+  const pending = await songRepository.getWithoutMetadata();
   if (pending.length === 0) {
     console.log("[MusicScanner] Phase 2 — no pending metadata extraction");
     return 0;
@@ -188,13 +185,23 @@ async function _extractAndSaveSongMetadata(song) {
       "name",
       "year",
       "artwork",
+      "albumartist",
+      "genre",
+      "track",
+      "disk",
+      "bitrate",
+      "sampleRate",
+      "channels",
     ]);
     const metadata = data.metadata || {};
 
-    // Handle artwork
+    // Handle artwork - save to cache and get local path
     let artworkPath = null;
+    let thumbnailPath = null;
     if (metadata.artwork) {
-      artworkPath = await _saveArtwork(song.id, metadata.artwork);
+      const result = await artworkManager.saveArtwork(song.id, metadata.artwork, 'audio');
+      artworkPath = result.fullPath;
+      thumbnailPath = result.thumbPath;
     }
 
     // Derive a title if metadata doesn't have one
@@ -203,13 +210,44 @@ async function _extractAndSaveSongMetadata(song) {
       song.filename?.replace(/\.[^/.]+$/, "") ||
       "Unknown Track";
 
-    await updateSongMetadata(song.id, {
+    // Extract album artist (TPE2 tag)
+    const albumArtist = metadata.albumartist || metadata.artist;
+
+    // Extract track number
+    let trackNumber = null;
+    if (metadata.track) {
+      const track = Array.isArray(metadata.track) ? metadata.track[0] : metadata.track;
+      trackNumber = typeof track === 'object' ? track.no : parseInt(track, 10);
+    }
+
+    // Extract disc number
+    let discNumber = null;
+    if (metadata.disk) {
+      const disk = Array.isArray(metadata.disk) ? metadata.disk[0] : metadata.disk;
+      discNumber = typeof disk === 'object' ? disk.no : parseInt(disk, 10);
+    }
+
+    // Extract bitrate, sample rate, channels
+    const bitrate = metadata.bitrate ? parseInt(metadata.bitrate, 10) : null;
+    const sampleRate = metadata.sampleRate ? parseInt(metadata.sampleRate, 10) : null;
+    const channels = metadata.channels ? parseInt(metadata.channels, 10) : null;
+
+    await songRepository.updateBatch([{
+      id: song.id,
       title,
       artist: metadata.artist || "Unknown Artist",
       album: metadata.album || "Unknown Album",
-      year: metadata.year || null,
+      album_artist: albumArtist || null,
+      genre: metadata.genre || null,
+      year: metadata.year ? String(metadata.year) : null,
+      track_number: trackNumber,
+      disc_number: discNumber,
+      bitrate,
+      sample_rate: sampleRate,
+      channels,
       artwork_path: artworkPath,
-    });
+      thumbnail_path: thumbnailPath,
+    }]);
   } catch (error) {
     // Gracefully handle missing metadata — mark as loaded with defaults
     console.log(
@@ -217,83 +255,54 @@ async function _extractAndSaveSongMetadata(song) {
       error?.message
     );
     const title = song.filename?.replace(/\.[^/.]+$/, "") || "Unknown Track";
-    await updateSongMetadata(song.id, {
+    await songRepository.updateBatch([{
+      id: song.id,
       title,
       artist: "Unknown Artist",
       album: "Unknown Album",
+      album_artist: null,
+      genre: null,
       year: null,
+      track_number: null,
+      disc_number: null,
+      bitrate: null,
+      sample_rate: null,
+      channels: null,
       artwork_path: null,
-    });
+      thumbnail_path: null,
+    }]);
   }
 }
 
-/**
- * Save artwork to the filesystem.
- * If the artwork is a base64 string or data URI, decode it and write as .png.
- * @param {string} songId
- * @param {string} artworkData — base64 string or data URI
- * @returns {Promise<string|null>} — local file path, or null on failure
- * @private
- */
-async function _saveArtwork(songId, artworkData) {
-  try {
-    let base64Data = artworkData;
-
-    // Strip data URI prefix if present
-    if (artworkData.startsWith("data:image")) {
-      const commaIndex = artworkData.indexOf(",");
-      if (commaIndex !== -1) {
-        base64Data = artworkData.substring(commaIndex + 1);
-      }
-    }
-
-    // Validate that it looks like base64
-    if (!/^[A-Za-z0-9+/=\s]+$/.test(base64Data.substring(0, 100))) {
-      // Not base64 — might be a URL. Return it directly.
-      return artworkData;
-    }
-
-    // Clean up any whitespace in base64
-    base64Data = base64Data.replace(/\s/g, "");
-
-    const filePath = `${ARTWORKS_DIR}${songId}.png`;
-    await FileSystem.writeAsStringAsync(filePath, base64Data, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-
-    return filePath;
-  } catch (error) {
-    console.log(
-      `[MusicScanner] Failed to save artwork for ${songId}:`,
-      error?.message
-    );
-    return null;
-  }
-}
-
-// ─── Background Sync ─────────────────────────────────────────────
+// ─── Incremental Sync ────────────────────────────────────────────
 
 /**
- * Check for new music files added since the last scan.
- * Only inserts new files and extracts their metadata.
- * Designed to run silently in the background.
+ * Perform incremental sync: detect new, modified, and deleted files.
+ * Compares modification_time and file_size to detect changes.
  *
- * @param {() => void} [onNewFilesFound] — called when new songs are discovered
- * @returns {Promise<number>} — number of new files found
+ * @param {(progress: { new: number, modified: number, deleted: number }) => void} [onProgress]
+ * @param {() => void} [onComplete] — called when sync completes
+ * @returns {Promise<{ new: number, modified: number, deleted: number }>}
  */
-export async function backgroundSync(onNewFilesFound) {
+export async function incrementalSync(onProgress, onComplete) {
   try {
     await initDB();
 
     const { status } = await MediaLibrary.getPermissionsAsync();
-    if (status !== "granted") return 0;
+    if (status !== "granted") return { new: 0, modified: 0, deleted: 0 };
 
-    // Get all known URIs for fast lookup
-    const knownUris = await getAllSongUris();
+    // Get all known files with metadata from database
+    const knownFiles = await songRepository.getAllUrisWithMeta();
+    console.log(`[MusicScanner] Incremental sync: ${knownFiles.size} known files in DB`);
+
     let newCount = 0;
+    let modifiedCount = 0;
+    let deletedCount = 0;
     let after = null;
     let hasNextPage = true;
+    const seenUris = new Set();
 
+    // Scan all files on device
     while (hasNextPage) {
       const page = await MediaLibrary.getAssetsAsync({
         mediaType: MediaLibrary.MediaType.audio,
@@ -301,49 +310,100 @@ export async function backgroundSync(onNewFilesFound) {
         after,
       });
 
-      // Filter: exclude known URIs and excluded folders
-      const newAssets = page.assets.filter(
-        (asset) =>
-          !knownUris.has(asset.uri) &&
-          !EXCLUDED_FOLDERS.some((folder) => asset.uri.includes(folder))
-      );
+      for (const asset of page.assets) {
+        if (shouldSkipFile(asset.uri)) continue;
+        seenUris.add(asset.uri);
 
-      if (newAssets.length > 0) {
-        const songs = newAssets.map((asset) => ({
-          id: asset.id,
-          uri: asset.uri,
-          filename: asset.filename,
-          duration: asset.duration || 0,
-          creation_time: asset.creationTime || null,
-          modification_time: asset.modificationTime || null,
-        }));
+        const known = knownFiles.get(asset.uri);
+        const currentMtime = asset.modificationTime || 0;
+        const currentSize = asset.fileSize || 0;
 
-        await insertSongs(songs);
-        newCount += songs.length;
+        if (!known) {
+          // New file
+          await songRepository.insertBatch([{
+            id: asset.id,
+            uri: asset.uri,
+            filename: asset.filename,
+            duration: asset.duration || 0,
+            creation_time: asset.creationTime || null,
+            modification_time: asset.modificationTime || null,
+            file_size: asset.fileSize || null,
+            media_type: 'audio',
+          }]);
+          newCount++;
+        } else if (
+          known.modification_time !== currentMtime ||
+          (known.file_size && known.file_size !== currentSize)
+        ) {
+          // Modified file - update basic info and mark for metadata re-extraction
+          await songRepository.updateBatch([{
+            id: known.id || asset.id,
+            filename: asset.filename,
+            duration: asset.duration || 0,
+            modification_time: asset.modificationTime || null,
+            file_size: asset.fileSize || null,
+            metadata_loaded: 0, // Trigger re-extraction
+          }]);
+          modifiedCount++;
+        }
+        // If unchanged, do nothing
       }
 
       hasNextPage = page.hasNextPage;
       after = page.endCursor;
     }
 
-    if (newCount > 0) {
-      console.log(`[MusicScanner] Background sync found ${newCount} new files`);
-      // Extract metadata for the new files
+    // Find deleted files (in DB but not on device)
+    for (const [uri, meta] of knownFiles) {
+      if (!seenUris.has(uri)) {
+        // File deleted - could mark as missing or delete
+        // For now, we'll delete from DB
+        const song = await songRepository.getById(meta.id);
+        if (song) {
+          await songRepository.deleteBatch([song.id]);
+          // Also cleanup artwork
+          await artworkManager.cleanupArtwork(song.id);
+        }
+        deletedCount++;
+      }
+    }
+
+    if (onProgress) {
+      onProgress({ new: newCount, modified: modifiedCount, deleted: deletedCount });
+    }
+
+    if (newCount > 0 || modifiedCount > 0) {
+      console.log(`[MusicScanner] Incremental sync: +${newCount} new, ~${modifiedCount} modified, -${deletedCount} deleted`);
+      // Extract metadata for new/modified files
       await extractMetadataInBackground();
-      if (onNewFilesFound) onNewFilesFound();
+      if (onComplete) onComplete();
     } else {
-      console.log("[MusicScanner] Background sync — no new files");
+      console.log("[MusicScanner] Incremental sync — no changes");
     }
 
     // Update scan state
-    const totalCount = await getSongCount();
-    await setLastScanTime(totalCount);
+    const totalCount = await songRepository.getCount();
+    await scanStateRepository.setMusicScanState(totalCount);
 
-    return newCount;
+    return { new: newCount, modified: modifiedCount, deleted: deletedCount };
   } catch (error) {
-    console.warn("[MusicScanner] Background sync error:", error);
-    return 0;
+    console.warn("[MusicScanner] Incremental sync error:", error);
+    return { new: 0, modified: 0, deleted: 0 };
   }
+}
+
+// ─── Background Sync (Legacy Compatibility) ──────────────────────
+
+/**
+ * Legacy background sync - now uses incremental sync
+ * @deprecated Use incrementalSync instead
+ */
+export async function backgroundSync(onNewFilesFound) {
+  const result = await incrementalSync();
+  if (result.new > 0 && onNewFilesFound) {
+    onNewFilesFound();
+  }
+  return result.new;
 }
 
 // ─── Convenience ─────────────────────────────────────────────────
@@ -355,12 +415,18 @@ export async function backgroundSync(onNewFilesFound) {
  * @returns {Promise<Array<{
  *   id: string, uri: string, filename: string, duration: number,
  *   title: string, artist: string, album: string, year: string|null,
- *   artwork: string|null, creationTime: number, modificationTime: number
+ *   albumArtist: string|null, genre: string|null,
+ *   trackNumber: number|null, discNumber: number|null,
+ *   bitrate: number|null, sampleRate: number|null, channels: number|null,
+ *   artwork: string|null, thumbnail: string|null,
+ *   creationTime: number, modificationTime: number,
+ *   metadataLoaded: boolean,
+ *   favorite: boolean, playCount: number, playbackPosition: number
  * }>>}
  */
 export async function getSongsForUI() {
   await initDB();
-  const songs = await getAllSongs();
+  const songs = await songRepository.getAll({ limit: 10000 }); // Large limit for compatibility
   return songs.map((song) => ({
     id: song.id,
     uri: song.uri,
@@ -370,10 +436,21 @@ export async function getSongsForUI() {
       song.title || song.filename?.replace(/\.[^/.]+$/, "") || "Unknown Track",
     artist: song.artist || "Unknown Artist",
     album: song.album || "Unknown Album",
+    albumArtist: song.album_artist,
+    genre: song.genre,
     year: song.year || null,
+    trackNumber: song.track_number,
+    discNumber: song.disc_number,
+    bitrate: song.bitrate,
+    sampleRate: song.sample_rate,
+    channels: song.channels,
     artwork: song.artwork_path || null,
+    thumbnail: song.thumbnail_path || null,
     creationTime: song.creation_time,
     modificationTime: song.modification_time,
     metadataLoaded: song.metadata_loaded === 1,
+    favorite: song.favorite === 1,
+    playCount: song.play_count || 0,
+    playbackPosition: song.playback_position || 0,
   }));
 }
