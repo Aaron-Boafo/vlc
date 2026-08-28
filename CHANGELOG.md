@@ -41,6 +41,7 @@
 - Scanners and library empty states now log and report the actual reason (permission denied vs. zero media found at scan time) instead of showing a bare empty list
 - All Songs list showing empty rows (no title/artist/artwork): hooks returned raw SQLite rows whose `title`/`artist` are null until metadata extraction and whose artwork lives in `artwork_path`/`thumbnail_path` columns, while the UI read `item.artwork`/`item.thumbnail`. Song rows are now normalized (`utils/songMapper`) in every library/search hook so each row carries `title`, `artist`, `album`, `artwork`, and `thumbnail` populated from stored metadata or safe fallbacks
 - Songs without metadata were re-extracted on every launch because the music scanner never set `metadata_loaded = 1`; both success and fallback paths now mark the row as metadata-loaded
+- Metadata extraction never finishing for most songs: `getWithoutMetadata()` defaulted to the first 50 rows (kept repeating the same ones while the completion flag was unset), so artist/album/artwork stayed empty for the rest of the library. It now processes the full pending set (deterministic `ORDER BY rowid`) so artist and artwork populate in a single run
 
 ## v1.0.0
 

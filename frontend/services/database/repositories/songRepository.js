@@ -400,10 +400,10 @@ export const songRepository = {
   /**
    * Get songs without metadata (for Phase 2)
    */
-  async getWithoutMetadata(limit = 50) {
+  async getWithoutMetadata(limit = 100000) {
     const db = getDB();
     return db.getAllAsync(
-      `SELECT * FROM songs WHERE metadata_loaded = 0 LIMIT ?`,
+      `SELECT * FROM songs WHERE metadata_loaded = 0 ORDER BY rowid ASC LIMIT ?`,
       [limit]
     );
   },
