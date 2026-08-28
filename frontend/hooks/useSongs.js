@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { songRepository } from '../services/database/repositories/songRepository';
+import { initDB } from '../services/database';
 
 const DEFAULT_PAGE_SIZE = 50;
 
@@ -26,6 +27,8 @@ export function useSongs(options = {}) {
     if (!enabled) return;
     if (isLoadMore && (loadingMore || !hasMore)) return;
     if (!isLoadMore && loading) return;
+
+    await initDB();
 
     const offset = isLoadMore ? offsetRef.current : 0;
     if (!isLoadMore) {
@@ -107,26 +110,28 @@ export function useSong(id) {
 
   useEffect(() => {
     let mounted = true;
-    if (!id) {
+    if (id) {
+      (async () => {
+        await initDB();
+        setLoading(true);
+        songRepository.getById(id)
+          .then(data => {
+            if (mounted) {
+              setSong(data);
+              setLoading(false);
+            }
+          })
+          .catch(err => {
+            if (mounted) {
+              setError(err.message);
+              setLoading(false);
+            }
+          });
+      })();
+    } else {
       setSong(null);
       setLoading(false);
-      return;
     }
-
-    setLoading(true);
-    songRepository.getById(id)
-      .then(data => {
-        if (mounted) {
-          setSong(data);
-          setLoading(false);
-        }
-      })
-      .catch(err => {
-        if (mounted) {
-          setError(err.message);
-          setLoading(false);
-        }
-      });
 
     return () => { mounted = false; };
   }, [id]);
@@ -142,20 +147,24 @@ export function useArtists(options = {}) {
 
   useEffect(() => {
     let mounted = true;
-    setLoading(true);
-    songRepository.getArtists({ limit, offset })
-      .then(data => {
-        if (mounted) {
-          setArtists(data);
-          setLoading(false);
-        }
-      })
-      .catch(err => {
-        if (mounted) {
-          setError(err.message);
-          setLoading(false);
-        }
-      });
+    (async () => {
+      await initDB();
+      setLoading(true);
+      songRepository.getArtists({ limit, offset })
+        .then(data => {
+          if (mounted) {
+            setArtists(data);
+            setLoading(false);
+          }
+        })
+        .catch(err => {
+          if (mounted) {
+            setError(err.message);
+            setLoading(false);
+          }
+        });
+    })();
+
     return () => { mounted = false; };
   }, [limit, offset]);
 
@@ -170,20 +179,24 @@ export function useAlbums(options = {}) {
 
   useEffect(() => {
     let mounted = true;
-    setLoading(true);
-    songRepository.getAlbums({ limit, offset })
-      .then(data => {
-        if (mounted) {
-          setAlbums(data);
-          setLoading(false);
-        }
-      })
-      .catch(err => {
-        if (mounted) {
-          setError(err.message);
-          setLoading(false);
-        }
-      });
+    (async () => {
+      await initDB();
+      setLoading(true);
+      songRepository.getAlbums({ limit, offset })
+        .then(data => {
+          if (mounted) {
+            setAlbums(data);
+            setLoading(false);
+          }
+        })
+        .catch(err => {
+          if (mounted) {
+            setError(err.message);
+            setLoading(false);
+          }
+        });
+    })();
+
     return () => { mounted = false; };
   }, [limit, offset]);
 
@@ -198,20 +211,24 @@ export function useGenres(options = {}) {
 
   useEffect(() => {
     let mounted = true;
-    setLoading(true);
-    songRepository.getGenres({ limit, offset })
-      .then(data => {
-        if (mounted) {
-          setGenres(data);
-          setLoading(false);
-        }
-      })
-      .catch(err => {
-        if (mounted) {
-          setError(err.message);
-          setLoading(false);
-        }
-      });
+    (async () => {
+      await initDB();
+      setLoading(true);
+      songRepository.getGenres({ limit, offset })
+        .then(data => {
+          if (mounted) {
+            setGenres(data);
+            setLoading(false);
+          }
+        })
+        .catch(err => {
+          if (mounted) {
+            setError(err.message);
+            setLoading(false);
+          }
+        });
+    })();
+
     return () => { mounted = false; };
   }, [limit, offset]);
 
@@ -230,6 +247,8 @@ export function useSongsByArtist(artist, options = {}) {
   const loadSongs = useCallback(async (isLoadMore = false) => {
     if (!artist) return;
     if (isLoadMore && !hasMore) return;
+
+    await initDB();
 
     const offset = isLoadMore ? offsetRef.current : 0;
     if (!isLoadMore) setLoading(true);
@@ -276,6 +295,8 @@ export function useSongsByAlbum(album, options = {}) {
   const loadSongs = useCallback(async (isLoadMore = false) => {
     if (!album) return;
     if (isLoadMore && !hasMore) return;
+
+    await initDB();
 
     const offset = isLoadMore ? offsetRef.current : 0;
     if (!isLoadMore) setLoading(true);
@@ -326,6 +347,8 @@ export function useRecentlyAddedSongs(options = {}) {
   const loadSongs = useCallback(async (isLoadMore = false) => {
     if (isLoadMore && !hasMore) return;
 
+    await initDB();
+
     const offset = isLoadMore ? offsetRef.current : 0;
     if (!isLoadMore) setLoading(true);
 
@@ -370,6 +393,8 @@ export function useRecentlyPlayedSongs(options = {}) {
 
   const loadSongs = useCallback(async (isLoadMore = false) => {
     if (isLoadMore && !hasMore) return;
+
+    await initDB();
 
     const offset = isLoadMore ? offsetRef.current : 0;
     if (!isLoadMore) setLoading(true);

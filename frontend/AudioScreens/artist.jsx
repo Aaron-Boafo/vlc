@@ -1,44 +1,28 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Image, Modal, StyleSheet, TextInput } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, Image, Modal, StyleSheet } from 'react-native';
 import useThemeStore from '../store/theme';
-import useGlobalAudioStore from '../store/globalAudioStore';
 import useAudioControl from '../store/useAudioControl';
 import SearchBar from '../components/SearchBar';
+import { useArtists, useSongsByArtist } from '../hooks/useSongs';
 
 const ArtistScreen = ({ showSearch, searchQuery, setSearchQuery, setShowSearch }) => {
   const { themeColors } = useThemeStore();
-  const { audioFiles } = useGlobalAudioStore();
   const audioControl = useAudioControl();
   const [selectedArtist, setSelectedArtist] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
 
-  // Get unique artists
-  const artists = useMemo(() => {
-    const map = new Map();
-    audioFiles.forEach(track => {
-      if (!map.has(track.artist)) {
-        map.set(track.artist, {
-          artist: track.artist,
-          artwork: track.artwork,
-        });
-      }
-    });
-    return Array.from(map.values());
-  }, [audioFiles]);
+  const { artists, loading } = useArtists();
 
   // Filter artists based on search query
   const filteredArtists = useMemo(() => {
     if (!searchQuery) return artists;
     return artists.filter(artist =>
-      artist.artist.toLowerCase().includes(searchQuery.toLowerCase())
+      (artist.artist || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [artists, searchQuery]);
 
   // Get tracks for selected artist
-  const artistTracks = useMemo(() => {
-    if (!selectedArtist) return [];
-    return audioFiles.filter(track => track.artist === selectedArtist.artist);
-  }, [selectedArtist, audioFiles]);
+  const { songs: artistTracks } = useSongsByArtist(selectedArtist?.artist);
 
   const handleArtistPress = (artist) => {
     setSelectedArtist(artist);

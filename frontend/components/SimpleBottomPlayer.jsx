@@ -12,10 +12,6 @@ const SimpleBottomPlayer = () => {
   // Test if we can access the store
   const audioControl = useAudioControl();
 
-  console.log('SimpleBottomPlayer render - currentTrack:', currentTrack?.title || 'undefined');
-  console.log('SimpleBottomPlayer render - isBottomPlayerVisible:', isBottomPlayerVisible);
-  console.log('SimpleBottomPlayer render - isPlaying:', isPlaying);
-
   const {
     currentTrack,
     isPlaying,

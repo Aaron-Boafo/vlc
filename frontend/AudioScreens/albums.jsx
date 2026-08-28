@@ -1,46 +1,29 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Image, Modal, StyleSheet, TextInput } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, Image, Modal, StyleSheet } from 'react-native';
 import useThemeStore from '../store/theme';
-import useGlobalAudioStore from '../store/globalAudioStore';
 import useAudioControl from '../store/useAudioControl';
 import SearchBar from '../components/SearchBar';
+import { useAlbums, useSongsByAlbum } from '../hooks/useSongs';
 
 const Albums = ({ showSearch, searchQuery, setSearchQuery }) => {
   const { themeColors } = useThemeStore();
-  const { audioFiles } = useGlobalAudioStore();
   const audioControl = useAudioControl();
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
 
-  // Get unique albums
-  const albums = useMemo(() => {
-    const map = new Map();
-    audioFiles.forEach(track => {
-      if (!map.has(track.album)) {
-        map.set(track.album, {
-          album: track.album,
-          artist: track.artist,
-          artwork: track.artwork,
-        });
-      }
-    });
-    return Array.from(map.values());
-  }, [audioFiles]);
+  const { albums, loading } = useAlbums();
 
   // Filter albums based on search query
   const filteredAlbums = useMemo(() => {
     if (!searchQuery) return albums;
     return albums.filter(album =>
-      album.album.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      album.artist.toLowerCase().includes(searchQuery.toLowerCase())
+      (album.album || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (album.artist || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [albums, searchQuery]);
 
   // Get tracks for selected album
-  const albumTracks = useMemo(() => {
-    if (!selectedAlbum) return [];
-    return audioFiles.filter(track => track.album === selectedAlbum.album);
-  }, [selectedAlbum, audioFiles]);
+  const { songs: albumTracks } = useSongsByAlbum(selectedAlbum?.album);
 
   const handleAlbumPress = (album) => {
     setSelectedAlbum(album);

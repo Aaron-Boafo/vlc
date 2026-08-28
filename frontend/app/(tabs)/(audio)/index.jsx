@@ -31,7 +31,8 @@ import useAudioControl from "../../../store/useAudioControl";
 import MusicNotificationService from "../../../services/musicNotificationService";
 import { scanMusicFiles, extractMetadataInBackground, incrementalSync } from "../../../services/musicScanner";
 import { initDB, getLastScanTime } from "../../../services/database";
-import { useSongs, useSongSearch } from "../../../hooks/useSongs";
+import { useSongs } from "../../../hooks/useSongs";
+import { useSongSearch } from "../../../hooks/useSearch";
 
 // Import screen components
 import PlaylistScreen from "../../../AudioScreens/playlist";

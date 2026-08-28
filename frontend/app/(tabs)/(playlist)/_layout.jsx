@@ -1,5 +1,5 @@
 import {Stack} from "expo-router";
-import { PlaylistProvider } from "./Context";
+import { PlaylistProvider } from "../../../contexts/PlaylistContext";
 import { TouchableOpacity } from 'react-native';
 
 const AudioLayout = () => {

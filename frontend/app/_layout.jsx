@@ -4,12 +4,13 @@ import { StatusBar } from 'expo-status-bar';
 import "../global.css";
 import { View, Text } from 'react-native';
 import { useFonts } from 'expo-font';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import * as Notifications from 'expo-notifications';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import usePlaybackStore from '../store/playbackStore';
 import useAudioControl from '../store/useAudioControl';
 import AppThemeProvider from '../components/ThemeProvider';
+import { initDB } from '../services/database';
 import React from 'react';
 
 // Simple error boundary component
@@ -69,15 +70,29 @@ function RootLayoutContent() {
     setupAudio();
   }, [backgroundPlay, initializeAudio]);
 
-  // Hide splash screen when fonts are loaded
+  const [dbReady, setDbReady] = useState(false);
+
+  // Initialize the database once at startup so data hooks never race it
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    let active = true;
+    initDB()
+      .then(() => { if (active) setDbReady(true); })
+      .catch((err) => {
+        console.warn('Database init failed at startup:', err);
+        if (active) setDbReady(true);
+      });
+    return () => { active = false; };
+  }, []);
+
+  // Hide splash screen when fonts and the database are ready
+  useEffect(() => {
+    if ((fontsLoaded || fontError) && dbReady) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsLoaded, fontError, dbReady]);
 
-  // Don't render anything until fonts are loaded
-  if (!fontsLoaded) {
+  // Don't render anything until fonts and the database are ready
+  if (!fontsLoaded || !dbReady) {
     return null;
   }
 

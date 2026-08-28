@@ -3,8 +3,8 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import useThemeStore from "../../../store/theme";
 import usePlaylistStore from '../../../store/playlistStore';
 import useAudioControl from '../../../store/useAudioControl';
-import useGlobalAudioStore from '../../../store/globalAudioStore';
-import useOptimizedVideoStore from '../../../store/optimizedVideoStore';
+import { useSongs } from '../../../hooks/useSongs';
+import { useVideos } from '../../../hooks/useVideos';
 import { Plus, Trash2, Music4, Play, Shuffle, MoreVertical, Edit3, Video as VideoIcon, FileAudio, ListMusic } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import AudioHeader from '../../../AudioComponents/title';
@@ -140,20 +140,9 @@ const PlaylistScreen = () => {
   const audioControl = useAudioControl();
   const router = useRouter();
 
-  // Use cached data from main stores (no separate loading needed)
-  const { 
-    audioFiles: playlistAudioFiles, 
-    loadAllAudioFiles, 
-    isLoading: audioLoading,
-    permissionGranted: audioPermission,
-    isInitialized: audioInitialized
-  } = useGlobalAudioStore();
-  const { 
-    videoFiles: playlistVideoFiles, 
-    loadVideoFiles, 
-    isLoading: videoLoading,
-    isInitialLoadComplete: videoInitialized
-  } = useOptimizedVideoStore();
+  // SQLite-backed track list for the create-playlist picker
+  const { songs: playlistAudioFiles, loading: audioLoading } = useSongs({ pageSize: 1000 });
+  const { videos: playlistVideoFiles, loading: videoLoading } = useVideos({ pageSize: 1000 });
 
   // State
   const [modalVisible, setModalVisible] = useState(false);
@@ -193,53 +182,10 @@ const PlaylistScreen = () => {
     });
   }, [availableTracks, trackSearchQuery]);
 
-  // Load tracks from stores when modal opens or type changes
-  // Ensure files are loaded when create modal opens - using cached data
-  useEffect(() => {
-    if (createModal) {
-      console.log('⚡ Playlist creation modal opened');
-      console.log(`📊 Audio: ${playlistAudioFiles.length} files, loading: ${audioLoading}, initialized: ${audioInitialized}, permission: ${audioPermission}`);
-      console.log(`📊 Video: ${playlistVideoFiles.length} files, loading: ${videoLoading}, initialized: ${videoInitialized}`);
-      
-      // Load audio files if needed
-      if (playlistAudioFiles.length === 0 && !audioLoading) {
-        if (audioPermission === false) {
-          console.warn('❌ Audio permission denied');
-        } else {
-          console.log('📱 Loading audio files...');
-          loadAllAudioFiles().catch(error => {
-            console.error('❌ Failed to load audio files:', error);
-          });
-        }
-      }
-      
-      // Load video files if needed
-      if (playlistVideoFiles.length === 0 && !videoLoading) {
-        console.log('🎥 Loading video files...');
-        loadVideoFiles().catch(error => {
-          console.error('❌ Failed to load video files:', error);
-        });
-      }
-    }
-  }, [createModal, loadAllAudioFiles, loadVideoFiles, playlistAudioFiles.length, playlistVideoFiles.length, audioLoading, videoLoading, audioPermission, audioInitialized, videoInitialized]);
-
-  // Check if we're currently loading - using main stores
+  // Check if we're currently loading - tracks come from SQLite hooks
   const isLoadingTracks = useMemo(() => {
-    if (playlistType === 'audio') {
-      return audioLoading || (playlistAudioFiles.length === 0 && !audioInitialized && audioPermission !== false);
-    } else {
-      return videoLoading || (playlistVideoFiles.length === 0 && !videoInitialized);
-    }
-  }, [playlistType, audioLoading, videoLoading, playlistAudioFiles.length, playlistVideoFiles.length, audioInitialized, videoInitialized, audioPermission]);
-
-  // Check for errors
-  const hasError = useMemo(() => {
-    if (playlistType === 'audio') {
-      return audioPermission === false || (audioInitialized && playlistAudioFiles.length === 0 && !audioLoading);
-    } else {
-      return videoInitialized && playlistVideoFiles.length === 0 && !videoLoading;
-    }
-  }, [playlistType, audioPermission, audioInitialized, videoInitialized, playlistAudioFiles.length, playlistVideoFiles.length, audioLoading, videoLoading]);
+    return playlistType === 'audio' ? audioLoading : videoLoading;
+  }, [playlistType, audioLoading, videoLoading]);
 
   // Handlers
   const openPlaylist = useCallback((playlist) => {
@@ -512,7 +458,7 @@ const PlaylistScreen = () => {
               Select {playlistType === 'audio' ? 'Audio' : 'Video'} Tracks ({filteredTracks.length})
               {filteredTracks.length > 0 && (
                 <Text style={[styles.cacheIndicator, { color: themeColors.primary, fontSize: 14, fontWeight: 'normal' }]}>
-                  {' '}• From Cache
+                  {' '}• From Library
                 </Text>
               )}
             </Text>
@@ -537,9 +483,9 @@ const PlaylistScreen = () => {
               <ActivityIndicator size="large" color={themeColors.primary} />
               <Text style={[styles.loadingText, { color: themeColors.textSecondary }]}>
                 {playlistType === 'audio' && playlistAudioFiles.length > 0 
-                  ? 'Preparing cached audio files...'
+                  ? 'Preparing track list...'
                   : playlistType === 'video' && playlistVideoFiles.length > 0
-                  ? 'Preparing cached video files...'
+                  ? 'Preparing track list...'
                   : `Loading ${playlistType} files...`
                 }
               </Text>

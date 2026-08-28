@@ -23,7 +23,7 @@ import useOptimizedPlaylistLoader from '../hooks/useOptimizedPlaylistLoader';
 
 const VideoPlaylistScreen = ({ showSearch, setShowSearch, searchQuery, setSearchQuery }) => {
   const { themeColors } = useThemeStore();
-  const { videoFiles, setCurrentVideo } = useOptimizedVideoStore();
+  const { setCurrentVideo } = useOptimizedVideoStore();
   
   // Use optimized loader for playlist creation
   const {

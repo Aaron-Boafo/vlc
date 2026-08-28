@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { songRepository } from '../services/database/repositories/songRepository';
 import { videoRepository } from '../services/database/repositories/videoRepository';
+import { initDB } from '../services/database';
 
 const DEFAULT_PAGE_SIZE = 50;
 
@@ -27,6 +28,8 @@ export function useSongSearch(query, options = {}) {
 
     const offset = isLoadMore ? offsetRef.current : 0;
     if (!isLoadMore) setLoading(true);
+
+    await initDB();
 
     try {
       const [data, count] = await Promise.all([
@@ -108,6 +111,8 @@ export function useVideoSearch(query, options = {}) {
 
     const offset = isLoadMore ? offsetRef.current : 0;
     if (!isLoadMore) setLoading(true);
+
+    await initDB();
 
     try {
       const [data, count] = await Promise.all([
@@ -194,6 +199,8 @@ export function useUnifiedSearch(query, options = {}) {
     const videoOffset = isLoadMore ? offsetRef.current.videos : 0;
 
     if (!isLoadMore) setLoading(true);
+
+    await initDB();
 
     try {
       const [songsData, songsCount, videosData, videosCount] = await Promise.all([

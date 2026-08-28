@@ -1,4 +1,4 @@
-import { getDB } from '../database';
+import { getDB } from '../../database';
 
 const DEFAULT_LIMIT = 50;
 const DEFAULT_ORDER = { key: 'filename', dir: 'ASC' };
@@ -282,6 +282,20 @@ export const videoRepository = {
   async getById(id) {
     const db = getDB();
     return db.getFirstAsync(`SELECT * FROM videos WHERE id = ?`, [id]);
+  },
+
+  /**
+   * Get all known URIs with modification time and file size for incremental sync.
+   * @returns {Promise<Map<string, {modification_time: number, file_size: number}>>}
+   */
+  async getAllUrisWithMeta() {
+    const db = getDB();
+    const rows = await db.getAllAsync(`SELECT uri, modification_time, file_size FROM videos`);
+    const map = new Map();
+    for (const row of rows) {
+      map.set(row.uri, { modification_time: row.modification_time, file_size: row.file_size });
+    }
+    return map;
   },
 
   /**

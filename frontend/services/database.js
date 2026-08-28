@@ -10,20 +10,29 @@ import { runMigrations } from "./database/migrations";
 const DB_NAME = "visura_music.db";
 
 let _db = null;
+let _initPromise = null;
 
 /**
  * Open (or create) the database and run migrations.
+ * Concurrency-safe: concurrent callers share a single init/migration run.
  * @returns {Promise<SQLite.SQLiteDatabase>}
  */
 export async function initDB() {
   if (_db) return _db;
 
-  _db = await SQLite.openDatabaseAsync(DB_NAME);
+  if (!_initPromise) {
+    _initPromise = (async () => {
+      const db = await SQLite.openDatabaseAsync(DB_NAME);
+      // Run migrations to ensure schema is up to date
+      await runMigrations();
+      _db = db;
+      return db;
+    })().finally(() => {
+      _initPromise = null;
+    });
+  }
 
-  // Run migrations to ensure schema is up to date
-  await runMigrations();
-
-  return _db;
+  return _initPromise;
 }
 
 /**
@@ -398,5 +407,5 @@ export async function clearVideoDatabase() {
     DELETE FROM videos;
     DELETE FROM videos_fts;
     UPDATE video_scan_state SET last_scan_time = NULL, last_scan_count = 0 WHERE id = 1;
-  `;
+  `);
 }

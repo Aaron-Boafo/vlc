@@ -17,9 +17,26 @@
 - Refactored `globalAudioStore`, `simpleAudioStore`, and `optimizedVideoStore` to hold UI state only
 - Refactored music and video scanners to use incremental sync and batch repository operations
 - Audio library screen now streams data from SQLite via hooks with FlashList virtualization
+- Migrated remaining screens off the removed store arrays onto SQLite hooks:
+  - Video tab grid (`VideoScreens/all.jsx`) now uses `useVideos` + `useVideoSearch` with paginated FlatList grid
+  - Video player screen (`app/player/video.jsx`) sources its play queue from `useVideos`
+  - Audio Albums and Artists sub-tabs use `useAlbums`/`useArtists` with `useSongsByAlbum`/`useSongsByArtist`
+  - Playlist tab track picker uses `useSongs` + `useVideos` (large page size) backed by the library
+- Moved the bogus `(playlist)/Context.jsx` route file to `contexts/PlaylistContext.js` so it is no longer treated as a screen
 
 ### Removed
 - Duplicate `audioFiles` and `videoFiles` arrays from Zustand stores
+- `react-native-worklets` dependency (duplicate native class with react-native-reanimated 3.17.x) and its Babel plugin
+
+### Fixed
+- Android build failure caused by duplicate `com.swmansion.worklets` native classes; debug APK now builds successfully (13m20s clean assembleDebug)
+- Blank screen after onboarding: temporal-dead-zone `ReferenceError` in `SimpleBottomPlayer` (debug logs referenced `currentTrack` before its destructure) prevented the entire tab layout, including the tab bar, from rendering
+- `TypeError: Cannot read property 'length' of undefined` at first launch from screens still consuming the removed store arrays (`VideoScreens/all.jsx`, playlist tab, audio Albums/Artists sub-tabs)
+- Bundle errors: incorrect repository import paths, missing `getAllUrisWithMeta()` queries, and a syntax error in `database.js` `clearVideoDatabase`
+- `useSongSearch` imported from the wrong module; standalone `useSearch` hook used instead
+- Extraneous `unified`/`player` Stack screens declared in `(audio)/_layout.jsx` generated router warnings
+- `Database not initialized. Call initDB() first.` when data hooks queried before the database was ready; `initDB()` is now idempotent under concurrent callers, data/splash rendering waits on startup DB initialization, and every library/search/detail hook awaits `initDB()` before its first query
+- Background thumbnail and metadata extraction starting nested transactions; chunk items are now processed sequentially so parallel writers can no longer overlap `BEGIN`/`COMMIT` on the single SQLite connection
 
 ## v1.0.0
 

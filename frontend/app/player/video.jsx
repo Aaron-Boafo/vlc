@@ -7,9 +7,11 @@ import { VideoView, useVideoPlayer } from 'expo-video';
 import useOptimizedVideoStore from '../../store/optimizedVideoStore';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { videoManager } from '../../services/VideoManager';
+import { useVideos } from '../../hooks/useVideos';
 
 const VideoPlayer = () => {
-  const { currentVideo, playlist, videoFiles, setAndPlayVideo, showMiniPlayer } = useOptimizedVideoStore();
+  const { currentVideo, playlist, setAndPlayVideo, showMiniPlayer } = useOptimizedVideoStore();
+  const { videos: allVideos } = useVideos({ pageSize: 200 });
   const [isPlaying, setIsPlaying] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -178,7 +180,7 @@ const VideoPlayer = () => {
   );
 
   // Previous/Next logic
-  const getCurrentList = () => (playlist && playlist.length > 0 ? playlist : videoFiles);
+  const getCurrentList = () => (playlist && playlist.length > 0 ? playlist : allVideos);
   const getCurrentIndex = () => {
     const list = getCurrentList();
     return list.findIndex(v => v.id === currentVideo.id);

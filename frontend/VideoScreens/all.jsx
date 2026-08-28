@@ -27,15 +27,14 @@ import CustomAlert from '../components/CustomAlert';
 import MemoryManager from '../utils/memoryManager';
 import LargeLibraryOptimizer from '../utils/largeLibraryOptimizer';
 import PerformanceMonitor from '../utils/performanceMonitor';
-import { scanVideoFiles, getVideosForUI, extractThumbnailsInBackground } from '../services/videoScanner';
-import { initDB } from '../services/database';
+import { useVideos, useVideoSearch } from '../hooks/useVideos';
 
-const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
-  const { videoFiles, isLoading, setAndPlayVideo, removeVideo, renameVideo, toggleFavouriteVideo, setVideoFiles, setLoading } = useOptimizedVideoStore();
+const VideoAllScreen = ({ showSearch, setShowSearch, searchQuery, setSearchQuery, onCloseSearch, reloadKey }) => {
+  const { setAndPlayVideo, removeVideo, toggleFavouriteVideo } = useOptimizedVideoStore();
+  const sortOrder = useOptimizedVideoStore((state) => state.sortOrder);
   const { themeColors } = useThemeStore();
   const favouriteStore = useFavouriteStore();
   const historyStore = useHistoryStore();
-  const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [showMoreModal, setShowMoreModal] = useState(false);
@@ -51,22 +50,38 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
   const [videoThumbnails, setVideoThumbnails] = useState({});
   const [isTransitioning, setIsTransitioning] = useState(false);
 
+  // SQLite-backed paginated data via hooks
+  const sortKey = sortOrder.key === 'modificationTime' ? 'modification_time' : sortOrder.key;
+  const {
+    videos: videoFiles,
+    loading,
+    hasMore,
+    loadMore,
+    refresh: refreshVideos,
+  } = useVideos({
+    sort: { key: sortKey, dir: sortOrder.direction.toUpperCase() },
+    pageSize: 24,
+  });
+  const { videos: searchVideos, loading: searchLoading } = useVideoSearch(searchQuery, {
+    pageSize: 24,
+    enabled: !!searchQuery.trim(),
+  });
+
+  const isSearching = !!searchQuery.trim();
+  const displayVideos = isSearching ? searchVideos : videoFiles;
+  const isLoadingVideos = isSearching ? searchLoading : loading;
+
   // 🚀 Optimized thumbnail management for large libraries
   const thumbnailCache = useRef(new Map());
   const maxThumbnailCache = useRef(500); // Limit thumbnail cache size
 
+  // Refresh data when parent signals (new scan / thumbnails generated)
   useEffect(() => {
-    if (!videoFiles || !Array.isArray(videoFiles) || videoFiles.length === 0) {
-      // Videos are loaded by the parent tab screen via SQLite scanner.
-      // This is just a fallback safety net.
-      initDB().then(() => getVideosForUI()).then(videos => {
-        if (videos.length > 0) setVideoFiles(videos);
-      }).catch(error => {
-        console.error('Error loading videos:', error);
-        setLoadingError(error.message);
-      });
+    if (reloadKey > 0) {
+      refreshVideos();
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadKey]);
 
   // Safety check to ensure refreshing doesn't get stuck
   useEffect(() => {
@@ -82,14 +97,6 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
       };
     }
   }, [refreshing]);
-
-  // Monitor store loading state and sync with local refreshing state
-  useEffect(() => {
-    if (!isLoading && refreshing) {
-      console.log('📊 Store finished loading, stopping refresh indicator');
-      setRefreshing(false);
-    }
-  }, [isLoading, refreshing]);
 
   // 🧠 Register thumbnail cache with memory manager (only once on mount)
   useEffect(() => {
@@ -137,49 +144,26 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
     }, 30000);
 
     try {
-      setLoading(true);
-      await scanVideoFiles();
-      const videos = await getVideosForUI();
-      setVideoFiles(videos);
+      await refreshVideos();
       console.log('✅ Video refresh completed successfully');
-
-      // Re-extract thumbnails in background
-      extractThumbnailsInBackground(null, async () => {
-        const updated = await getVideosForUI();
-        setVideoFiles(updated);
-      });
     } catch (error) {
       console.error('❌ Error refreshing videos:', error);
       setLoadingError(error.message || 'Failed to refresh videos');
     } finally {
       clearTimeout(timeoutId);
-      setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [refreshVideos]);
 
   const handleRetryLoad = async () => {
     setLoadingError(null);
     try {
-      setLoading(true);
-      await scanVideoFiles();
-      const videos = await getVideosForUI();
-      setVideoFiles(videos);
+      await refreshVideos();
     } catch (error) {
       console.error('Error retrying video load:', error);
       setLoadingError(error.message);
-    } finally {
-      setLoading(false);
     }
   };
-
-  const filteredVideos = useMemo(() => {
-    if (!videoFiles || !Array.isArray(videoFiles)) return [];
-    if (!searchQuery) return videoFiles;
-    return videoFiles.filter(video =>
-      (video.title || video.filename).toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [videoFiles, searchQuery]);
 
   // Callback to receive thumbnail from VideoCard
   const handleThumbnailReady = useCallback((uri, video) => {
@@ -321,7 +305,7 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
   ), [handleVideoPress, handleMoreOptions, handleThumbnailReady]);
 
   // Only show loading screen if we're loading AND have no files
-  if (isLoading && (!videoFiles || videoFiles.length === 0)) {
+  if (isLoadingVideos && videoFiles.length === 0) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: themeColors.background }]}>
         <ActivityIndicator size="large" color={themeColors.primary} />
@@ -370,7 +354,7 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
       )}
 
       <FlatList
-        data={filteredVideos}
+        data={displayVideos}
         renderItem={renderItem}
         keyExtractor={LargeLibraryOptimizer.optimizedKeyExtractor}
         numColumns={2}
@@ -406,6 +390,7 @@ const VideoAllScreen = ({ showSearch, onCloseSearch }) => {
             thumbnailCache.current.clear();
             toKeep.forEach(([key, value]) => thumbnailCache.current.set(key, value));
           }
+          loadMore();
         }}
         // 🎯 Optimized scroll handling for large video libraries
         onScrollBeginDrag={() => {

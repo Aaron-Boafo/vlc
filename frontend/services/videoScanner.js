@@ -141,8 +141,11 @@ export async function extractThumbnailsInBackground(
   for (let i = 0; i < pending.length; i += THUMBNAIL_CHUNK_SIZE) {
     const chunk = pending.slice(i, i + THUMBNAIL_CHUNK_SIZE);
 
-    // Process chunk in parallel
-    await Promise.all(chunk.map((video) => _generateAndSaveThumbnail(video)));
+    // Process chunk sequentially - expo-sqlite uses a single connection,
+    // so parallel writers overlap BEGIN/COMMIT and throw nested-transaction errors
+    for (const video of chunk) {
+      await _generateAndSaveThumbnail(video);
+    }
 
     processed += chunk.length;
 

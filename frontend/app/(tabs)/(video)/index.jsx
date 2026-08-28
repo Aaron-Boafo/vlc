@@ -18,7 +18,6 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import SortOptionsSheet from "../../../components/SortOptionsSheet";
-import AdvancedSearch from "../../../utils/advancedSearch";
 import LazyScreen from "../../../components/LazyScreen";
 import * as Icons from "lucide-react-native";
 
@@ -26,7 +25,6 @@ import * as Icons from "lucide-react-native";
 import { initDB, getVideoScanTime } from "../../../services/database";
 import {
   scanVideoFiles,
-  getVideosForUI,
   extractThumbnailsInBackground,
   videoBackgroundSync,
 } from "../../../services/videoScanner";
@@ -34,12 +32,10 @@ import {
 export default function VideoTabScreen() {
   const {
     activeTab,
-    videoFiles,
     isLoading,
     sortOrder,
-    sortVideoFiles,
     toggleTabs,
-    setVideoFiles,
+    setSortOrder,
   } = useOptimizedVideoStore();
   const { themeColors } = useThemeStore();
   const [showSort, setShowSort] = useState(false);
@@ -47,6 +43,7 @@ export default function VideoTabScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [thumbnailProgress, setThumbnailProgress] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const router = useRouter();
   const appStateRef = useRef(AppState.currentState);
 
@@ -60,24 +57,19 @@ export default function VideoTabScreen() {
         if (lastScan) {
           // Subsequent launch — load from SQLite instantly
           console.log("📹 Loading videos from SQLite...");
-          const videos = await getVideosForUI();
-          setVideoFiles(videos);
           setIsInitialized(true);
+          setReloadKey((k) => k + 1);
 
           // Background sync for new files
-          videoBackgroundSync(async () => {
+          videoBackgroundSync(() => {
             console.log("📹 New videos found during sync, refreshing...");
-            const updated = await getVideosForUI();
-            setVideoFiles(updated);
+            setReloadKey((k) => k + 1);
           });
 
           // Extract thumbnails for any remaining videos
           extractThumbnailsInBackground(
             (progress) => setThumbnailProgress(progress),
-            async () => {
-              const updated = await getVideosForUI();
-              setVideoFiles(updated);
-            }
+            () => setReloadKey((k) => k + 1)
           ).then(() => setThumbnailProgress(null));
         } else {
           // First launch — full scan
@@ -93,18 +85,14 @@ export default function VideoTabScreen() {
           }
 
           console.log(`📹 Scan complete: ${count} videos found`);
-          const videos = await getVideosForUI();
-          setVideoFiles(videos);
+          setReloadKey((k) => k + 1);
           useOptimizedVideoStore.getState().setLoading(false);
           setIsInitialized(true);
 
           // Start background thumbnail extraction
           extractThumbnailsInBackground(
             (progress) => setThumbnailProgress(progress),
-            async () => {
-              const updated = await getVideosForUI();
-              setVideoFiles(updated);
-            }
+            () => setReloadKey((k) => k + 1)
           ).then(() => setThumbnailProgress(null));
         }
       } catch (error) {
@@ -126,9 +114,8 @@ export default function VideoTabScreen() {
         isInitialized
       ) {
         console.log("📹 App foregrounded — running background sync");
-        videoBackgroundSync(async () => {
-          const updated = await getVideosForUI();
-          setVideoFiles(updated);
+        videoBackgroundSync(() => {
+          setReloadKey((k) => k + 1);
         });
       }
       appStateRef.current = nextState;
@@ -176,28 +163,17 @@ export default function VideoTabScreen() {
     },
   ];
 
-  // Build search index when video files change
-  useEffect(() => {
-    if (videoFiles.length > 0) {
-      AdvancedSearch.buildSearchIndex(videoFiles);
-    }
-  }, [videoFiles]);
-
   // Handle refresh — force re-scan
   const handleRefresh = useCallback(async () => {
     useOptimizedVideoStore.getState().setLoading(true);
     try {
       const { count } = await scanVideoFiles();
-      const videos = await getVideosForUI();
-      setVideoFiles(videos);
+      setReloadKey((k) => k + 1);
 
       // Re-extract thumbnails
       extractThumbnailsInBackground(
         (progress) => setThumbnailProgress(progress),
-        async () => {
-          const updated = await getVideosForUI();
-          setVideoFiles(updated);
-        }
+        () => setReloadKey((k) => k + 1)
       ).then(() => setThumbnailProgress(null));
     } catch (error) {
       console.error("📹 Refresh failed:", error);
@@ -226,8 +202,9 @@ export default function VideoTabScreen() {
       searchQuery,
       setSearchQuery,
       onCloseSearch: () => setShowSearch(false),
+      reloadKey,
     }),
-    [showSearch, setShowSearch, searchQuery, setSearchQuery]
+    [showSearch, setShowSearch, searchQuery, setSearchQuery, reloadKey]
   );
 
   // Get current tab index
@@ -314,7 +291,7 @@ export default function VideoTabScreen() {
 
   const renderContent = () => {
     // Show loading during initial scan with no files
-    if (isLoading && videoFiles.length === 0) {
+    if (isLoading && reloadKey === 0) {
       return (
         <View style={styles.centerContainer}>
           <Text style={{ color: themeColors.textSecondary }}>
@@ -360,7 +337,7 @@ export default function VideoTabScreen() {
         sortOptions={videoSortOptions}
         currentSortOrder={sortOrder || { key: "filename", direction: "asc" }}
         onSort={(newSortOrder) =>
-          sortVideoFiles(newSortOrder.key, newSortOrder.direction)
+          setSortOrder(newSortOrder.key, newSortOrder.direction)
         }
       />
     </SafeAreaView>

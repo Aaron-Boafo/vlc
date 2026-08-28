@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { videoRepository } from '../services/database/repositories/videoRepository';
+import { initDB } from '../services/database';
 
 const DEFAULT_PAGE_SIZE = 50;
 
@@ -26,6 +27,8 @@ export function useVideos(options = {}) {
     if (isLoadMore && (loadingMore || !hasMore)) return;
     if (!isLoadMore && loading) return;
 
+    await initDB();
+
     const offset = isLoadMore ? offsetRef.current : 0;
     if (!isLoadMore) {
       setLoading(true);
@@ -40,7 +43,7 @@ export function useVideos(options = {}) {
         videoRepository.getAll({
           limit: pageSize,
           offset,
-          sort,
+          order: sort,
           filters,
         }),
         videoRepository.getCount(filters),
@@ -106,26 +109,28 @@ export function useVideo(id) {
 
   useEffect(() => {
     let mounted = true;
-    if (!id) {
+    if (id) {
+      (async () => {
+        await initDB();
+        setLoading(true);
+        videoRepository.getById(id)
+          .then(data => {
+            if (mounted) {
+              setVideo(data);
+              setLoading(false);
+            }
+          })
+          .catch(err => {
+            if (mounted) {
+              setError(err.message);
+              setLoading(false);
+            }
+          });
+      })();
+    } else {
       setVideo(null);
       setLoading(false);
-      return;
     }
-
-    setLoading(true);
-    videoRepository.getById(id)
-      .then(data => {
-        if (mounted) {
-          setVideo(data);
-          setLoading(false);
-        }
-      })
-      .catch(err => {
-        if (mounted) {
-          setError(err.message);
-          setLoading(false);
-        }
-      });
 
     return () => { mounted = false; };
   }, [id]);
@@ -148,6 +153,8 @@ export function useRecentlyAddedVideos(options = {}) {
 
   const loadVideos = useCallback(async (isLoadMore = false) => {
     if (isLoadMore && !hasMore) return;
+
+    await initDB();
 
     const offset = isLoadMore ? offsetRef.current : 0;
     if (!isLoadMore) setLoading(true);
@@ -193,6 +200,8 @@ export function useRecentlyPlayedVideos(options = {}) {
 
   const loadVideos = useCallback(async (isLoadMore = false) => {
     if (isLoadMore && !hasMore) return;
+
+    await initDB();
 
     const offset = isLoadMore ? offsetRef.current : 0;
     if (!isLoadMore) setLoading(true);
@@ -250,6 +259,8 @@ export function useVideoSearch(query, options = {}) {
 
     const offset = isLoadMore ? offsetRef.current : 0;
     if (!isLoadMore) setLoading(true);
+
+    await initDB();
 
     try {
       const [data, count] = await Promise.all([

@@ -1,4 +1,4 @@
-import { getDB } from '../database';
+import { getDB } from '../../database';
 
 export const scanStateRepository = {
   /**

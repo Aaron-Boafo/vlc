@@ -151,8 +151,11 @@ export async function extractMetadataInBackground(onProgress, onBatchComplete) {
       InteractionManager.runAfterInteractions(resolve);
     });
 
-    // Process each file in the chunk
-    await Promise.all(chunk.map((song) => _extractAndSaveSongMetadata(song)));
+    // Process each file in the chunk sequentially - expo-sqlite uses a single
+    // connection, so parallel writers overlap BEGIN/COMMIT and throw nested-transaction errors
+    for (const song of chunk) {
+      await _extractAndSaveSongMetadata(song);
+    }
 
     completed += chunk.length;
 
