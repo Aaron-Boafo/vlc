@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { songRepository } from '../services/database/repositories/songRepository';
 import { initDB } from '../services/database';
+import { mapSongRow, mapSongRows } from '../utils/songMapper';
 
 const DEFAULT_PAGE_SIZE = 50;
 
@@ -52,10 +53,12 @@ export function useSongs(options = {}) {
 
       if (!isMountedRef.current) return;
 
+      const mapped = mapSongRows(data);
+
       if (isLoadMore) {
-        setSongs(prev => [...prev, ...data]);
+        setSongs(prev => [...prev, ...mapped]);
       } else {
-        setSongs(data);
+        setSongs(mapped);
       }
       offsetRef.current = offset + data.length;
       setHasMore(data.length === pageSize);
@@ -117,7 +120,7 @@ export function useSong(id) {
         songRepository.getById(id)
           .then(data => {
             if (mounted) {
-              setSong(data);
+              setSong(mapSongRow(data));
               setLoading(false);
             }
           })
@@ -257,10 +260,12 @@ export function useSongsByArtist(artist, options = {}) {
       const data = await songRepository.getByArtist(artist, { limit: pageSize, offset, sort });
       if (!isMountedRef.current) return;
 
+      const mapped = mapSongRows(data);
+
       if (isLoadMore) {
-        setSongs(prev => [...prev, ...data]);
+        setSongs(prev => [...prev, ...mapped]);
       } else {
-        setSongs(data);
+        setSongs(mapped);
       }
       offsetRef.current = offset + data.length;
       setHasMore(data.length === pageSize);
@@ -305,10 +310,12 @@ export function useSongsByAlbum(album, options = {}) {
       const data = await songRepository.getByAlbum(album, { limit: pageSize, offset, sort });
       if (!isMountedRef.current) return;
 
+      const mapped = mapSongRows(data);
+
       if (isLoadMore) {
-        setSongs(prev => [...prev, ...data]);
+        setSongs(prev => [...prev, ...mapped]);
       } else {
-        setSongs(data);
+        setSongs(mapped);
       }
       offsetRef.current = offset + data.length;
       setHasMore(data.length === pageSize);
@@ -356,10 +363,12 @@ export function useRecentlyAddedSongs(options = {}) {
       const data = await songRepository.getRecentlyAdded({ limit: pageSize, offset });
       if (!isMountedRef.current) return;
 
+      const mapped = mapSongRows(data);
+
       if (isLoadMore) {
-        setSongs(prev => [...prev, ...data]);
+        setSongs(prev => [...prev, ...mapped]);
       } else {
-        setSongs(data);
+        setSongs(mapped);
       }
       offsetRef.current = offset + data.length;
       setHasMore(data.length === pageSize);
@@ -403,10 +412,12 @@ export function useRecentlyPlayedSongs(options = {}) {
       const data = await songRepository.getRecentlyPlayed({ limit: pageSize, offset });
       if (!isMountedRef.current) return;
 
+      const mapped = mapSongRows(data);
+
       if (isLoadMore) {
-        setSongs(prev => [...prev, ...data]);
+        setSongs(prev => [...prev, ...mapped]);
       } else {
-        setSongs(data);
+        setSongs(mapped);
       }
       offsetRef.current = offset + data.length;
       setHasMore(data.length === pageSize);

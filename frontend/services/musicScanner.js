@@ -256,6 +256,7 @@ async function _extractAndSaveSongMetadata(song) {
       channels,
       artwork_path: artworkPath,
       thumbnail_path: thumbnailPath,
+      metadata_loaded: 1,
     }]);
   } catch (error) {
     // Gracefully handle missing metadata — mark as loaded with defaults
@@ -279,6 +280,7 @@ async function _extractAndSaveSongMetadata(song) {
       channels: null,
       artwork_path: null,
       thumbnail_path: null,
+      metadata_loaded: 1,
     }]);
   }
 }

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { songRepository } from '../services/database/repositories/songRepository';
 import { videoRepository } from '../services/database/repositories/videoRepository';
 import { initDB } from '../services/database';
+import { mapSongRows } from '../utils/songMapper';
 
 const DEFAULT_PAGE_SIZE = 50;
 
@@ -39,10 +40,12 @@ export function useSongSearch(query, options = {}) {
 
       if (!isMountedRef.current) return;
 
+      const mapped = mapSongRows(data);
+
       if (isLoadMore) {
-        setSongs(prev => [...prev, ...data]);
+        setSongs(prev => [...prev, ...mapped]);
       } else {
-        setSongs(data);
+        setSongs(mapped);
       }
       offsetRef.current = offset + data.length;
       setHasMore(data.length === pageSize);
@@ -210,15 +213,17 @@ export function useUnifiedSearch(query, options = {}) {
         videoRepository.searchCount(searchQuery),
       ]);
 
+      const songsMapped = mapSongRows(songsData);
+
       if (!isMountedRef.current) return;
 
       if (isLoadMore) {
         setResults(prev => ({
-          songs: [...prev.songs, ...songsData],
+          songs: [...prev.songs, ...songsMapped],
           videos: [...prev.videos, ...videosData],
         }));
       } else {
-        setResults({ songs: songsData, videos: videosData });
+        setResults({ songs: songsMapped, videos: videosData });
       }
 
       offsetRef.current = {
