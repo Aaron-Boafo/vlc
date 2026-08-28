@@ -234,7 +234,7 @@ export const songRepository = {
 
     for (let i = 0; i < songs.length; i += BATCH) {
       const batch = songs.slice(i, i + BATCH);
-      const placeholders = batch.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
+      const placeholders = batch.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
       const values = batch.flatMap((s) => [
         s.id,
         s.uri,

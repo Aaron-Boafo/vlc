@@ -110,6 +110,11 @@ export async function scanVideoFiles(onProgress) {
   await scanStateRepository.setVideoScanState(totalInserted);
 
   console.log(`📹 Phase 1 complete: ${totalInserted} videos in SQLite`);
+  if (totalInserted === 0) {
+    console.warn(
+      "📹 Media library returned 0 videos — the device gallery appears empty or media is unavailable. Add videos to the device, confirm media library permission, then refresh to re-scan."
+    );
+  }
   return { granted: true, count: totalInserted };
 }
 

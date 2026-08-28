@@ -37,6 +37,8 @@
 - Extraneous `unified`/`player` Stack screens declared in `(audio)/_layout.jsx` generated router warnings
 - `Database not initialized. Call initDB() first.` when data hooks queried before the database was ready; `initDB()` is now idempotent under concurrent callers, data/splash rendering waits on startup DB initialization, and every library/search/detail hook awaits `initDB()` before its first query
 - Background thumbnail and metadata extraction starting nested transactions; chunk items are now processed sequentially so parallel writers can no longer overlap `BEGIN`/`COMMIT` on the single SQLite connection
+- Music library scan failing with `NativeDatabase.prepareAsync` rejected (`23 values for 22 columns`): `songRepository.insertBatch` supplied one extra placeholder, so no songs could be inserted
+- Scanners and library empty states now log and report the actual reason (permission denied vs. zero media found at scan time) instead of showing a bare empty list
 
 ## v1.0.0
 

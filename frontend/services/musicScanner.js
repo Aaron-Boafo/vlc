@@ -65,6 +65,7 @@ export async function scanMusicFiles(onProgress) {
   // 2. Request permission
   const { status } = await MediaLibrary.requestPermissionsAsync();
   if (status !== "granted") {
+    console.warn("[MusicScanner] Media library permission not granted, scan aborted");
     return { granted: false, count: 0 };
   }
 
@@ -115,6 +116,11 @@ export async function scanMusicFiles(onProgress) {
   console.log(
     `[MusicScanner] Phase 1 complete — ${totalInserted} files scanned`
   );
+  if (totalInserted === 0) {
+    console.warn(
+      "[MusicScanner] Media library returned 0 audio files — the device gallery appears empty or media is unavailable. Add media to the device, confirm media library permission, then re-scan."
+    );
+  }
   return { granted: true, count: totalInserted };
 }
 

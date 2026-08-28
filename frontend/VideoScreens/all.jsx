@@ -405,12 +405,42 @@ const VideoAllScreen = ({ showSearch, setShowSearch, searchQuery, setSearchQuery
               size={64}
               color={themeColors.textSecondary}
             />
-            <Text style={[styles.emptyText, { color: themeColors.text }]}>
-              {searchQuery ? 'No videos found' : 'No videos in your library'}
-            </Text>
-            <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
-              {searchQuery ? 'Try adjusting your search' : 'Add some videos to get started'}
-            </Text>
+            {!isLoadingVideos && loadingError ? (
+              <>
+                <Text style={[styles.emptyText, { color: themeColors.text }]}>
+                  Couldn't load your videos
+                </Text>
+                <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
+                  {loadingError}
+                </Text>
+                <TouchableOpacity
+                  style={[styles.retryButton, { backgroundColor: themeColors.primary, marginTop: 16 }]}
+                  onPress={handleRetryLoad}
+                >
+                  <Text style={[styles.retryButtonText, { color: 'white' }]}>
+                    Retry
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : searchQuery ? (
+              <>
+                <Text style={[styles.emptyText, { color: themeColors.text }]}>
+                  No videos found
+                </Text>
+                <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
+                  Try a different search
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={[styles.emptyText, { color: themeColors.text }]}>
+                  No videos to show
+                </Text>
+                <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
+                  Visura found nothing on this device. Confirm media library permission, add videos to the device, then tap the refresh icon to re-scan.
+                </Text>
+              </>
+            )}
             {LargeLibraryOptimizer.isHugeLibrary() && (
               <Text style={[styles.emptySubtext, { color: themeColors.textSecondary, marginTop: 8 }]}>
                 🎥 Huge video library detected - optimizations applied

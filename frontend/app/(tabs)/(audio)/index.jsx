@@ -435,9 +435,25 @@ export default function UnifiedAudioApp() {
                                 ListEmptyComponent={
                                     <View style={styles.emptyContainer}>
                                         <Music size={64} color={themeColors.textSecondary} />
-                                        <Text style={[styles.emptyText, { color: themeColors.text }]}>
-                                            {searchQuery ? 'No songs found' : 'No music in your library'}
-                                        </Text>
+                                        {searchQuery ? (
+                                            <>
+                                                <Text style={[styles.emptyText, { color: themeColors.text }]}>
+                                                    No songs found
+                                                </Text>
+                                                <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
+                                                    Try a different search
+                                                </Text>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Text style={[styles.emptyText, { color: themeColors.text }]}>
+                                                    No music to show
+                                                </Text>
+                                                <Text style={[styles.emptySubtext, { color: themeColors.textSecondary }]}>
+                                                    Visura found nothing on this device. Confirm media library permission, add audio to the device, then refresh to re-scan.
+                                                </Text>
+                                            </>
+                                        )}
                                     </View>
                                 }
                             />
@@ -665,6 +681,12 @@ const styles = StyleSheet.create({
     emptyText: {
         fontSize: 18,
         marginTop: 16,
+    },
+    emptySubtext: {
+        fontSize: 13,
+        marginTop: 8,
+        paddingHorizontal: 32,
+        textAlign: 'center',
     },
     shuffleButton: {
         position: 'absolute',
