@@ -13,8 +13,8 @@ function sanitizeOrder(order) {
 }
 
 function buildWhereClause(filters) {
-  const conditions = [];
-  const values = [];
+  const conditions = ['media_type = ?'];
+  const values = ['audio'];
 
   if (filters.artist) {
     conditions.push('artist = ?');
@@ -59,7 +59,7 @@ export const songRepository = {
     const { where, values } = buildWhereClause(filters);
 
     const query = `
-      SELECT * FROM songs
+      SELECT * FROM media
       ${where}
       ORDER BY ${key} COLLATE NOCASE ${dir}
       LIMIT ? OFFSET ?
@@ -75,7 +75,7 @@ export const songRepository = {
   async getCount(filters = {}) {
     const db = getDB();
     const { where, values } = buildWhereClause(filters);
-    const query = `SELECT COUNT(*) as count FROM songs ${where}`;
+    const query = `SELECT COUNT(*) as count FROM media ${where}`;
     const row = await db.getFirstAsync(query, values);
     return row?.count ?? 0;
   },
@@ -107,7 +107,7 @@ export const songRepository = {
   async getRecentlyAdded({ limit = DEFAULT_LIMIT, offset = 0 }) {
     const db = getDB();
     return db.getAllAsync(
-      `SELECT * FROM songs ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      `SELECT * FROM media WHERE media_type = 'audio' ORDER BY created_at DESC LIMIT ? OFFSET ?`,
       [limit, offset]
     );
   },
@@ -118,7 +118,7 @@ export const songRepository = {
   async getRecentlyPlayed({ limit = DEFAULT_LIMIT, offset = 0 }) {
     const db = getDB();
     return db.getAllAsync(
-      `SELECT * FROM songs WHERE last_played_at IS NOT NULL ORDER BY last_played_at DESC LIMIT ? OFFSET ?`,
+      `SELECT * FROM media WHERE last_played_at IS NOT NULL AND media_type = 'audio' ORDER BY last_played_at DESC LIMIT ? OFFSET ?`,
       [limit, offset]
     );
   },
@@ -129,7 +129,7 @@ export const songRepository = {
   async getMostPlayed({ limit = DEFAULT_LIMIT, offset = 0 }) {
     const db = getDB();
     return db.getAllAsync(
-      `SELECT * FROM songs WHERE play_count > 0 ORDER BY play_count DESC LIMIT ? OFFSET ?`,
+      `SELECT * FROM media WHERE play_count > 0 AND media_type = 'audio' ORDER BY play_count DESC LIMIT ? OFFSET ?`,
       [limit, offset]
     );
   },
@@ -142,11 +142,10 @@ export const songRepository = {
     const searchQuery = query.trim();
     if (!searchQuery) return [];
 
-    // Use FTS5 for full-text search
     return db.getAllAsync(
-      `SELECT s.* FROM songs s
-       JOIN songs_fts fts ON s.rowid = fts.rowid
-       WHERE songs_fts MATCH ?
+      `SELECT s.* FROM media s
+       JOIN media_fts fts ON s.id = fts.rowid
+       WHERE media_fts MATCH ? AND s.media_type = 'audio'
        ORDER BY rank
        LIMIT ? OFFSET ?`,
       [searchQuery, limit, offset]
@@ -161,7 +160,7 @@ export const songRepository = {
     const searchQuery = query.trim();
     if (!searchQuery) return 0;
     const row = await db.getFirstAsync(
-      `SELECT COUNT(*) as count FROM songs_fts WHERE songs_fts MATCH ?`,
+      `SELECT COUNT(*) as count FROM media_fts fts JOIN media s ON fts.rowid = s.id WHERE media_fts MATCH ? AND s.media_type = 'audio'`,
       [searchQuery]
     );
     return row?.count ?? 0;
@@ -174,8 +173,8 @@ export const songRepository = {
     const db = getDB();
     return db.getAllAsync(
       `SELECT DISTINCT artist, COUNT(*) as track_count, MIN(artwork_path) as artwork
-       FROM songs
-       WHERE artist IS NOT NULL AND artist != ''
+       FROM media
+       WHERE artist IS NOT NULL AND artist != '' AND media_type = 'audio'
        GROUP BY artist
        ORDER BY artist COLLATE NOCASE ASC
        LIMIT ? OFFSET ?`,
@@ -190,8 +189,8 @@ export const songRepository = {
     const db = getDB();
     return db.getAllAsync(
       `SELECT album, artist, COUNT(*) as track_count, MIN(artwork_path) as artwork, MIN(album_artist) as album_artist
-       FROM songs
-       WHERE album IS NOT NULL AND album != ''
+       FROM media
+       WHERE album IS NOT NULL AND album != '' AND media_type = 'audio'
        GROUP BY album, artist
        ORDER BY album COLLATE NOCASE ASC
        LIMIT ? OFFSET ?`,
@@ -206,8 +205,8 @@ export const songRepository = {
     const db = getDB();
     return db.getAllAsync(
       `SELECT DISTINCT genre, COUNT(*) as track_count
-       FROM songs
-       WHERE genre IS NOT NULL AND genre != ''
+       FROM media
+       WHERE genre IS NOT NULL AND genre != '' AND media_type = 'audio'
        GROUP BY genre
        ORDER BY genre COLLATE NOCASE ASC
        LIMIT ? OFFSET ?`,
@@ -234,10 +233,11 @@ export const songRepository = {
 
     for (let i = 0; i < songs.length; i += BATCH) {
       const batch = songs.slice(i, i + BATCH);
-      const placeholders = batch.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
+      const placeholders = batch.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
       const values = batch.flatMap((s) => [
-        s.id,
+        s.media_key || s.mediaKey,
         s.uri,
+        'audio',
         s.filename || null,
         s.duration || 0,
         s.title || null,
@@ -261,8 +261,8 @@ export const songRepository = {
       ]);
 
       const result = await db.runAsync(
-        `INSERT OR IGNORE INTO songs (
-          id, uri, filename, duration, title, artist, album, album_artist, genre, year,
+        `INSERT OR IGNORE INTO media (
+          media_key, uri, media_type, filename, duration, title, artist, album, album_artist, genre, year,
           track_number, disc_number, bitrate, sample_rate, channels, file_size,
           artwork_path, thumbnail_path, metadata_loaded, creation_time, modification_time, metadata_hash
         ) VALUES ${placeholders}`,
@@ -301,7 +301,7 @@ export const songRepository = {
 
         values.push(id);
         await db.runAsync(
-          `UPDATE songs SET ${setClauses.join(', ')} WHERE id = ?`,
+          `UPDATE media SET ${setClauses.join(', ')} WHERE id = ?`,
           values
         );
         totalUpdated++;
@@ -323,7 +323,7 @@ export const songRepository = {
 
     const placeholders = ids.map(() => '?').join(', ');
     const result = await db.runAsync(
-      `DELETE FROM songs WHERE id IN (${placeholders})`,
+      `DELETE FROM media WHERE id IN (${placeholders})`,
       ids
     );
     return result.changes || 0;
@@ -344,7 +344,7 @@ export const songRepository = {
     const db = getDB();
     const now = Date.now();
     return db.runAsync(
-      `UPDATE songs SET 
+      `UPDATE media SET 
          play_count = play_count + 1,
          last_played_at = ?,
          playback_position = ?
@@ -359,7 +359,7 @@ export const songRepository = {
   async updatePlaybackPosition(id, position) {
     const db = getDB();
     return db.runAsync(
-      `UPDATE songs SET playback_position = ? WHERE id = ?`,
+      `UPDATE media SET playback_position = ? WHERE id = ?`,
       [position, id]
     );
   },
@@ -370,7 +370,7 @@ export const songRepository = {
   async toggleFavorite(id) {
     const db = getDB();
     return db.runAsync(
-      `UPDATE songs SET favorite = CASE WHEN favorite = 1 THEN 0 ELSE 1 END WHERE id = ?`,
+      `UPDATE media SET favorite = CASE WHEN favorite = 1 THEN 0 ELSE 1 END WHERE id = ?`,
       [id]
     );
   },
@@ -380,19 +380,27 @@ export const songRepository = {
    */
   async getById(id) {
     const db = getDB();
-    return db.getFirstAsync(`SELECT * FROM songs WHERE id = ?`, [id]);
+    return db.getFirstAsync(`SELECT * FROM media WHERE id = ?`, [id]);
+  },
+
+  /**
+   * Get song by mediaKey
+   */
+  async getByMediaKey(mediaKey) {
+    const db = getDB();
+    return db.getFirstAsync(`SELECT * FROM media WHERE media_key = ?`, [mediaKey]);
   },
 
   /**
    * Get all known URIs with modification time and file size for incremental sync.
-   * @returns {Promise<Map<string, {modification_time: number, file_size: number}>>}
+   * @returns {Promise<Map<string, {id: number, modification_time: number, file_size: number}>>}
    */
   async getAllUrisWithMeta() {
     const db = getDB();
-    const rows = await db.getAllAsync(`SELECT uri, modification_time, file_size FROM songs`);
+    const rows = await db.getAllAsync(`SELECT id, uri, modification_time, file_size FROM media WHERE media_type = 'audio'`);
     const map = new Map();
     for (const row of rows) {
-      map.set(row.uri, { modification_time: row.modification_time, file_size: row.file_size });
+      map.set(row.uri, { id: row.id, modification_time: row.modification_time, file_size: row.file_size });
     }
     return map;
   },
@@ -403,7 +411,7 @@ export const songRepository = {
   async getWithoutMetadata(limit = 100000) {
     const db = getDB();
     return db.getAllAsync(
-      `SELECT * FROM songs WHERE metadata_loaded = 0 ORDER BY rowid ASC LIMIT ?`,
+      `SELECT * FROM media WHERE metadata_loaded = 0 AND media_type = 'audio' ORDER BY id ASC LIMIT ?`,
       [limit]
     );
   },

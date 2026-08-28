@@ -1,450 +1,114 @@
-# Media Library Performance Refactor - Expo SDK 53
+# Fix Media Database ID / Key Collisions
 
-You are working on an existing **VLC-like media player application built with Expo SDK 53 / React Native**.
+The current VLC-like media library has a serious issue where **SQLite database record keys/IDs can collide with the IDs/keys of songs and videos**.
 
-The application currently scans videos and audio files from the user's device and extracts metadata and artwork. The current implementation has performance problems, especially:
+Refactor the media database identity system so that **database identity is completely independent from media identity**.
 
-- Slow loading of large media libraries
-- Repeatedly scanning the user's storage
-- Repeatedly extracting media metadata
-- Repeatedly loading/decoding artwork
-- Slow startup
-- UI freezing or lagging while media is being discovered
-- Excessive filesystem operations
-- Excessive React re-renders
-- Artwork being loaded directly from the original media files repeatedly
-- Media lists becoming slow as the library grows
+## Core Requirement
 
-Your task is to **refactor the media-library architecture for maximum performance while preserving all existing functionality and the current UI unless a UI change is necessary.**
+Do NOT use the media file's existing ID, track ID, video ID, filename, array index, or metadata ID directly as the SQLite primary key.
 
-Do not blindly rewrite the entire application. First inspect the existing codebase and understand the current media discovery, metadata extraction, artwork handling, playback, state management, and navigation architecture.
+The database must generate and own its own unique record identifier.
 
----
-
-## 1. Main Architecture Change
-
-Replace the current "scan storage -> extract everything -> keep results in memory/state" approach with a persistent local media-library database.
-
-Use the **native SQLite database available through Expo SDK 53-compatible APIs**.
-
-The SQLite database should become the application's primary source of truth for the media library.
-
-The database should persist across application launches.
-
-Do NOT store the actual video/audio binary data inside SQLite.
-
-SQLite should only store metadata and references to files/artwork.
-
-The architecture should conceptually become:
+For example:
 
 ```text
-Device Storage
-     |
-     v
-Media Scanner
-     |
-     v
-Metadata Extraction
-     |
-     v
-SQLite Media Database
-     |
-     +----> Artwork Cache Directory
-     |
-     v
-React Native UI
-     |
-     v
-Playback Engine
+Database Record
+id: 8f4c2c91-...
+
+Media File
+mediaId: song-123
 ```
 
-The UI should primarily read from SQLite instead of repeatedly scanning the device.
+These must be two completely separate identifiers.
 
 ---
 
-# 2. SQLite Database Design
+## 1. Separate the IDs
 
-Design a proper schema for the media library.
+Audit the entire codebase and identify every place where these concepts are currently mixed:
 
-At minimum, support media records containing information such as:
-
-- id
-- uri/path
+- SQLite primary key
+- media ID
+- song ID
+- video ID
+- file URI
 - filename
-- displayName
-- mediaType
-- mimeType
-- duration
-- fileSize
-- width
-- height
-- bitrate if available
-- sampleRate if available
-- channels if available
-- artist
-- album
-- albumArtist
-- title
-- genre
-- year
-- trackNumber
-- discNumber
-- artworkUri
-- dateAdded
-- dateModified
-- lastScannedAt
-- metadataVersion/hash if useful
-- favorite status if the existing application supports favorites
-- playback position if already supported
-- play count if already supported
+- track ID
+- playlist item ID
+- artwork ID
+- queue item ID
+- React `key`
+- Zustand/store identifier
 
-Use appropriate indexes.
+Do not assume they are interchangeable.
 
-At minimum, consider indexes for:
-
-- media type
-- artist
-- album
-- title
-- filename
-- date added
-- date modified
-- favorite status
-
-Do not create unnecessary indexes that negatively affect write performance.
-
-Use migrations so future schema changes can be performed safely.
-
----
-
-# 3. Store Artwork on the Device
-
-One of the biggest performance improvements should be artwork caching.
-
-Do NOT repeatedly extract album/video artwork from the original media file.
-
-When artwork is discovered:
-
-1. Extract the artwork once.
-2. Save it into an application-controlled cache/storage directory.
-3. Store only the local artwork URI/path in SQLite.
-4. Reuse the cached artwork on subsequent launches.
+Create a clear identity model.
 
 For example:
 
 ```text
-App Storage
-|
-+-- media-cache/
-|   |
-|   +-- artwork/
-|   |   +-- <media-id>.jpg
-|   |   +-- <media-id>.jpg
-|   |   +-- ...
-|   |
-|   +-- thumbnails/
-|       +-- ...
+Media Database Record
+---------------------
+dbId        -> unique SQLite identifier
+mediaKey    -> stable identifier for the physical media file
+uri         -> original media URI
+mediaType   -> audio | video
 ```
 
-Use deterministic filenames based on a stable media identifier.
+The `dbId` must belong exclusively to the database.
 
-Do not generate duplicate artwork files unnecessarily.
+---
 
-Before extracting artwork:
+# 2. SQLite Primary Key
+
+Use a proper database-generated primary key.
+
+Prefer an integer SQLite primary key if there is no reason to use UUIDs:
+
+```sql
+id INTEGER PRIMARY KEY AUTOINCREMENT
+```
+
+The important requirement is that SQLite owns this ID.
+
+Do NOT manually assign it from:
 
 ```text
-Does cached artwork already exist?
-        |
-       YES ---> use cached artwork
-        |
-       NO
-        |
-        v
-Extract artwork
-        |
-        v
-Save artwork
-        |
-        v
-Save artwork URI to SQLite
+song.id
+video.id
+filename
+index
+timestamp alone
 ```
 
-Artwork should not be regenerated every time the application starts.
+If the existing architecture requires UUIDs, use a proper UUID generated specifically for the database record.
 
 ---
 
-# 4. Do Not Store Media Files in SQLite
+# 3. Create a Separate Media Identity
 
-This is extremely important.
+The application still needs to know when two scans refer to the same physical media file.
 
-Never store:
-
-- MP4
-- MKV
-- AVI
-- MP3
-- FLAC
-- WAV
-- M4A
-- or other large media binaries
-
-inside SQLite.
-
-Store only:
+Create a separate stable media identity such as:
 
 ```text
-uri/path
-metadata
-artwork URI
-database identifiers
+mediaKey
 ```
-
-The original media remains on the user's device.
-
----
-
-# 5. Incremental Media Scanning
-
-The application should NOT perform a complete expensive media scan every time it starts.
-
-Implement an incremental scanner.
-
-The scanner should identify:
-
-### New files
-
-Files that exist on the device but are not in SQLite.
-
-These should be indexed.
-
-### Changed files
-
-Files already in SQLite whose relevant properties have changed.
-
-For example:
-
-- modification time changed
-- file size changed
-- metadata fingerprint changed if available
-
-Only these files should have their metadata refreshed.
-
-### Deleted files
-
-Files that exist in SQLite but no longer exist on the device.
-
-Remove or mark these records appropriately.
-
----
-
-# 6. Avoid Full Metadata Extraction
-
-Do not extract expensive metadata for every file unnecessarily.
-
-The desired logic is:
-
-```text
-File discovered
-      |
-      v
-Does it already exist in SQLite?
-      |
-   +--+--+
-   |     |
-  YES    NO
-   |     |
-   v     v
-Check    Extract metadata
-whether
-changed
-   |
-   v
-Only re-extract if necessary
-```
-
-If a media file has not changed, reuse the metadata already stored in SQLite.
-
----
-
-# 7. Separate Scanning From UI
-
-The UI must never wait for the entire media scan to finish before displaying the library.
-
-The application should:
-
-1. Open SQLite.
-2. Immediately load existing media records.
-3. Render the existing library.
-4. Start the scanner asynchronously.
-5. Insert/update media records as scanning progresses.
-6. Notify the UI about changes efficiently.
-
-The user should be able to interact with the application while scanning is happening.
-
-Example:
-
-```text
-App launches
-     |
-     v
-Open SQLite
-     |
-     v
-Load cached library immediately
-     |
-     v
-Render UI
-     |
-     v
-Background/incremental scan
-     |
-     +--> New media
-     +--> Changed media
-     +--> Deleted media
-```
-
-Do not block application startup on a complete device scan.
-
----
-
-# 8. Batch Database Operations
-
-Do not execute one expensive database transaction for every single file if thousands of files are being indexed.
-
-Use transactions/batched inserts and updates where appropriate.
 
 For example:
 
 ```text
-Begin transaction
-
-Insert media 1
-Insert media 2
-Insert media 3
-...
-Insert media 100
-
-Commit transaction
+dbId:     127
+mediaKey: 5d7d3a...
+uri:      file:///storage/music/song.mp3
 ```
 
-Tune the batch size based on performance.
+The database ID and media key must never be treated as the same value.
 
-Avoid keeping a huge transaction open for an excessive amount of time.
+The `mediaKey` should be deterministic/stable enough to allow rescanning to find an existing media record rather than creating duplicates.
 
----
-
-# 9. Optimize React State Management
-
-Do not keep the entire media library duplicated in multiple React states/stores.
-
-SQLite should be the persistent source of truth.
-
-Avoid architectures such as:
-
-```text
-SQLite
-   |
-   v
-Huge Zustand store
-   |
-   v
-Huge React state
-```
-
-if they are unnecessary.
-
-Only keep transient UI state in React/Zustand.
-
-Examples:
-
-- current selected item
-- search query
-- sort mode
-- filter
-- current playback state
-- UI preferences
-
-The media library itself should be queried efficiently.
-
----
-
-# 10. Pagination / Virtualization
-
-The application must remain responsive even with:
-
-- 1,000 media files
-- 5,000 media files
-- 10,000+ media files
-
-Do not load thousands of records into the UI at once.
-
-Implement appropriate pagination or incremental loading.
-
-For example:
-
-```text
-First query:
-LIMIT 50
-
-Next:
-LIMIT 50 OFFSET ...
-```
-
-or use a more efficient cursor/keyset strategy where appropriate.
-
-Ensure the existing FlatList/FlashList/etc. configuration is optimized.
-
-Check:
-
-- keyExtractor
-- renderItem
-- memoization
-- image rendering
-- item layout
-- unnecessary state updates
-- unnecessary parent re-renders
-
-Do not use ScrollView for very large media libraries.
-
----
-
-# 11. Artwork/Image Performance
-
-Artwork is one of the most important performance areas.
-
-Do not repeatedly decode huge original artwork images.
-
-If artwork is large, generate appropriately sized thumbnails for library views.
-
-For example:
-
-```text
-Original artwork
-      |
-      +--> cached artwork
-      |
-      +--> thumbnail for list/grid
-```
-
-Use appropriate image caching and resizing.
-
-A media list displaying 100 album covers should NOT load 100 full-resolution images unnecessarily.
-
-If the current image library already provides caching, use it correctly rather than implementing duplicate caching.
-
-Avoid converting image formats repeatedly.
-
----
-
-# 12. Stable Media IDs
-
-Create a stable identifier for each media item.
-
-Do not depend solely on array indexes.
-
-The identifier should remain stable across application launches.
-
-Where practical, derive the identity from information such as:
+A suitable identity can be derived from stable file information such as:
 
 ```text
 normalized URI/path
@@ -454,607 +118,581 @@ file size
 modification timestamp
 ```
 
-or another appropriate deterministic strategy.
+or another robust strategy appropriate for the existing media scanner.
 
-However, do not make IDs so dependent on mutable metadata that normal metadata changes create duplicate records.
-
-Ensure that rescanning the same file does not create duplicate database records.
+Do NOT use only the filename because different directories can contain files with the same name.
 
 ---
 
-# 13. File URI Handling
+# 4. Add a UNIQUE Constraint
 
-Be careful with Android/iOS URI formats.
+The database should enforce uniqueness for the media identity.
 
-Do not assume every media URI is a normal filesystem path.
+For example:
 
-Preserve the original URI in a format that the playback engine can actually consume.
-
-The database should store the appropriate URI/reference required by the application.
-
-Do not blindly convert:
-
-```text
-content://
+```sql
+CREATE UNIQUE INDEX idx_media_media_key
+ON media(media_key);
 ```
 
-URIs into filesystem paths if the platform does not permit that.
+or make `media_key` explicitly unique in the schema.
 
-Account for Android scoped storage and the platform's media/file access model.
-
----
-
-# 14. Permissions
-
-Review the current permission implementation.
-
-Ensure the application requests only the permissions actually required for accessing the user's media.
-
-Do not repeatedly request permissions.
-
-Handle:
-
-- permission granted
-- permission denied
-- permission revoked
-- restricted access
-- empty library
-
-gracefully.
-
-If permission is unavailable, the UI should explain the state instead of repeatedly trying to scan.
+This protects against accidental duplicate records even if the scanner runs multiple times.
 
 ---
 
-# 15. Android/iOS Compatibility
+# 5. Do Not Use Array Indexes
 
-This is an Expo SDK 53 application.
+Search the codebase for patterns such as:
 
-Before installing or replacing packages, verify that they are compatible with the project's current Expo SDK version.
-
-Do NOT introduce packages that require an incompatible native setup without first checking the project's architecture.
-
-Prefer Expo-supported/native modules where practical.
-
-If a package requires:
-
-```text
-expo prebuild
+```ts
+key = { index };
 ```
 
-or a development build instead of Expo Go, document that clearly before changing the project architecture.
+or:
 
-Do not unnecessarily eject the project.
+```ts
+id: index;
+```
+
+or:
+
+```ts
+media.id = index;
+```
+
+or any equivalent logic.
+
+Do not use array indexes as persistent media identifiers.
+
+For React list keys, use the database ID or another genuinely stable unique identifier.
+
+For example:
+
+```tsx
+keyExtractor={(item) => String(item.dbId)}
+```
+
+Do not use:
+
+```tsx
+keyExtractor={(item, index) => String(index)}
+```
 
 ---
 
-# 16. Metadata Extraction Architecture
+# 6. Separate Song and Video Records
 
-Create a clean metadata extraction layer.
+Songs and videos must not have separate ID namespaces that can accidentally collide.
+
+Do NOT create logic like:
+
+```text
+song ID = 1
+video ID = 1
+```
+
+and then treat both as simply:
+
+```text
+id = 1
+```
+
+If songs and videos are stored in one `media` table, they should share the same database ID namespace.
 
 For example:
 
 ```text
-src/
-├── database/
-│   ├── database.ts
-│   ├── schema.ts
-│   ├── migrations/
-│   └── repositories/
-│
-├── media/
-│   ├── scanner/
-│   ├── metadata/
-│   ├── artwork/
-│   ├── thumbnails/
-│   └── cache/
-│
-├── services/
-│   └── mediaLibraryService.ts
-│
-└── ...
+media
+--------------------------------
+dbId | mediaKey | mediaType
+--------------------------------
+1    | abc123   | audio
+2    | xyz987   | video
+3    | def456   | audio
+4    | mno321   | video
 ```
 
-Adapt this structure to the existing project rather than blindly creating duplicate architecture.
-
-The responsibilities should be separated:
-
-### Media Scanner
-
-Responsible for discovering media files.
-
-### Metadata Extractor
-
-Responsible for extracting metadata from a specific media file.
-
-### Artwork Manager
-
-Responsible for:
-
-- extracting artwork
-- saving artwork
-- checking whether artwork exists
-- generating thumbnails if needed
-- returning cached artwork
-
-### Database Repository
-
-Responsible for:
-
-- insert
-- update
-- delete
-- search
-- filtering
-- sorting
-- pagination
-
-### Media Library Service
-
-Coordinates:
+There should never be two records with:
 
 ```text
-scanner
-   +
-metadata extractor
-   +
-artwork manager
-   +
-database
+dbId = 1
 ```
 
 ---
 
-# 17. Search Optimization
+# 7. Foreign Keys Must Reference dbId
 
-Search should query SQLite rather than filtering a huge JavaScript array whenever possible.
+Audit all related tables.
 
-Support efficient searches such as:
+If the application has tables such as:
 
 ```text
-title
-artist
-album
-filename
-genre
+playlists
+playlist_items
+favorites
+playback_history
+artwork
+queue
 ```
+
+and they reference media, make sure they reference the database record's ID.
 
 For example:
 
 ```text
-Search "Michael"
+playlist_items.media_id
         |
         v
-SQLite query
+media.id
+```
+
+NOT:
+
+```text
+playlist_items.media_id
         |
         v
-Only matching records returned
+media.songId
 ```
 
-Do not retrieve the entire media library and perform expensive JavaScript filtering for every keystroke.
-
-Debounce search input appropriately.
-
----
-
-# 18. Sorting and Filtering
-
-Move large-library sorting/filtering into SQLite where practical.
-
-Support existing application functionality such as:
-
-- Recently added
-- Recently played
-- Alphabetical
-- Artist
-- Album
-- Duration
-- Favorites
-- Videos
-- Music
-
-Do not sort thousands of objects repeatedly in JavaScript if SQLite can perform the operation efficiently.
-
----
-
-# 19. Playback Must Remain Independent
-
-Do not tightly couple the database to the playback engine.
-
-The playback system should receive something like:
+and NOT:
 
 ```text
-media.uri
+playlist_items.media_id
+        |
+        v
+media.filename
 ```
 
-and use it to play the original media.
-
-The database is for:
-
-```text
-library/index/metadata/state
-```
-
-not for actual playback data.
-
-Playback should continue to work even if artwork caching fails.
-
-Likewise, a metadata failure should not prevent a playable media file from appearing in the library.
-
-Use graceful fallback values.
+Use the database primary key for relational references.
 
 ---
 
-# 20. Failure Handling
+# 8. Artwork IDs Must Also Be Independent
 
-A single corrupt media file must NOT stop the entire scanner.
+Check artwork caching.
+
+Do not assume:
+
+```text
+artwork ID = song ID
+```
+
+or:
+
+```text
+artwork ID = video ID
+```
+
+The artwork cache can use the media's stable `mediaKey` or another dedicated artwork identifier.
 
 For example:
 
 ```text
-File 1 -> success
-File 2 -> success
-File 3 -> metadata error
-File 4 -> success
-File 5 -> success
+mediaKey:
+abc123...
+
+Artwork:
+artwork/abc123.jpg
 ```
 
-File 3 should be logged/marked appropriately while scanning continues.
-
-Implement appropriate error handling around:
-
-- metadata extraction
-- artwork extraction
-- filesystem operations
-- SQLite operations
-- permission failures
-- invalid URIs
-- inaccessible files
-- deleted files
-- corrupted media
-
-Do not silently swallow all errors.
-
-Use structured logging in development.
-
-Avoid excessive logging in production.
+The important part is that artwork identity does not interfere with SQLite's database primary key.
 
 ---
 
-# 21. Cache Validation
+# 9. Playback Queue
 
-Do not assume a cached artwork file is valid simply because the database contains its URI.
+Audit the playback queue.
 
-When necessary, verify that the cached file exists.
+A queue item should identify the database media record explicitly.
 
-If the artwork cache is missing:
+For example:
+
+```ts
+{
+    mediaDbId: 127,
+    uri: "...",
+    mediaType: "audio"
+}
+```
+
+Do not rely on:
+
+```ts
+{
+  id: 127;
+}
+```
+
+if `id` could mean different things in different parts of the application.
+
+Use explicit naming:
 
 ```text
-SQLite artwork URI exists
-        |
-        v
-Does file actually exist?
-        |
-     +--+--+
-     |     |
-    YES    NO
-     |     |
-    use   regenerate
+dbId
+mediaKey
+uri
+mediaType
 ```
 
-Avoid regenerating artwork unnecessarily.
+This makes accidental ID mixing much harder.
 
 ---
 
-# 22. Startup Performance Target
+# 10. API / Service Naming
 
-Optimize startup so the application does NOT need to:
+Rename ambiguous variables where necessary.
+
+Avoid code such as:
+
+```ts
+media.id;
+```
+
+when it is unclear what `id` means.
+
+Prefer explicit properties:
+
+```ts
+media.dbId;
+media.mediaKey;
+media.uri;
+```
+
+For example:
+
+```ts
+const mediaDbId = media.dbId;
+const mediaKey = media.mediaKey;
+```
+
+This should make the distinction obvious throughout the codebase.
+
+---
+
+# 11. Migration Existing Database
+
+Do NOT simply delete the database if users may already have media records.
+
+Inspect the current schema and determine whether a migration is required.
+
+If the existing database uses:
 
 ```text
-scan entire storage
-extract all metadata
-extract all artwork
-generate all thumbnails
-populate massive JS arrays
+song IDs
+video IDs
+filename IDs
 ```
 
-before the UI becomes usable.
+as primary keys, migrate them to the new identity model.
 
-The ideal startup flow is:
+The migration should:
+
+1. Create the new database schema.
+2. Generate proper database-owned IDs.
+3. Generate/populate stable `mediaKey` values.
+4. Preserve metadata.
+5. Preserve artwork references where possible.
+6. Preserve favorites.
+7. Preserve playlists.
+8. Preserve playback history.
+9. Preserve playback positions.
+10. Preserve other existing media relationships.
+11. Rebuild foreign-key relationships using the new `dbId`.
+
+Do not lose user data unnecessarily.
+
+If migration cannot safely preserve old records, clearly document why.
+
+---
+
+# 12. Scanner Upsert Logic
+
+The media scanner must identify media using `mediaKey`, NOT `dbId`.
+
+Correct logic:
 
 ```text
-Launch
-  |
-  v
-Initialize DB
-  |
-  v
-Query cached media
-  |
-  v
-Render UI quickly
-  |
-  v
-Run incremental synchronization
+Scan file
+    |
+    v
+Calculate mediaKey
+    |
+    v
+Search SQLite by mediaKey
+    |
+    +---- Existing ----> UPDATE existing dbId
+    |
+    +---- Missing -----> INSERT new record
 ```
 
-The user should see the existing library as quickly as possible.
-
----
-
-# 23. Avoid Memory Leaks
-
-Audit the existing implementation for:
-
-- event listeners
-- subscriptions
-- timers
-- filesystem watchers
-- media listeners
-- database listeners
-- promises/tasks
-- image references
-
-Ensure cleanup occurs when components/services are unmounted or destroyed.
-
-Do not keep references to thousands of media objects unnecessarily.
-
----
-
-# 24. Do Not Break Existing Features
-
-Before modifying the implementation, identify all existing media-library features.
-
-Preserve:
-
-- playback
-- playlists
-- favorites
-- recently played
-- search
-- sorting
-- filtering
-- album views
-- artist views
-- video views
-- audio views
-- metadata display
-- artwork display
-- playback history
-- resume position
-- queue functionality
-- any existing user preferences
-
-Only change the underlying storage/indexing architecture unless a change is required for performance.
-
----
-
-# 25. Migration From Existing Implementation
-
-If the application currently keeps media information in:
-
-- React state
-- Zustand
-- AsyncStorage
-- JSON
-- filesystem cache
-- another local database
-
-create a migration path where appropriate.
-
-Do not simply delete the old system without understanding whether existing user data would be lost.
-
-If old cached data can safely be discarded and regenerated, document that decision.
-
----
-
-# 26. Performance Testing
-
-After implementation, test with increasingly large libraries:
+Never do:
 
 ```text
-100 files
-500 files
-1,000 files
-5,000 files
-10,000+ files
+scan file
+    |
+    v
+use file/song/video ID as database ID
 ```
 
-Measure:
-
-- application startup time
-- time until library becomes visible
-- initial database query time
-- scan time
-- metadata extraction time
-- artwork extraction time
-- memory usage
-- UI FPS/responsiveness
-- search performance
-- scrolling performance
-- database write performance
-
-Compare the new implementation against the old one.
+The database decides the `dbId`.
 
 ---
 
-# 27. Important Implementation Rules
+# 13. Prevent Duplicate Records
 
-Do NOT:
-
-- store media binaries in SQLite
-- rescan everything on every launch
-- extract artwork repeatedly
-- load all media into React state
-- load full-resolution artwork into every list item
-- block the UI while scanning
-- create thousands of individual React updates
-- create duplicate database records
-- blindly add incompatible Expo packages
-- blindly run prebuild/eject
-- rewrite unrelated parts of the application
-- remove existing functionality just to simplify the implementation
-
-Prefer:
-
-- SQLite
-- persistent metadata
-- incremental scanning
-- filesystem artwork cache
-- thumbnail caching
-- batched DB writes
-- transactions
-- indexed queries
-- pagination
-- virtualization
-- memoized components
-- asynchronous/background processing
-- stable IDs
-- graceful failure handling
-
----
-
-# 28. Agent Workflow
-
-Follow this workflow strictly.
-
-### Phase 1 - Inspect
-
-First inspect the entire project and identify:
-
-- Expo SDK version
-- React Native version
-- existing media scanner
-- metadata extraction library
-- artwork extraction implementation
-- filesystem implementation
-- state management
-- database/storage implementation
-- playback implementation
-- media list components
-- navigation
-- permissions
-- existing caching
-
-Do not modify anything yet.
-
-### Phase 2 - Architecture Plan
-
-Explain:
-
-1. What is currently causing the performance problems.
-2. What will be changed.
-3. What files will be created.
-4. What files will be modified.
-5. What packages are required.
-6. Whether any native build/development build requirement exists.
-7. How migration will work.
-8. How the new scanner will work.
-9. How artwork caching will work.
-10. How the UI will consume SQLite data.
-
-Then implement the plan.
-
-### Phase 3 - Implementation
-
-Implement the database layer first.
-
-Then:
+The following situation must never occur:
 
 ```text
-SQLite
-  ↓
-Repository
-  ↓
-Media Library Service
-  ↓
-Incremental Scanner
-  ↓
-Metadata Extraction
-  ↓
-Artwork Cache
-  ↓
-UI
+Song A
+dbId = 10
+mediaKey = abc
+
+Song A after rescan
+dbId = 11
+mediaKey = abc
 ```
 
-Keep each layer independently testable.
-
-### Phase 4 - Integration
-
-Replace the old media-library loading logic with the new database-backed system.
-
-Do not remove old functionality until the replacement is confirmed to work.
-
-### Phase 5 - Performance Audit
-
-After implementation, inspect the code again specifically for:
-
-- unnecessary renders
-- unnecessary filesystem reads
-- unnecessary metadata extraction
-- duplicate database queries
-- duplicate artwork extraction
-- large JS arrays
-- memory leaks
-- blocking operations
-- sequential operations that could safely be batched
-- inefficient SQL queries
-
-Fix the identified issues.
-
-### Phase 6 - Verification
-
-Run:
+A rescan of the same physical file should update:
 
 ```text
-lint
-typecheck
-tests
-Expo diagnostics
+dbId = 10
 ```
 
-and the appropriate platform build/run commands.
+rather than create another record.
 
-Verify that the application works on the actual target device, not only the simulator/emulator.
+The unique constraint on `mediaKey` should provide an additional safety layer.
 
 ---
 
-# 29. Final Deliverable
+# 14. Handle URI Changes Carefully
 
-At the end, provide a concise implementation report containing:
+If the physical URI changes but the file is still logically the same media item, determine whether the application should preserve its database identity.
 
-### Changed
+Do not automatically create a duplicate simply because the URI changed.
 
-List the files and major changes.
+However, do not make the identity system so aggressive that two genuinely different files are treated as the same file.
 
-### Database
+Choose a robust strategy based on the existing scanner and platform behavior.
 
-Show the final SQLite schema and indexes.
+---
 
-### Media Scanner
+# 15. Database Queries
 
-Explain how incremental scanning works.
+Audit all SQL queries.
 
-### Artwork Cache
+Replace ambiguous queries such as:
 
-Explain where artwork is stored and how cache validation works.
+```sql
+WHERE id = ?
+```
 
-### Performance
+when the caller might actually be passing:
 
-Explain what operations were removed from startup and what is now cached.
+```text
+song ID
+video ID
+mediaKey
+```
 
-### Compatibility
+Use explicit queries:
 
-Confirm Expo SDK 53 compatibility and identify any development-build/native requirements.
+```sql
+WHERE id = ?
+```
 
-### Migration
+for `dbId`.
 
-Explain what happens to existing users' cached media data.
+And:
 
-### Testing
+```sql
+WHERE media_key = ?
+```
 
-Report the tests performed and any remaining limitations.
+for `mediaKey`.
 
-Most importantly, prioritize **real-world performance on physical Android/iOS devices with thousands of media files** rather than optimizing only for small test libraries.
+Never mix these parameters.
 
-Do not make speculative changes. Inspect the existing codebase first, preserve working functionality, and make the smallest architectural changes necessary to create a fast, persistent, scalable local media library.
+---
+
+# 16. TypeScript Types
+
+Create strong types that make ID confusion difficult.
+
+For example:
+
+```ts
+type MediaRecord = {
+  dbId: number;
+  mediaKey: string;
+  uri: string;
+  mediaType: "audio" | "video";
+  title?: string;
+  artist?: string;
+  album?: string;
+  artworkUri?: string;
+};
+```
+
+Do not expose an ambiguous generic `id` if it causes confusion throughout the application.
+
+Update interfaces, database models, repository methods, services, stores, and UI components accordingly.
+
+---
+
+# 17. Audit All ID Usage
+
+Perform a full codebase search for:
+
+```text
+.id
+id:
+media.id
+song.id
+video.id
+track.id
+keyExtractor
+key=
+mediaId
+songId
+videoId
+trackId
+```
+
+For every occurrence, determine exactly what identifier it represents.
+
+Do not blindly rename everything.
+
+Some IDs may legitimately belong to external APIs or metadata sources.
+
+The goal is to make the distinction explicit:
+
+```text
+Database identity  -> dbId
+Media identity     -> mediaKey
+Original URI       -> uri
+External song ID   -> externalSongId
+External video ID  -> externalVideoId
+Artwork identity   -> artworkKey
+```
+
+---
+
+# 18. Tests
+
+Add tests specifically for ID collision scenarios.
+
+Test cases must include:
+
+### Test 1 - Song and video have same external ID
+
+```text
+song.id = 1
+video.id = 1
+```
+
+Both must successfully exist in the database without collision.
+
+### Test 2 - Same filename
+
+```text
+/music/song.mp3
+/downloads/song.mp3
+```
+
+They must be treated as separate files.
+
+### Test 3 - Rescan
+
+Scanning the same file twice must produce only one database record.
+
+### Test 4 - New media
+
+A new file must receive a new database-generated `dbId`.
+
+### Test 5 - Deleted media
+
+Deleting a media file must not accidentally delete another media record because of an ID collision.
+
+### Test 6 - Playlist references
+
+Playlist entries must continue pointing to the correct media after database migration.
+
+### Test 7 - Artwork
+
+Two media files with conflicting external IDs must still receive the correct artwork.
+
+### Test 8 - Playback
+
+Playback must resolve the correct URI using the database record and must not confuse song/video IDs.
+
+---
+
+# 19. Final Architecture
+
+The final architecture should conceptually look like:
+
+```text
+                    ┌──────────────────┐
+                    │   Media Scanner  │
+                    └────────┬─────────┘
+                             │
+                             │ mediaKey
+                             v
+                    ┌──────────────────┐
+                    │  SQLite Media DB │
+                    │                  │
+                    │ dbId             │
+                    │ mediaKey         │
+                    │ uri              │
+                    │ metadata         │
+                    │ artworkUri       │
+                    └────────┬─────────┘
+                             │
+                ┌────────────┼────────────┐
+                │            │            │
+                v            v            v
+           Playlists      Favorites    History
+                │            │            │
+                └────────────┼────────────┘
+                             v
+                         Playback
+```
+
+The critical identity rule is:
+
+```text
+dbId != mediaKey != externalSongId != externalVideoId
+```
+
+They may sometimes contain related information, but they must never be treated as interchangeable.
+
+---
+
+# 20. Final Verification
+
+Before finishing:
+
+1. Inspect the complete database schema.
+2. Inspect every foreign key.
+3. Inspect scanner/upsert logic.
+4. Inspect song/video models.
+5. Inspect playlist logic.
+6. Inspect playback queue.
+7. Inspect artwork cache.
+8. Inspect Zustand/Redux/React state if used.
+9. Inspect all list keys.
+10. Search the entire project for ambiguous `.id` usage.
+11. Run TypeScript checks.
+12. Run linting.
+13. Run tests.
+14. Test with songs and videos having identical external IDs.
+15. Test rescanning.
+16. Test deleting and re-adding files.
+17. Test playlists and favorites.
+18. Test playback.
+19. Test artwork.
+20. Confirm that the database cannot create primary-key collisions.
+
+Do not simply patch the immediate collision. Refactor the identity model so that **ID collisions are structurally impossible** between database records, songs, videos, artwork, and external media identifiers.

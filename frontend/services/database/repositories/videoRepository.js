@@ -13,8 +13,8 @@ function sanitizeOrder(order) {
 }
 
 function buildWhereClause(filters) {
-  const conditions = [];
-  const values = [];
+  const conditions = ['media_type = ?'];
+  const values = ['video'];
 
   if (filters.artist) {
     conditions.push('artist = ?');
@@ -55,7 +55,7 @@ export const videoRepository = {
     const { where, values } = buildWhereClause(filters);
 
     const query = `
-      SELECT * FROM videos
+      SELECT * FROM media
       ${where}
       ORDER BY ${key} COLLATE NOCASE ${dir}
       LIMIT ? OFFSET ?
@@ -71,7 +71,7 @@ export const videoRepository = {
   async getCount(filters = {}) {
     const db = getDB();
     const { where, values } = buildWhereClause(filters);
-    const query = `SELECT COUNT(*) as count FROM videos ${where}`;
+    const query = `SELECT COUNT(*) as count FROM media ${where}`;
     const row = await db.getFirstAsync(query, values);
     return row?.count ?? 0;
   },
@@ -89,7 +89,7 @@ export const videoRepository = {
   async getRecentlyAdded({ limit = DEFAULT_LIMIT, offset = 0 }) {
     const db = getDB();
     return db.getAllAsync(
-      `SELECT * FROM videos ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      `SELECT * FROM media WHERE media_type = 'video' ORDER BY created_at DESC LIMIT ? OFFSET ?`,
       [limit, offset]
     );
   },
@@ -100,7 +100,7 @@ export const videoRepository = {
   async getRecentlyPlayed({ limit = DEFAULT_LIMIT, offset = 0 }) {
     const db = getDB();
     return db.getAllAsync(
-      `SELECT * FROM videos WHERE last_played_at IS NOT NULL ORDER BY last_played_at DESC LIMIT ? OFFSET ?`,
+      `SELECT * FROM media WHERE last_played_at IS NOT NULL AND media_type = 'video' ORDER BY last_played_at DESC LIMIT ? OFFSET ?`,
       [limit, offset]
     );
   },
@@ -114,9 +114,9 @@ export const videoRepository = {
     if (!searchQuery) return [];
 
     return db.getAllAsync(
-      `SELECT v.* FROM videos v
-       JOIN videos_fts fts ON v.rowid = fts.rowid
-       WHERE videos_fts MATCH ?
+      `SELECT v.* FROM media v
+       JOIN media_fts fts ON v.id = fts.rowid
+       WHERE media_fts MATCH ? AND v.media_type = 'video'
        ORDER BY rank
        LIMIT ? OFFSET ?`,
       [searchQuery, limit, offset]
@@ -131,7 +131,7 @@ export const videoRepository = {
     const searchQuery = query.trim();
     if (!searchQuery) return 0;
     const row = await db.getFirstAsync(
-      `SELECT COUNT(*) as count FROM videos_fts WHERE videos_fts MATCH ?`,
+      `SELECT COUNT(*) as count FROM media_fts fts JOIN media v ON fts.rowid = v.id WHERE media_fts MATCH ? AND v.media_type = 'video'`,
       [searchQuery]
     );
     return row?.count ?? 0;
@@ -149,10 +149,11 @@ export const videoRepository = {
 
     for (let i = 0; i < videos.length; i += BATCH) {
       const batch = videos.slice(i, i + BATCH);
-      const placeholders = batch.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
+      const placeholders = batch.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
       const values = batch.flatMap((v) => [
-        v.id,
+        v.media_key || v.mediaKey,
         v.uri,
+        'video',
         v.filename || null,
         v.duration || 0,
         v.width || 0,
@@ -170,8 +171,8 @@ export const videoRepository = {
       ]);
 
       const result = await db.runAsync(
-        `INSERT OR IGNORE INTO videos (
-          id, uri, filename, duration, width, height, file_size,
+        `INSERT OR IGNORE INTO media (
+          media_key, uri, media_type, filename, duration, width, height, file_size,
           title, artist, album, genre, year, thumbnail_path,
           metadata_loaded, creation_time, modification_time
         ) VALUES ${placeholders}`,
@@ -210,7 +211,7 @@ export const videoRepository = {
 
         values.push(id);
         await db.runAsync(
-          `UPDATE videos SET ${setClauses.join(', ')} WHERE id = ?`,
+          `UPDATE media SET ${setClauses.join(', ')} WHERE id = ?`,
           values
         );
         totalUpdated++;
@@ -232,7 +233,7 @@ export const videoRepository = {
 
     const placeholders = ids.map(() => '?').join(', ');
     const result = await db.runAsync(
-      `DELETE FROM videos WHERE id IN (${placeholders})`,
+      `DELETE FROM media WHERE id IN (${placeholders})`,
       ids
     );
     return result.changes || 0;
@@ -245,7 +246,7 @@ export const videoRepository = {
     const db = getDB();
     const now = Date.now();
     return db.runAsync(
-      `UPDATE videos SET 
+      `UPDATE media SET 
          play_count = play_count + 1,
          last_played_at = ?,
          playback_position = ?
@@ -260,7 +261,7 @@ export const videoRepository = {
   async updatePlaybackPosition(id, position) {
     const db = getDB();
     return db.runAsync(
-      `UPDATE videos SET playback_position = ? WHERE id = ?`,
+      `UPDATE media SET playback_position = ? WHERE id = ?`,
       [position, id]
     );
   },
@@ -271,7 +272,7 @@ export const videoRepository = {
   async toggleFavorite(id) {
     const db = getDB();
     return db.runAsync(
-      `UPDATE videos SET favorite = CASE WHEN favorite = 1 THEN 0 ELSE 1 END WHERE id = ?`,
+      `UPDATE media SET favorite = CASE WHEN favorite = 1 THEN 0 ELSE 1 END WHERE id = ?`,
       [id]
     );
   },
@@ -281,19 +282,27 @@ export const videoRepository = {
    */
   async getById(id) {
     const db = getDB();
-    return db.getFirstAsync(`SELECT * FROM videos WHERE id = ?`, [id]);
+    return db.getFirstAsync(`SELECT * FROM media WHERE id = ?`, [id]);
+  },
+
+  /**
+   * Get video by mediaKey
+   */
+  async getByMediaKey(mediaKey) {
+    const db = getDB();
+    return db.getFirstAsync(`SELECT * FROM media WHERE media_key = ?`, [mediaKey]);
   },
 
   /**
    * Get all known URIs with modification time and file size for incremental sync.
-   * @returns {Promise<Map<string, {modification_time: number, file_size: number}>>}
+   * @returns {Promise<Map<string, {id: number, modification_time: number, file_size: number}>>}
    */
   async getAllUrisWithMeta() {
     const db = getDB();
-    const rows = await db.getAllAsync(`SELECT uri, modification_time, file_size FROM videos`);
+    const rows = await db.getAllAsync(`SELECT id, uri, modification_time, file_size FROM media WHERE media_type = 'video'`);
     const map = new Map();
     for (const row of rows) {
-      map.set(row.uri, { modification_time: row.modification_time, file_size: row.file_size });
+      map.set(row.uri, { id: row.id, modification_time: row.modification_time, file_size: row.file_size });
     }
     return map;
   },
@@ -304,7 +313,7 @@ export const videoRepository = {
   async getWithoutThumbnails(limit = 50) {
     const db = getDB();
     return db.getAllAsync(
-      `SELECT * FROM videos WHERE metadata_loaded = 0 LIMIT ?`,
+      `SELECT * FROM media WHERE metadata_loaded = 0 AND media_type = 'video' LIMIT ?`,
       [limit]
     );
   },

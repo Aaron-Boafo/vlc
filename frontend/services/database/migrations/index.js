@@ -185,6 +185,155 @@ const migrations = [
         CREATE INDEX IF NOT EXISTS idx_songs_media_type ON songs(media_type);
       `);
     }
+  },
+  {
+    version: 5,
+    name: 'unify_media_table',
+    up: async (db) => {
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS media (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          media_key TEXT NOT NULL UNIQUE,
+          uri TEXT NOT NULL UNIQUE,
+          media_type TEXT NOT NULL CHECK(media_type IN ('audio', 'video')),
+          filename TEXT,
+          duration REAL DEFAULT 0,
+          title TEXT,
+          artist TEXT,
+          album TEXT,
+          album_artist TEXT,
+          genre TEXT,
+          year TEXT,
+          track_number INTEGER,
+          disc_number INTEGER,
+          bitrate INTEGER,
+          sample_rate INTEGER,
+          channels INTEGER,
+          width INTEGER DEFAULT 0,
+          height INTEGER DEFAULT 0,
+          file_size INTEGER DEFAULT 0,
+          artwork_path TEXT,
+          thumbnail_path TEXT,
+          metadata_loaded INTEGER DEFAULT 0,
+          favorite INTEGER DEFAULT 0,
+          play_count INTEGER DEFAULT 0,
+          playback_position INTEGER DEFAULT 0,
+          last_played_at REAL,
+          creation_time REAL,
+          modification_time REAL,
+          metadata_hash TEXT,
+          created_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_media_key ON media(media_key);
+        CREATE INDEX IF NOT EXISTS idx_media_uri ON media(uri);
+        CREATE INDEX IF NOT EXISTS idx_media_type ON media(media_type);
+        CREATE INDEX IF NOT EXISTS idx_media_artist ON media(artist);
+        CREATE INDEX IF NOT EXISTS idx_media_album ON media(album);
+        CREATE INDEX IF NOT EXISTS idx_media_title ON media(title);
+        CREATE INDEX IF NOT EXISTS idx_media_favorite ON media(favorite);
+      `);
+
+      let songs = [];
+      try {
+        songs = await db.getAllAsync('SELECT * FROM songs');
+      } catch (e) {
+        console.log('[Migrations] songs table does not exist or empty');
+      }
+
+      let videos = [];
+      try {
+        videos = await db.getAllAsync('SELECT * FROM videos');
+      } catch (e) {
+        console.log('[Migrations] videos table does not exist or empty');
+      }
+
+      const generateMediaKey = (uri, fileSize, modificationTime) => {
+        const input = `${uri}_${fileSize || 0}_${modificationTime || 0}`;
+        let hash = 5381;
+        for (let i = 0; i < input.length; i++) {
+          hash = (hash * 33) ^ input.charCodeAt(i);
+        }
+        return (hash >>> 0).toString(16);
+      };
+
+      for (const song of songs) {
+        const mediaKey = generateMediaKey(song.uri, song.file_size, song.modification_time);
+        try {
+          await db.runAsync(
+            `INSERT OR IGNORE INTO media (
+              media_key, uri, media_type, filename, duration, title, artist, album,
+              album_artist, genre, year, track_number, disc_number, bitrate, sample_rate,
+              channels, file_size, artwork_path, thumbnail_path, metadata_loaded, favorite,
+              play_count, playback_position, last_played_at, creation_time, modification_time,
+              metadata_hash, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              mediaKey, song.uri, 'audio', song.filename, song.duration, song.title, song.artist, song.album,
+              song.album_artist, song.genre, song.year, song.track_number, song.disc_number, song.bitrate, song.sample_rate,
+              song.channels, song.file_size, song.artwork_path, song.thumbnail_path, song.metadata_loaded, song.favorite,
+              song.play_count, song.playback_position, song.last_played_at, song.creation_time, song.modification_time,
+              song.metadata_hash, song.created_at
+            ]
+          );
+        } catch (err) {
+          console.error('[Migrations] Failed to migrate song:', song.uri, err);
+        }
+      }
+
+      for (const video of videos) {
+        const mediaKey = generateMediaKey(video.uri, video.file_size, video.modification_time);
+        try {
+          await db.runAsync(
+            `INSERT OR IGNORE INTO media (
+              media_key, uri, media_type, filename, duration, title, artist, album,
+              genre, year, width, height, file_size, thumbnail_path, metadata_loaded, favorite,
+              play_count, playback_position, last_played_at, creation_time, modification_time,
+              metadata_hash, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              mediaKey, video.uri, 'video', video.filename, video.duration, video.title, video.artist, video.album,
+              video.genre, video.year, video.width, video.height, video.file_size, video.thumbnail_path, video.metadata_loaded, video.favorite,
+              video.play_count, video.playback_position, video.last_played_at, video.creation_time, video.modification_time,
+              video.metadata_hash, video.created_at
+            ]
+          );
+        } catch (err) {
+          console.error('[Migrations] Failed to migrate video:', video.uri, err);
+        }
+      }
+
+      await db.execAsync(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS media_fts USING fts5(
+          title, artist, album, album_artist, genre, filename,
+          content='media', content_rowid='id'
+        );
+
+        CREATE TRIGGER IF NOT EXISTS media_fts_ai AFTER INSERT ON media BEGIN
+          INSERT INTO media_fts(rowid, title, artist, album, album_artist, genre, filename)
+          VALUES (new.id, new.title, new.artist, new.album, new.album_artist, new.genre, new.filename);
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS media_fts_ad AFTER DELETE ON media BEGIN
+          INSERT INTO media_fts(media_fts, rowid, title, artist, album, album_artist, genre, filename)
+          VALUES ('delete', old.id, old.title, old.artist, old.album, old.album_artist, old.genre, old.filename);
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS media_fts_au AFTER UPDATE ON media BEGIN
+          INSERT INTO media_fts(media_fts, rowid, title, artist, album, album_artist, genre, filename)
+          VALUES ('delete', old.id, old.title, old.artist, old.album, old.album_artist, old.genre, old.filename);
+          INSERT INTO media_fts(rowid, title, artist, album, album_artist, genre, filename)
+          VALUES (new.id, new.title, new.artist, new.album, new.album_artist, new.genre, new.filename);
+        END;
+      `);
+
+      await db.execAsync(`
+        DROP TABLE IF EXISTS songs;
+        DROP TABLE IF EXISTS songs_fts;
+        DROP TABLE IF EXISTS videos;
+        DROP TABLE IF EXISTS videos_fts;
+      `);
+    }
   }
 ];
 
